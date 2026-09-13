@@ -1,0 +1,36 @@
+﻿/* === Turnos === */
+    /* ═══ TURNOS ═══ */
+    .turno-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 10.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px
+    }
+
+    .turno-badge.abierto {
+      background: var(--lgreen);
+      color: var(--green)
+    }
+
+    .turno-badge.cerrado {
+      background: #E0E0E0;
+      color: #666
+    }
+
+    .turno-badge.diferencia-mal {
+      background: var(--lred);
+      color: var(--red)
+    }
+
+    .diferencia-positiva {
+      color: var(--green);
+      font-weight: 600
+    }
+
+    .diferencia-negativa {
+      color: var(--red);
+      font-weight: 600
+    }

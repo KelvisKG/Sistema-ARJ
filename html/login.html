@@ -1,0 +1,24 @@
+﻿  <div class="login-screen" id="login-screen">
+    <div class="login-box">
+      <div class="login-logo">
+        <i class="ti ti-building-store"></i>
+        <h1>Sistema ARJ</h1>
+        <p>Acceso seguro · Repuestos Agrícolas</p>
+      </div>
+      <div class="login-error" id="login-error"><i class="ti ti-x"></i> Email o contraseña incorrectos</div>
+      <div class="login-field">
+        <label>Email</label>
+        <input type="email" id="login-user" placeholder="tu correo" autocomplete="email">
+      </div>
+      <div class="login-field">
+        <label>Contraseña</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"
+          onkeypress="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="login-btn" onclick="doLogin()"><i class="ti ti-login"></i> Iniciar sesión</button>
+      <div class="login-hint">
+        <strong>Acceso restringido</strong><br>
+        Si olvidaste tu contraseña, contacta al gerente.
+      </div>
+    </div>
+  </div>

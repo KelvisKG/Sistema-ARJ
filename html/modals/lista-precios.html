@@ -1,0 +1,27 @@
+﻿  <div class="confirm-modal" id="modal-lista-precios">
+    <div class="confirm-box lp-box">
+      <h3><i class="ti ti-download"></i> Descargar lista de precios</h3>
+      <p style="margin-bottom:10px">Precio público siempre. Los precios manuales se respetan tal cual.<br>
+        <span style="font-size:11.5px;color:var(--dgray)">Solo salen productos con embarque sellado y con
+          existencia en al menos una de las dos empresas.</span></p>
+      <input type="text" class="lp-buscar" id="lp-buscar" placeholder="Buscar marca…"
+        oninput="_lpFiltrarMarcas()">
+      <div class="lp-marcas" id="lp-marcas"></div>
+      <div class="lp-acciones-marca">
+        <button type="button" onclick="_lpMarcarTodas(true)">Todas</button>
+        <button type="button" onclick="_lpMarcarTodas(false)">Ninguna</button>
+      </div>
+      <div class="lp-conteo" id="lp-conteo">—</div>
+      <div class="actions">
+        <button class="btn btn-primary" id="lp-btn-pdf" onclick="listaPreciosPDF()"><i
+            class="ti ti-file-type-pdf"></i> PDF (para clientes)</button>
+        <button class="btn btn-secondary" id="lp-btn-csv" onclick="listaPreciosCSV()"><i
+            class="ti ti-file-spreadsheet"></i> Excel/CSV</button>
+        <button class="btn btn-secondary" id="lp-btn-analisis" onclick="listaPreciosAnalisis()"><i
+            class="ti ti-chart-bar"></i> Simulador de precios</button>
+        <button class="btn btn-secondary" onclick="cerrarListaPrecios()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: simulador de precios (v13.26) -->

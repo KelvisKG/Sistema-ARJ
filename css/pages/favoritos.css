@@ -1,0 +1,82 @@
+﻿/* === Favoritos Grid === */
+    /* ═══ FAVORITOS GRID ═══ */
+    .fav-card {
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+      text-align: center
+    }
+
+    .fav-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      border-color: var(--blue)
+    }
+
+    .fav-card.obligatorio {
+      border-color: var(--gold);
+      background: linear-gradient(135deg, #FFF 70%, #FFF8DC 100%)
+    }
+
+    .fav-card .fav-star {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      font-size: 12px;
+      color: var(--gold)
+    }
+
+    .fav-card .fav-cod {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 4px
+    }
+
+    .fav-card .fav-desc {
+      font-size: 11px;
+      color: var(--dgray);
+      line-height: 1.3;
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center
+    }
+
+    .fav-card .fav-precio {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--green);
+      margin-top: 4px
+    }
+
+    .fav-card .fav-delete {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: rgba(163, 45, 45, 0.1);
+      border: none;
+      color: var(--red);
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 10px;
+      display: none;
+      align-items: center;
+      justify-content: center
+    }
+
+    .fav-card:hover .fav-delete {
+      display: flex
+    }
+
+    .fav-card .fav-delete:hover {
+      background: var(--red);
+      color: #FFF
+    }

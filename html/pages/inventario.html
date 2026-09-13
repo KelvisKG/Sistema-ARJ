@@ -1,0 +1,87 @@
+﻿    <div class="page" id="page-inventario">
+      <h1 class="page-title"><i class="ti ti-package"></i> Inventario</h1>
+      <p class="page-sub">Empresa: <strong id="emp-inv">Venta Directa</strong> · Total productos: <strong
+          id="total-prods">20</strong></p>
+
+      <div class="help-box">
+        <i class="ti ti-info-circle"></i>
+        <div><strong>Nuevo:</strong> Puedes buscar productos por marca de tractor y sistema. Si un cliente pregunta
+          "¿qué tienen para el motor del John Deere 6420?", usa la pestaña <strong>Por aplicación</strong>.</div>
+      </div>
+
+      <!-- v13.4: botón de recepción masiva -->
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px" data-restrict="gerente">
+        <button class="btn btn-secondary" id="btn-despachar" onclick="abrirTraspaso()"><i class="ti ti-arrows-exchange"></i> Despachar a Directa</button>
+        <button class="btn btn-secondary" id="btn-notas" onclick="abrirNotas()"><i class="ti ti-file-text"></i> Notas de entrega</button>
+        <button class="btn btn-secondary" id="btn-recepciones" onclick="abrirRecepciones()"><i class="ti ti-truck-delivery"></i> Recepciones</button>
+        <button class="btn btn-primary" onclick="abrirRecepcion()"><i class="ti ti-clipboard-check"></i> Conteo / Recepción</button>
+      </div>
+
+      <!-- Tabs búsqueda inventario -->
+      <div style="display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid var(--gray)">
+        <button class="search-tab active" data-tab-inv="normal" onclick="cambiarTabInv('normal')"><i
+            class="ti ti-search"></i> Búsqueda general</button>
+        <button class="search-tab" data-tab-inv="aplicacion" onclick="cambiarTabInv('aplicacion')"><i
+            class="ti ti-tractor"></i> Por aplicación</button>
+      </div>
+
+      <!-- Tab búsqueda normal -->
+      <div id="tab-inv-normal" class="search-tab-content active">
+        <div class="inv-controls">
+          <div class="inv-search">
+            <i class="ti ti-search"></i>
+            <input type="text" id="inv-busqueda" placeholder="Buscar por código, descripción, marca..."
+              oninput="renderInventario()">
+          </div>
+          <button class="btn btn-secondary" data-role="gerente"><i class="ti ti-upload"></i> Importar Excel</button>
+          <button class="btn btn-secondary" data-role="gerente" onclick="abrirEmbarques()"><i class="ti ti-ship"></i> Embarques</button>
+          <button class="btn btn-primary" data-role="gerente" onclick="abrirNuevoProducto()"><i class="ti ti-plus"></i>
+            Nuevo producto</button>
+          <button class="btn btn-secondary" data-role="gerente" onclick="descargarListaPrecios()"><i
+              class="ti ti-download"></i> Lista de precios</button>
+        </div>
+      </div>
+
+      <!-- Tab búsqueda por aplicación -->
+      <div id="tab-inv-aplicacion" class="search-tab-content" style="display:none">
+        <div
+          style="background:#FFF8E1;border:1px solid #FFC107;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#5D4037;margin-bottom:10px">
+          <i class="ti ti-bulb"></i> Combina <strong>marca/modelo</strong> con <strong>sistema</strong> para filtrar.
+          Por ejemplo: "Ford 6610" en marca/modelo + "Motor" en sistema = solo repuestos del motor del Ford 6610.
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:10px;margin-bottom:10px">
+          <div class="inv-search">
+            <i class="ti ti-tractor"></i>
+            <input type="text" id="inv-marca-modelo" placeholder="Marca y modelo del tractor (ej: John Deere 6420)"
+              oninput="renderInventario()">
+          </div>
+          <select id="inv-sistema" onchange="renderInventario()"
+            style="background:#FFF;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit">
+            <option value="">Todos los sistemas</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="inv-table">
+        <table>
+          <thead>
+            <tr>
+              <th class="center" style="width:3%">#</th>
+              <th style="width:11%">Código alt.</th>
+              <th style="width:10%">Código orig.</th>
+              <th style="width:20%">Descripción</th>
+              <th style="width:9%">Marca</th>
+              <th style="width:12%">Aplicación</th>
+              <th class="num col-restricted" style="width:8%">FOB</th>
+              <th class="num" style="width:9%">P. Público</th>
+              <th class="center" style="width:7%">Stock</th>
+              <th class="center" style="width:9%">Otra emp.</th>
+              <th class="center col-restricted" style="width:5%">Editar</th>
+            </tr>
+          </thead>
+          <tbody id="inv-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ───── CUENTAS POR COBRAR ───── -->

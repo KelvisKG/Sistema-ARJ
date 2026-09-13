@@ -1,0 +1,54 @@
+﻿    <div class="page" id="page-alertas">
+      <h1 class="page-title"><i class="ti ti-bell-ringing"></i> Alertas inteligentes</h1>
+      <p class="page-sub">El sistema detecta patrones anormales y te avisa antes de que sea tarde</p>
+
+      <div class="help-box">
+        <i class="ti ti-info-circle"></i>
+        <div><strong>¿Qué detecta?</strong> Vendedores haciendo más descuentos de lo normal, facturas con margen bajo,
+          productos con caída de ventas, clientes que dejaron de comprar, stock que se agotará pronto, y más. No
+          reemplaza tu criterio — te ayuda a no perder de vista lo importante.</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card red">
+          <div class="kpi-icon"><i class="ti ti-alert-octagon"></i></div>
+          <div class="kpi-label">Alertas críticas</div>
+          <div class="kpi-val" style="color:var(--red)" id="alertas-criticas">0</div>
+          <div class="kpi-sub">requieren acción</div>
+        </div>
+        <div class="kpi-card gold">
+          <div class="kpi-icon"><i class="ti ti-alert-triangle"></i></div>
+          <div class="kpi-label">Advertencias</div>
+          <div class="kpi-val" style="color:var(--gold)" id="alertas-warning">0</div>
+          <div class="kpi-sub">revisar pronto</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon"><i class="ti ti-info-circle"></i></div>
+          <div class="kpi-label">Informativas</div>
+          <div class="kpi-val" id="alertas-info">0</div>
+          <div class="kpi-sub">solo aviso</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-icon"><i class="ti ti-check"></i></div>
+          <div class="kpi-label">Resueltas hoy</div>
+          <div class="kpi-val" style="color:var(--green)">0</div>
+          <div class="kpi-sub">ya atendidas</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="filtro-alerta active" data-filtro="todas" onclick="filtrarAlertas('todas')"><i
+            class="ti ti-list"></i> Todas</button>
+        <button class="filtro-alerta" data-filtro="critica" onclick="filtrarAlertas('critica')"><i
+            class="ti ti-alert-octagon"></i> Críticas</button>
+        <button class="filtro-alerta" data-filtro="warning" onclick="filtrarAlertas('warning')"><i
+            class="ti ti-alert-triangle"></i> Advertencias</button>
+        <button class="filtro-alerta" data-filtro="info" onclick="filtrarAlertas('info')"><i
+            class="ti ti-info-circle"></i> Informativas</button>
+      </div>
+
+      <div id="alertas-list"></div>
+    </div>
+
+    <!-- ───── CLIENTES ───── -->
+    <!-- ───── MOVIMIENTOS (Entradas y Salidas) ───── -->

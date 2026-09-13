@@ -1,0 +1,297 @@
+/* =====================================================================
+   SISTEMA ARJ · LAYOUT MODERNO (HEADER, NAV, MARCO Y RESPONSIVE)
+   ===================================================================== */
+
+/* ═══ CABECERA PRINCIPAL GLASSMORPHIC CON DEGRADADO CORPORATIVO ═══ */
+.header {
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.15);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #FFFFFF;
+  position: sticky;
+  top: 0;
+  z-index: 5000;
+  backdrop-filter: blur(12px);
+}
+
+.header.empresa-directa {
+  background: linear-gradient(135deg, #B45309 0%, #D97706 45%, #F59E0B 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.header.empresa-dist,
+.header.empresa-distribuidora {
+  background: linear-gradient(135deg, #071526 0%, #0F2744 50%, #1A365D 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.brand i {
+  font-size: 24px;
+  color: #FCD34D;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.empresa-switch {
+  background: rgba(255, 255, 255, 0.16);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  margin-left: 16px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(6px);
+}
+
+.empresa-switch:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.empresa-switch i {
+  font-size: 15px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.tasa-info {
+  background: rgba(255, 255, 255, 0.14);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-weight: 500;
+}
+
+.tasa-info:hover {
+  background: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
+}
+
+.tasa-info i {
+  font-size: 14px;
+  color: #FDE047;
+}
+
+.tasa-info strong {
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.bell-btn {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #FFF;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all var(--trans-fast);
+}
+
+.bell-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.bell-btn i {
+  font-size: 18px;
+}
+
+.bell-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #EF4444;
+  color: #FFF;
+  font-size: 10px;
+  font-weight: 700;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.user-pill {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+}
+
+.user-pill .role {
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 9.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.panic-btn {
+  background: rgba(239, 68, 68, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFF;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all var(--trans-fast);
+}
+
+.panic-btn:hover {
+  background: #DC2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.4);
+}
+
+/* ═══ BARRA DE NAVEGACIÓN MODERNA ═══ */
+.nav {
+  display: flex;
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  overflow-x: auto;
+  gap: 4px;
+  box-shadow: var(--shadow-xs);
+  transition: background var(--trans-normal), border-color var(--trans-normal);
+}
+
+.nav-item {
+  padding: 13px 15px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dgray);
+  cursor: pointer;
+  border-bottom: 2.5px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  transition: all var(--trans-fast);
+  border-radius: 6px 6px 0 0;
+}
+
+.nav-item:hover {
+  color: var(--text);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.nav-item.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+  font-weight: 600;
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.nav-item i {
+  font-size: 16px;
+}
+
+/* ═══ BANNER DE TASAS SIN CONFIRMAR ═══ */
+#banner-tasas {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: #FEF2F2;
+  border-bottom: 2px solid #EF4444;
+  padding: 10px 20px;
+  font-size: 13px;
+  color: #991B1B;
+}
+
+#banner-tasas.show {
+  display: flex;
+  animation: slideDown 0.3s ease-out;
+}
+
+#banner-tasas .bt-txt {
+  flex: 1;
+  line-height: 1.4;
+}
+
+#banner-tasas .bt-txt strong {
+  color: #DC2626;
+  font-weight: 700;
+}
+
+#banner-tasas .bt-sub {
+  font-size: 11.5px;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+#banner-tasas button {
+  flex: none;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: #DC2626;
+  color: #FFF;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--trans-fast);
+}
+
+#banner-tasas button:hover {
+  background: #B91C1C;
+  transform: translateY(-1px);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

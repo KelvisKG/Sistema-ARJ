@@ -1,0 +1,163 @@
+﻿/* === Facturacion === */
+    /* ═══ FACTURACIÓN ═══ */
+    .factura-layout {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 16px
+    }
+
+    .total-box {
+      background: linear-gradient(135deg, var(--navy) 0%, #152849 100%);
+      color: #FFF;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 12px
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 4px 0
+    }
+
+    .total-row.big {
+      font-size: 20px;
+      font-weight: 600;
+      padding: 10px 0 6px;
+      margin-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.25)
+    }
+
+    .total-row.small {
+      font-size: 11.5px;
+      opacity: 0.85;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.25);
+      margin-top: 6px
+    }
+
+    .total-row.iva-zero {
+      color: #FFD700;
+      font-style: italic
+    }
+
+    .pago-section {
+      background: #E8F5E9;
+      border: 1px solid #81C784;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 12px
+    }
+
+    .pago-tit {
+      font-size: 12px;
+      color: #1B5E20;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .pago-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 7px;
+      background: #FFF;
+      border: 1px solid #C8E6C9;
+      border-radius: 7px;
+      padding: 5px 6px
+    }
+
+    .pago-row select,
+    .pago-row input {
+      background: #FFF;
+      border: 1px solid #A5D6A7;
+      border-radius: 5px;
+      padding: 6px 8px;
+      font-size: 12px;
+      color: #222;
+      font-family: inherit
+    }
+
+    .pago-row input {
+      text-align: right;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums
+    }
+
+    .pago-row select:focus,
+    .pago-row input:focus {
+      outline: none;
+      border-color: #2E7D32;
+      box-shadow: 0 0 0 2px rgba(46, 125, 50, .15)
+    }
+
+    .pago-moneda {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #1B5E20;
+      background: #E8F5E9;
+      border-radius: 4px;
+      padding: 3px 6px;
+      min-width: 26px;
+      text-align: center
+    }
+
+    .pago-row select {
+      flex: 1.3
+    }
+
+    .pago-row input {
+      flex: 1
+    }
+
+    .pago-row .del-pago {
+      background: none;
+      border: none;
+      color: var(--red);
+      cursor: pointer;
+      font-size: 13px
+    }
+
+    .add-pago {
+      background: #FFF;
+      border: 1px dashed #66BB6A;
+      color: #1B5E20;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-top: 5px;
+      width: 100%;
+      font-weight: 500;
+      font-family: inherit
+    }
+
+    .add-pago:hover {
+      background: #E8F5E9
+    }
+
+    .saldo-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0 0;
+      border-top: 1px dashed #66BB6A;
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 600
+    }
+
+    .saldo-row.cubierto {
+      color: var(--green)
+    }
+
+    .saldo-row.parcial {
+      color: var(--gold)
+    }
+
+    .saldo-row.exceso {
+      color: var(--red)
+    }

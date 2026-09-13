@@ -1,0 +1,35 @@
+﻿  <div class="modal" id="modal-cerrar-turno">
+    <div class="modal-content" style="max-width:560px;text-align:left">
+      <div
+        style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:12px">
+        <h2 style="margin:0;text-align:left;color:var(--gold)"><i class="ti ti-clock-stop"></i> Cerrar turno y cuadrar
+          caja</h2>
+        <button class="btn btn-secondary btn-sm" onclick="cerrarCerrarTurno()"><i class="ti ti-x"></i></button>
+      </div>
+      <div
+        style="background:#FFF8E1;border-left:4px solid var(--gold);border-radius:6px;padding:10px 12px;font-size:12px;color:#5D4037;margin-bottom:14px">
+        <i class="ti ti-info-circle"></i> Cuenta el efectivo que tienes ahora y escríbelo abajo. El sistema te dirá si
+        cuadra con las ventas.
+      </div>
+      <div id="ct-resumen"
+        style="background:#F5F8FC;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.7">
+      </div>
+      <div class="field-row"><label>Efectivo real USD:</label><input type="number" id="ct-real-usd" step="0.01"
+          value="0" onchange="recalcularCierre()"></div>
+      <div class="field-row"><label>Efectivo real Bs.:</label><input type="number" id="ct-real-bs" step="0.01" value="0"
+          onchange="recalcularCierre()"></div>
+      <div id="ct-resultado" style="margin-top:12px;padding:12px 14px;border-radius:6px;font-size:13px;font-weight:600">
+      </div>
+      <div class="field-row" style="margin-top:12px;flex-direction:column;align-items:flex-start;gap:6px">
+        <label>Observaciones (opcional):</label>
+        <textarea id="ct-obs" placeholder="Ej: Faltó dinero por error de cambio, sobró por propina, etc."
+          style="width:100%;min-height:50px;background:#FFF;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-secondary" onclick="cerrarCerrarTurno()">Cancelar</button>
+        <button class="btn btn-gold" onclick="confirmarCerrarTurno()"><i class="ti ti-check"></i> Cerrar turno</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NUEVA LISTA DE PRECIOS -->

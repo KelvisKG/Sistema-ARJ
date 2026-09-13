@@ -1,0 +1,199 @@
+﻿/* === Modo Caja === */
+    /* ═══ MODO CAJA — pantalla simplificada ═══ */
+    .caja-modo {
+      position: fixed;
+      inset: 0;
+      background: #FAFBFC;
+      z-index: 7800;
+      display: none;
+      flex-direction: column;
+      padding: 0
+    }
+
+    .caja-modo.show {
+      display: flex
+    }
+
+    .caja-header {
+      background: var(--navy);
+      color: #FFF;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2)
+    }
+
+    .caja-header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px
+    }
+
+    .caja-header h1 i {
+      font-size: 28px;
+      color: #FFD700
+    }
+
+    .caja-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 20px;
+      padding: 24px;
+      overflow: hidden
+    }
+
+    .caja-izquierda {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden
+    }
+
+    .caja-derecha {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden
+    }
+
+    .caja-input-grande {
+      font-size: 24px !important;
+      padding: 18px 22px !important;
+      font-family: 'Courier New', monospace !important;
+      letter-spacing: 1px !important;
+      border: 3px solid var(--navy) !important;
+      border-radius: 12px !important;
+      background: #FFF !important
+    }
+
+    .caja-input-grande:focus {
+      box-shadow: 0 0 0 6px rgba(31, 56, 100, 0.15) !important;
+      border-color: var(--blue) !important
+    }
+
+    .caja-items-cont {
+      background: #FFF;
+      border-radius: 12px;
+      padding: 14px;
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--border)
+    }
+
+    .caja-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--gray);
+      font-size: 16px
+    }
+
+    .caja-item:last-child {
+      border-bottom: none
+    }
+
+    .caja-item .ci-nombre {
+      flex: 1;
+      font-weight: 500;
+      color: #222
+    }
+
+    .caja-item .ci-cant {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      min-width: 70px;
+      text-align: center
+    }
+
+    .caja-item .ci-precio {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      min-width: 120px;
+      text-align: right
+    }
+
+    .caja-item button {
+      background: none;
+      border: none;
+      color: var(--red);
+      font-size: 20px;
+      cursor: pointer;
+      margin-left: 10px
+    }
+
+    .caja-total-box {
+      background: linear-gradient(135deg, var(--navy), #152849);
+      color: #FFF;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 16px
+    }
+
+    .caja-total-label {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 4px
+    }
+
+    .caja-total-monto {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 6px
+    }
+
+    .caja-total-bs {
+      font-size: 15px;
+      opacity: 0.9
+    }
+
+    .caja-btn-grande {
+      padding: 18px 24px;
+      font-size: 18px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      font-family: inherit
+    }
+
+    .caja-btn-cobrar {
+      background: var(--green);
+      color: #FFF
+    }
+
+    .caja-btn-cobrar:hover {
+      background: #2A5008
+    }
+
+    .caja-btn-cobrar:disabled {
+      opacity: 0.5;
+      cursor: not-allowed
+    }
+
+    .caja-btn-volver {
+      background: #FFF;
+      color: var(--navy);
+      border: 2px solid var(--navy);
+      margin-top: 10px
+    }
+
+    .caja-info-box {
+      background: #FFF8E1;
+      border-left: 4px solid #FFC107;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #5D4037
+    }

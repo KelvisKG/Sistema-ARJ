@@ -1,0 +1,110 @@
+﻿    <div class="page" id="page-exportar">
+      <h1 class="page-title"><i class="ti ti-file-export"></i> Exportación al Sistema Fiscal</h1>
+      <p class="page-sub">Reporte diario automático · Carga periódica al sistema homologado</p>
+
+      <div class="help-box">
+        <i class="ti ti-info-circle"></i>
+        <div><strong>¿Cómo funciona?</strong> Tu sistema interno es el dueño real del inventario y las ventas. El
+          sistema fiscal solo se usa cuando un cliente pide factura fiscal. Para que ambos sistemas tengan el mismo
+          inventario, este módulo genera un reporte diario con todos los movimientos del día, listo para cargar
+          manualmente al sistema fiscal homologado.</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card green">
+          <div class="kpi-icon"><i class="ti ti-check"></i></div>
+          <div class="kpi-label">Ventas hoy (no fiscales)</div>
+          <div class="kpi-val" style="font-size:20px" id="exp-kpi-nofiscal">0</div>
+          <div class="kpi-sub" id="exp-kpi-nofiscal-sub">$ 0</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon"><i class="ti ti-receipt-tax"></i></div>
+          <div class="kpi-label">Ventas hoy con fiscal</div>
+          <div class="kpi-val" style="font-size:20px" id="exp-kpi-fiscal">0</div>
+          <div class="kpi-sub" id="exp-kpi-fiscal-sub">$ 0</div>
+        </div>
+        <div class="kpi-card gold">
+          <div class="kpi-icon"><i class="ti ti-clock"></i></div>
+          <div class="kpi-label">Pendientes de exportar</div>
+          <div class="kpi-val" style="font-size:20px;color:var(--gold)" id="kpi-pendientes-exp">0</div>
+          <div class="kpi-sub">desde último reporte</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-icon"><i class="ti ti-alert-triangle"></i></div>
+          <div class="kpi-label">Último export</div>
+          <div class="kpi-val" style="font-size:14px" id="exp-kpi-ultimo">—</div>
+          <div class="kpi-sub" id="exp-kpi-ultimo-sub">aún sin reportes</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-tit"><i class="ti ti-download"></i> Generar reporte para sistema fiscal</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px">
+          <div style="background:#F5F8FC;border-radius:8px;padding:14px">
+            <div
+              style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500;margin-bottom:6px">
+              Reporte del día</div>
+            <div style="font-size:16px;color:var(--navy);font-weight:600;margin-bottom:6px" id="exp-resumen-dia">0 ventas · $ 0</div>
+            <div style="font-size:11.5px;color:var(--dgray);margin-bottom:10px">Movimientos de hoy. Se genera
+              automáticamente al cierre.</div>
+            <button class="btn btn-primary btn-sm" onclick="generarReporteFiscal('dia')"><i
+                class="ti ti-file-spreadsheet"></i> Descargar reporte del día</button>
+          </div>
+          <div style="background:#F5F8FC;border-radius:8px;padding:14px">
+            <div
+              style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500;margin-bottom:6px">
+              Reporte personalizado</div>
+            <div style="display:flex;gap:6px;margin-bottom:10px">
+              <input type="date" id="exp-desde"
+                style="flex:1;background:#FFF;border:1px solid var(--border);border-radius:5px;padding:6px;font-size:12px;font-family:inherit">
+              <input type="date" id="exp-hasta"
+                style="flex:1;background:#FFF;border:1px solid var(--border);border-radius:5px;padding:6px;font-size:12px;font-family:inherit">
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="generarReporteFiscal('rango')"><i
+                class="ti ti-calendar"></i> Generar rango</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-tit"><i class="ti ti-list"></i> Ventas pendientes de exportar al fiscal</div>
+        <table class="simple-tbl">
+          <thead>
+            <tr>
+              <th>N°</th>
+              <th>Hora</th>
+              <th>Cliente</th>
+              <th>Vendedor</th>
+              <th class="num">Total USD</th>
+              <th>Pidió fiscal</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="ventas-pendientes-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-tit"><i class="ti ti-history"></i> Historial de exportaciones</div>
+        <table class="simple-tbl">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Período</th>
+              <th class="num">Ventas</th>
+              <th class="num">Total USD</th>
+              <th>Usuario</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="6" style="text-align:center;color:var(--dgray);padding:20px">Sin exportaciones registradas
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ───── CONFIG (solo gerente) ───── -->

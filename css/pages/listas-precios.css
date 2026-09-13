@@ -1,0 +1,96 @@
+﻿/* === Listas de Precios + Simulador === */
+    /* ── Simulador de precios (v13.26): la caja nunca debe salirse de la
+       pantalla. Flex en columna: titulo y botones fijos, el resto cede. ── */
+    .lpa-box {
+      max-width: 1040px; width: 97vw; max-height: 92vh; text-align: left;
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 7px;
+      overflow: hidden
+    }
+    .lpa-box h3 { flex: 0 0 auto; margin-bottom: 0; font-size: 16px }
+    .lpa-fijo { flex: 0 0 auto }
+    /* min-height:0 es obligatorio: sin el, un hijo flex nunca baja de su
+       altura intrinseca y la tabla empuja los botones fuera de la pantalla. */
+    .lpa-tabla-wrap {
+      flex: 1 1 auto; min-height: 0; overflow: auto;
+      border: 1px solid var(--border); border-radius: 6px
+    }
+    .lpa-box .actions { flex: 0 0 auto; margin-top: 0 }
+    /* Tira compacta de indicadores: la informacion densa vive aqui, no en
+       tablas altas que le roban el espacio a la tabla de productos. */
+    .lpa-tira { display: flex; flex-wrap: wrap; gap: 6px }
+    .lpa-st {
+      flex: 1 1 110px; background: #F2F5FA; border-radius: 6px; padding: 6px 9px; min-width: 96px
+    }
+    .lpa-st b { display: block; font-size: 9.5px; color: var(--dgray); text-transform: uppercase;
+      letter-spacing: .3px; font-weight: 600 }
+    .lpa-st s { display: block; font-size: 15px; font-weight: 800; text-decoration: none; line-height: 1.25 }
+    .lpa-st i { display: block; font-size: 10px; color: var(--dgray); font-style: normal }
+    .lpa-det summary {
+      cursor: pointer; font-size: 11.5px; color: var(--navy); padding: 3px 0; font-weight: 600
+    }
+    .lpa-det[open] summary { margin-bottom: 3px }
+
+    /* ── Selector de marcas de la lista de precios (v13.12) ── */
+    .lp-box { max-width: 520px }
+    .lp-buscar {
+      width: 100%; padding: 7px 10px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; margin-bottom: 8px; font-family: inherit
+    }
+    .lp-marcas {
+      max-height: 240px; overflow-y: auto; border: 1px solid var(--border);
+      border-radius: 6px; text-align: left; background: #FCFCFC
+    }
+    .lp-marca {
+      display: flex; align-items: center; gap: 9px; padding: 7px 11px;
+      border-bottom: 1px solid #EEE; cursor: pointer; font-size: 13px
+    }
+    .lp-marca:last-child { border-bottom: none }
+    .lp-marca:hover { background: #F2F5FA }
+    .lp-marca input { cursor: pointer; width: 15px; height: 15px; flex: none }
+    .lp-marca .n { margin-left: auto; color: var(--dgray); font-size: 11.5px; font-weight: 600 }
+    .lp-vacio { padding: 18px 12px; text-align: center; color: var(--dgray); font-size: 12.5px; line-height: 1.5 }
+    .lp-acciones-marca { display: flex; gap: 6px; margin: 8px 0 4px }
+    .lp-acciones-marca button {
+      flex: 1; padding: 5px; font-size: 11.5px; border: 1px solid var(--border);
+      background: #FFF; border-radius: 5px; cursor: pointer; color: var(--navy); font-family: inherit
+    }
+    .lp-acciones-marca button:hover { background: #F2F5FA }
+    .lp-conteo {
+      margin: 10px 0 2px; padding: 8px 10px; border-radius: 6px;
+      background: #F2F5FA; font-size: 13px; color: var(--navy)
+    }
+    .lp-conteo.cero { background: #FCEBEB; color: var(--red) }
+
+
+    /* ═══ LISTAS DE PRECIOS ═══ */
+    .lista-precio-row {
+      background: #FAFBFC;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center
+    }
+
+    .lista-precio-row .lp-nombre {
+      font-weight: 600;
+      color: var(--navy);
+      font-size: 13px
+    }
+
+    .lista-precio-row .lp-desc {
+      font-size: 11.5px;
+      color: var(--dgray);
+      margin-top: 2px
+    }
+
+    .lista-precio-row .lp-tag {
+      background: var(--lblue);
+      color: var(--blue);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10.5px;
+      font-weight: 600
+    }

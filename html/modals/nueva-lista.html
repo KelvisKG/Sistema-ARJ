@@ -1,0 +1,32 @@
+﻿  <div class="modal" id="modal-nueva-lista">
+    <div class="modal-content" style="max-width:480px;text-align:left">
+      <div
+        style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:12px">
+        <h2 style="margin:0;text-align:left"><i class="ti ti-list"></i> Nueva lista de precios</h2>
+        <button class="btn btn-secondary btn-sm" onclick="cerrarNuevaLista()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="field-row"><label>Nombre:</label><input type="text" id="lp-nombre"
+          placeholder="Ej: VIP, Familiar, Precio Costo..."></div>
+      <div class="field-row"><label>Descripción:</label><input type="text" id="lp-desc"
+          placeholder="¿Para qué casos se usa?"></div>
+      <div class="field-row"><label>Descuento %:</label><input type="number" id="lp-descuento" step="1" value="15"
+          placeholder="0-100"></div>
+      <div class="field-row" style="margin-bottom:0"><label>Tipo:</label>
+        <select id="lp-tipo">
+          <option value="descuento">Descuento sobre precio público</option>
+          <option value="costo">Sobre costo FOB (margen reducido)</option>
+          <option value="fijo">Precio fijo personalizado por producto</option>
+        </select>
+      </div>
+      <div style="background:#FFF8E1;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#5D4037;margin-top:12px">
+        <i class="ti ti-info-circle"></i> Las listas personalizadas se asignan a clientes específicos en su ficha
+        individual.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-secondary" onclick="cerrarNuevaLista()">Cancelar</button>
+        <button class="btn btn-primary" onclick="crearLista()"><i class="ti ti-check"></i> Crear lista</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DESCUENTO MANUAL (solo gerente, en Venta Directa) -->

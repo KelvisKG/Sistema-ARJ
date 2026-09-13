@@ -1,0 +1,214 @@
+/* === Badges Modernos === */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badge-success {
+  background: var(--lgreen);
+  color: var(--green);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-danger {
+  background: var(--lred);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-warning {
+  background: var(--lgold);
+  color: var(--gold);
+  border: 1px solid rgba(217, 119, 6, 0.3);
+}
+
+.badge-primary {
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+
+.badge-secondary {
+  background: var(--gray);
+  color: var(--dgray);
+  border: 1px solid var(--border);
+}
+
+/* === Chips, Badges, Stock Indicators === */
+    .mov-chip {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dgray);
+      border-radius: 6px;
+      padding: 6px 11px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .12s
+    }
+
+    .mov-chip:hover {
+      border-color: var(--navy)
+    }
+
+    .mov-chip.on {
+      background: var(--navy);
+      color: #FFF;
+      border-color: var(--navy);
+      font-weight: 600
+    }
+
+    .stock-ok {
+      color: var(--green);
+      font-weight: 500
+    }
+
+    .stock-warn {
+      color: var(--red);
+      font-weight: 500
+    }
+
+    .stock-neg {
+      color: var(--red);
+      font-weight: 700;
+      background: #FCEBEB;
+      padding: 1px 5px;
+      border-radius: 3px
+    }
+
+    .del-btn {
+      background: none;
+      border: none;
+      color: var(--red);
+      cursor: pointer;
+      font-size: 15px;
+      padding: 4px
+    }
+
+    .del-btn:hover {
+      background: #FCE4D6;
+      border-radius: 4px
+    }
+
+    .alert-stock {
+      background: #FFF3CD;
+      border: 1px solid #FFC107;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #856404;
+      margin: 10px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px
+    }
+
+    .alert-stock i {
+      font-size: 18px;
+      color: #FFA000
+    }
+
+    .alert-stock.danger {
+      background: #FCE4D6;
+      border-color: var(--red);
+      color: var(--red)
+    }
+
+    .alert-stock.danger i {
+      color: var(--red)
+    }
+
+    .cliente-info {
+      background: #EEEDFE;
+      color: #3C3489;
+      padding: 5px 12px;
+      border-radius: 14px;
+      font-size: 11px;
+      display: inline-block;
+      margin-left: 6px;
+      font-weight: 500
+    }
+
+    .cliente-info.contado {
+      background: #E8F5E9;
+      color: #1B5E20
+    }
+
+    .cliente-info.credito {
+      background: #FFE0B2;
+      color: #E65100
+    }
+
+    .inv-stock-badge {
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      display: inline-block;
+      min-width: 32px;
+      text-align: center
+    }
+
+    .inv-stock-badge.alto {
+      background: var(--lgreen);
+      color: var(--green)
+    }
+
+    .inv-stock-badge.medio {
+      background: var(--lgold);
+      color: #854F0B
+    }
+
+    .inv-stock-badge.bajo {
+      background: var(--lred);
+      color: var(--red)
+    }
+
+    .inv-stock-badge.neg {
+      background: var(--red);
+      color: #FFF
+    }
+
+    .inv-stock-other {
+      font-size: 11px;
+      color: var(--dgray)
+    }
+
+    .inv-stock-other.disponible {
+      color: var(--blue);
+      font-weight: 500;
+      cursor: help
+    }
+
+    /* ═══ MARCAS FRECUENTES ═══ */
+    .marca-chip {
+      background: #F5F8FC;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 11.5px;
+      color: var(--navy);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px
+    }
+
+    .marca-chip:hover {
+      background: var(--blue);
+      color: #FFF;
+      border-color: var(--blue)
+    }
+
+    .marca-chip i {
+      font-size: 11px
+    }

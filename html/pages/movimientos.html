@@ -1,0 +1,89 @@
+﻿    <div class="page" id="page-movimientos">
+      <h1 class="page-title"><i class="ti ti-arrows-exchange"></i> Entradas y Salidas</h1>
+      <p class="page-sub">Empresa: <strong id="emp-mov">Venta Directa</strong></p>
+
+      <div class="help-box">
+        <i class="ti ti-info-circle"></i>
+        <div><strong>Esto es plata, no ventas.</strong> Las entradas por venta aparecen solas cuando el cliente
+          <em>paga</em>. Una factura a crédito no mueve la caja hasta que se cobre. Las salidas se registran a mano.</div>
+      </div>
+
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="kpi-card green">
+          <div class="kpi-icon"><i class="ti ti-arrow-down-left"></i></div>
+          <div class="kpi-label">Entró</div>
+          <div class="kpi-val" style="color:var(--green)" id="kpi-mov-entro">$ 0</div>
+          <div class="kpi-sub" id="kpi-mov-entro-sub">0 movimientos</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-icon"><i class="ti ti-arrow-up-right"></i></div>
+          <div class="kpi-label">Salió</div>
+          <div class="kpi-val" style="color:var(--red)" id="kpi-mov-salio">$ 0</div>
+          <div class="kpi-sub" id="kpi-mov-salio-sub">0 movimientos</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon"><i class="ti ti-scale"></i></div>
+          <div class="kpi-label">Saldo del período</div>
+          <div class="kpi-val" id="kpi-mov-saldo">$ 0</div>
+          <div class="kpi-sub" id="kpi-mov-saldo-sub">entradas − salidas</div>
+        </div>
+      </div>
+
+      <!-- v13.7: desglose de las salidas. El total de arriba dice cuánta plata
+           salió de la caja (liquidez). Este desglose dice cuánto de eso fue
+           realmente gasto (rentabilidad). Son dos preguntas distintas. -->
+      <div class="card" id="mov-desglose-card" style="margin-bottom:14px;display:none">
+        <div class="card-tit"><i class="ti ti-chart-pie"></i> En qué se fue el dinero que salió</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">
+          <div style="background:#FEF5F5;border-radius:8px;padding:12px">
+            <div style="font-size:10.5px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Gasto del mes</div>
+            <div style="font-size:19px;font-weight:600;color:var(--red)" id="mov-cls-opex">$ 0</div>
+            <div style="font-size:10.5px;color:var(--dgray);margin-top:2px">Sueldos, servicios, contador. <strong>Sí baja la utilidad.</strong></div>
+          </div>
+          <div style="background:var(--lblue);border-radius:8px;padding:12px">
+            <div style="font-size:10.5px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Mercancía</div>
+            <div style="font-size:19px;font-weight:600;color:var(--navy)" id="mov-cls-inventario">$ 0</div>
+            <div style="font-size:10.5px;color:var(--dgray);margin-top:2px">Se volvió inventario. <strong>No es gasto</strong> hasta que se venda.</div>
+          </div>
+          <div style="background:var(--lgold);border-radius:8px;padding:12px">
+            <div style="font-size:10.5px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Inversión</div>
+            <div style="font-size:19px;font-weight:600;color:#854F0B" id="mov-cls-capex">$ 0</div>
+            <div style="font-size:10.5px;color:var(--dgray);margin-top:2px">Galpón, equipos. <strong>Se deprecia</strong> con los años.</div>
+          </div>
+          <div style="background:var(--gray);border-radius:8px;padding:12px">
+            <div style="font-size:10.5px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Capital</div>
+            <div style="font-size:19px;font-weight:600;color:var(--dgray)" id="mov-cls-no_gasto">$ 0</div>
+            <div style="font-size:10.5px;color:var(--dgray);margin-top:2px">Retiros del dueño. <strong>No es gasto</strong>, es reparto.</div>
+          </div>
+        </div>
+        <div id="mov-desglose-nota" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <label style="display:block;font-size:11px;color:var(--dgray);margin-bottom:3px">Mes</label>
+            <input type="month" id="mov-mes" onchange="renderMovimientos()"
+              style="border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:13px;font-family:inherit">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;color:var(--dgray);margin-bottom:3px">Ver</label>
+            <select id="mov-filtro-emp" onchange="renderMovimientos()"
+              style="border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:13px;font-family:inherit">
+              <option value="activa">Empresa activa + compartidos</option>
+              <option value="directa">Solo Venta Directa</option>
+              <option value="dist">Solo Distribuidora</option>
+              <option value="ambas">Solo compartidos</option>
+              <option value="todas">Todas</option>
+            </select>
+          </div>
+          <div style="flex:1"></div>
+          <button class="btn btn-secondary" onclick="abrirModalMovimiento('entrada')"><i
+              class="ti ti-arrow-down-left"></i> Entrada</button>
+          <button class="btn btn-red" onclick="abrirModalMovimiento('salida')"><i class="ti ti-arrow-up-right"></i>
+            Registrar salida</button>
+        </div>
+      </div>
+
+      <div id="mov-list"></div>
+    </div>

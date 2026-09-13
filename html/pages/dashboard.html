@@ -1,0 +1,163 @@
+﻿    <div class="page" id="page-dashboard">
+      <h1 class="page-title"><i class="ti ti-chart-bar"></i> Reportes y Dashboard</h1>
+      <p class="page-sub">Resumen del día · Comparativa entre empresas · Ranking · Reorden · Backup</p>
+
+      <!-- Sub-navegación de reportes -->
+      <div
+        style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);overflow-x:auto;flex-wrap:wrap">
+        <button class="search-tab active" data-subrep="resumen" onclick="cambiarSubReporte('resumen')"><i
+            class="ti ti-dashboard"></i> Resumen</button>
+        <button class="search-tab" data-subrep="comparativa" onclick="cambiarSubReporte('comparativa')"><i
+            class="ti ti-arrows-left-right"></i> Comparar empresas</button>
+        <button class="search-tab" data-subrep="ranking" onclick="cambiarSubReporte('ranking')"><i
+            class="ti ti-trophy"></i> Ranking clientes</button>
+        <button class="search-tab" data-subrep="reorden" onclick="cambiarSubReporte('reorden')"><i
+            class="ti ti-package"></i> Qué reordenar</button>
+        <button class="search-tab" data-subrep="backup" onclick="cambiarSubReporte('backup')"><i
+            class="ti ti-database"></i> Respaldos</button>
+      </div>
+
+      <!-- SUB-SECCIÓN: RESUMEN (contenido original) -->
+      <div class="sub-reporte" id="subrep-resumen">
+        <div class="kpi-grid">
+          <div class="kpi-card green">
+            <div class="kpi-icon"><i class="ti ti-trending-up"></i></div>
+            <div class="kpi-label">Ventas hoy</div>
+            <div class="kpi-val" id="rep-ventas-hoy">$ 0</div>
+            <div class="kpi-sub" id="rep-ventas-hoy-sub" style="color:var(--dgray);font-weight:600">Sin datos aún</div>
+          </div>
+          <div class="kpi-card blue">
+            <div class="kpi-icon"><i class="ti ti-calendar"></i></div>
+            <div class="kpi-label">Ventas este mes</div>
+            <div class="kpi-val" id="rep-ventas-mes">$ 0</div>
+            <div class="kpi-sub" id="rep-ventas-mes-sub" style="color:var(--dgray);font-weight:600">Sin datos aún</div>
+          </div>
+          <div class="kpi-card gold">
+            <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
+            <div class="kpi-label">Margen del catálogo</div>
+            <div class="kpi-val" id="rep-margen">0%</div>
+            <div class="kpi-sub" id="rep-margen-sub" style="color:var(--dgray);font-weight:600">Sin datos aún</div>
+          </div>
+          <div class="kpi-card red">
+            <div class="kpi-icon"><i class="ti ti-package"></i></div>
+            <div class="kpi-label">Stock crítico</div>
+            <div class="kpi-val" id="kpi-stock-critico">7</div>
+            <div class="kpi-sub" id="kpi-stock-sub">≤ 10 ud (Venta Directa)</div>
+          </div>
+          <div class="kpi-card green">
+            <div class="kpi-icon"><i class="ti ti-coin"></i></div>
+            <div class="kpi-label">Utilidad bruta del mes</div>
+            <div class="kpi-val" id="rep-utilidad">$ 0</div>
+            <div class="kpi-sub" id="rep-utilidad-sub" style="color:var(--dgray);font-weight:600">Sin datos aún</div>
+          </div>
+          <div class="kpi-card gold">
+            <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
+            <div class="kpi-label">Margen real vendido</div>
+            <div class="kpi-val" id="rep-margen-real">0%</div>
+            <div class="kpi-sub" id="rep-margen-real-sub" style="color:var(--dgray);font-weight:600">Sin datos aún</div>
+          </div>
+          <div class="kpi-card blue">
+            <div class="kpi-icon"><i class="ti ti-scale"></i></div>
+            <div class="kpi-label">Punto de equilibrio</div>
+            <div class="kpi-val" id="rep-equilibrio">$ 0</div>
+            <div class="kpi-sub" id="rep-equilibrio-sub" style="color:var(--dgray);font-weight:600">Configura los costos fijos</div>
+          </div>
+          <div class="kpi-card red">
+            <div class="kpi-icon"><i class="ti ti-building-store"></i></div>
+            <div class="kpi-label">Costos fijos del mes</div>
+            <div class="kpi-val" id="rep-fijos">$ 0</div>
+            <div class="kpi-sub" id="rep-fijos-sub" style="color:var(--dgray);font-weight:600">Sin configurar</div>
+          </div>
+        </div>
+
+        <!-- VENTAS POR ORIGEN (v13.28) · selector de periodo (v13.35) -->
+        <div class="chart-card" style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+            <h3 style="margin:0"><i class="ti ti-world" style="color:var(--blue)"></i> Importado vs Local
+              <span id="rep-origen-lbl" style="font-weight:500;color:var(--dgray)">— Este mes</span></h3>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <select id="rep-origen-rango" onchange="repOrigenCambioRango()"
+                style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
+                <option value="mes">Este mes</option>
+                <option value="mes_ant">Mes pasado</option>
+                <option value="3m">Últimos 3 meses</option>
+                <option value="12m">Últimos 12 meses</option>
+                <option value="anio">Este año</option>
+                <option value="todo">Todo el histórico</option>
+                <option value="custom">Personalizado…</option>
+              </select>
+              <span id="rep-origen-custom" style="display:none;gap:6px;align-items:center">
+                <input type="date" id="rep-origen-desde"
+                  style="padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
+                <span style="font-size:11.5px;color:var(--dgray)">a</span>
+                <input type="date" id="rep-origen-hasta"
+                  style="padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
+                <button class="btn btn-primary btn-sm" onclick="cargarOrigenPeriodo()">Aplicar</button>
+              </span>
+            </div>
+          </div>
+          <div id="rep-origen-content"></div>
+          <div id="rep-origen-detalle" style="display:none;margin-top:12px"></div>
+        </div>
+
+        <!-- METAS DE VENTA -->
+        <div style="margin-bottom:20px">
+          <h2
+            style="font-size:15px;color:var(--navy);font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            <i class="ti ti-target"></i> Metas de venta del mes</h2>
+          <div id="metas-content"></div>
+        </div>
+
+        <!-- COMPARATIVA MES vs MES -->
+        <div class="chart-card" style="margin-bottom:16px">
+          <h3><i class="ti ti-chart-line" style="color:var(--blue)"></i> Comparativa de ventas — Mes actual vs Mes
+            anterior</h3>
+          <div id="comp-meses-content"></div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="chart-card">
+            <h3><i class="ti ti-chart-bar" style="color:var(--blue)"></i> Productos más vendidos del mes</h3>
+            <div id="top-productos-content"></div>
+          </div>
+          <div class="list-card">
+            <h3><i class="ti ti-receipt" style="color:var(--blue)"></i> Últimas ventas</h3>
+            <div id="ventas-recientes-list"></div>
+          </div>
+        </div>
+      </div> <!-- fin subrep-resumen -->
+
+      <!-- SUB-SECCIÓN: COMPARATIVA ENTRE EMPRESAS -->
+      <div class="sub-reporte" id="subrep-comparativa" style="display:none">
+        <div class="card">
+          <div class="card-tit"><i class="ti ti-arrows-left-right"></i> Venta Directa vs Distribuidora — Este mes</div>
+          <div id="comparativa-content"></div>
+        </div>
+      </div>
+
+      <!-- SUB-SECCIÓN: RANKING DE CLIENTES -->
+      <div class="sub-reporte" id="subrep-ranking" style="display:none">
+        <div class="card">
+          <div class="card-tit"><i class="ti ti-trophy"></i> Ranking de clientes</div>
+          <div id="ranking-content"></div>
+        </div>
+      </div>
+
+      <!-- SUB-SECCIÓN: REORDEN -->
+      <div class="sub-reporte" id="subrep-reorden" style="display:none">
+        <div class="card">
+          <div class="card-tit"><i class="ti ti-package"></i> Productos que debes reordenar pronto</div>
+          <div id="reorden-content"></div>
+        </div>
+      </div>
+
+      <!-- SUB-SECCIÓN: BACKUP -->
+      <div class="sub-reporte" id="subrep-backup" style="display:none">
+        <div class="card">
+          <div class="card-tit"><i class="ti ti-database"></i> Respaldos y seguridad de datos</div>
+          <div id="backup-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───── EXPORTACIÓN FISCAL ───── -->

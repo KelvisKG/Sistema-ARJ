@@ -1,0 +1,212 @@
+/* =====================================================================
+   SISTEMA ARJ · FORMULARIOS, INPUTS Y CONTROLES UNIFORMES
+   ===================================================================== */
+
+/* ═══ REGLA UNIVERSAL PARA TODOS LOS INPUTS DEL SISTEMA ═══ */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="month"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+select,
+textarea,
+.val-input,
+.form-input {
+  width: 100%;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color var(--trans-fast), box-shadow var(--trans-fast), background-color var(--trans-fast);
+  box-shadow: var(--shadow-xs);
+  outline: none;
+}
+
+/* Estado Focus con Resplandor Moderno */
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="month"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+select:focus,
+textarea:focus,
+.val-input:focus,
+.form-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  background: var(--input-bg-focus);
+}
+
+/* Estado Hover */
+input[type="text"]:hover:not(:disabled):not(:focus),
+input[type="number"]:hover:not(:disabled):not(:focus),
+input[type="date"]:hover:not(:disabled):not(:focus),
+input[type="month"]:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus),
+.val-input:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-hover);
+}
+
+/* Deshabilitados */
+input:disabled,
+select:disabled,
+textarea:disabled,
+.val-input:disabled {
+  background: var(--gray);
+  color: var(--dgray);
+  cursor: not-allowed;
+  opacity: 0.75;
+  border-color: var(--border);
+}
+
+/* Placeholder */
+::placeholder {
+  color: var(--dgray);
+  opacity: 0.7;
+  font-size: 12.5px;
+}
+
+/* ═══ SELECT CON FLECHA MODERNA SVG ═══ */
+select,
+.val-input select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748B'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+/* ═══ FILAS DE CAMPOS Y ETIQUETAS (.field-row) ═══ */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.field-row label {
+  font-size: 12.5px;
+  color: var(--dgray);
+  min-width: 95px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.field-col label {
+  font-size: 11.5px;
+  color: var(--dgray);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ═══ TIER SELECTOR (PRECIOS POR VOLUMEN) ═══ */
+.tier-selector {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.tier-btn {
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--card-bg);
+  color: var(--dgray);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all var(--trans-fast);
+  flex: 1;
+  text-align: center;
+  font-family: inherit;
+}
+
+.tier-btn:hover:not(:disabled) {
+  background: var(--lblue);
+  color: var(--blue);
+  border-color: var(--blue);
+}
+
+.tier-btn.active {
+  background: var(--lblue);
+  color: var(--blue);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+
+.tier-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ═══ CHIPS DE MOVIMIENTO Y FILTROS (.mov-chip) ═══ */
+.mov-chip {
+  border: 1.5px solid var(--border);
+  background: var(--card-bg);
+  color: var(--dgray);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--trans-fast);
+}
+
+.mov-chip:hover {
+  background: var(--gray);
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+.mov-chip.active {
+  background: var(--navy);
+  color: #FFF;
+  border-color: var(--navy);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ═══ VALIDACIONES Y ESTADOS DE ERROR ═══ */
+.val-input.is-invalid,
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+  border-color: var(--red) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+  background-color: rgba(239, 68, 68, 0.04) !important;
+}
+
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--red);
+  margin-top: 4px;
+  font-weight: 500;
+  animation: fadeIn 0.15s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+

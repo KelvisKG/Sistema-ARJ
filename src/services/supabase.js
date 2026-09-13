@@ -1,0 +1,189 @@
+// =====================================================================
+// ARJ - Supabase Integration Service (Vue 3 / ES Module)
+// =====================================================================
+import { createClient } from '@supabase/supabase-js';
+import { DEFAULT_PRODUCTOS, DEFAULT_CLIENTES, DEFAULT_FACTURAS_COBRAR } from './seedData.js';
+import { FACTOR_LANDED_FALLBACK } from './pricing.js';
+
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true
+  }
+});
+
+// Carga completa de datos tolerante a RLS y fallos de red
+export async function cargarDatosCompletos() {
+  const resultado = {
+    productos: [],
+    clientes: [],
+    facturasCobrar: [],
+    todasFacturas: [],
+    embarques: [],
+    tasas: { tasa_par: 58.50, tasa_bcv: 47.80, dto_divisa: 18.29 },
+    conectado: false
+  };
+
+  try {
+    // 1. Probar conexion cargando tasas / config si existe
+    try {
+      const { data: cfg, error: eCfg } = await supabase.from('configuracion').select('*').limit(1);
+      if (!eCfg) {
+        resultado.conectado = true;
+        if (cfg && cfg.length > 0) {
+          const c = cfg[0];
+          if (c.tasa_par) resultado.tasas.tasa_par = parseFloat(c.tasa_par);
+          if (c.tasa_bcv) resultado.tasas.tasa_bcv = parseFloat(c.tasa_bcv);
+          if (c.dto_divisa) resultado.tasas.dto_divisa = parseFloat(c.dto_divisa);
+        }
+      }
+    } catch (_) {}
+
+    // 2. Productos
+    try {
+      const { data: prods, error: eP } = await supabase
+        .from('productos')
+        .select('*')
+        .eq('activo', true)
+        .order('cod_alt');
+
+      if (!eP) {
+        resultado.conectado = true;
+        if (prods && prods.length > 0) {
+          resultado.productos = prods.map(p => ({
+            id: p.id,
+            cod_alt: p.cod_alt,
+            cod_orig: p.cod_orig || '',
+            cod_barras: p.cod_barras || '',
+            desc: p.descripcion,
+            marca: p.marca || '',
+            fob: parseFloat(p.fob) || 0,
+            stock_vd: parseInt(p.stock_vd) || 0,
+            stock_dist: parseInt(p.stock_dist) || 0,
+            marca_modelo: p.marca_modelo || '',
+            sistema: p.sistema || '',
+            precio_manual: p.precio_manual ? parseFloat(p.precio_manual) : null,
+            imagen_url: p.imagen_url || '',
+            origen: p.origen || 'importado',
+            factor_landed: p.factor_landed != null ? parseFloat(p.factor_landed) : FACTOR_LANDED_FALLBACK,
+            proveedor: p.proveedor || '',
+            embarque_id: p.embarque_id || null
+          }));
+        }
+      }
+    } catch (errP) {
+      console.warn('[ARJ] Aviso cargando productos de Supabase:', errP);
+    }
+
+    if (resultado.productos.length === 0) {
+      resultado.productos = JSON.parse(JSON.stringify(DEFAULT_PRODUCTOS));
+    }
+
+    // 3. Clientes
+    try {
+      const { data: clis, error: eC } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('activo', true)
+        .order('nombre');
+
+      if (!eC) {
+        resultado.conectado = true;
+        if (clis && clis.length > 0) {
+          resultado.clientes = clis.map(c => ({
+            id: c.id,
+            nombre: c.nombre,
+            rif: c.rif || '',
+            nivel: c.nivel || 'T1',
+            tipo: c.tipo || 'contado',
+            saldo_vd: parseFloat(c.saldo_vd) || 0,
+            saldo_dist: parseFloat(c.saldo_dist) || 0,
+            tel: c.telefono || '',
+            empresa: c.empresa || 'ambas',
+            origen: c.origen || 'mostrador',
+            origen_detalle: c.origen_detalle || '',
+            direccion: c.direccion || '',
+            notas: c.notas || '',
+            contacto_principal: {
+              nombre: c.contacto_nombre || '',
+              cargo: c.contacto_cargo || '',
+              tel: c.contacto_tel || ''
+            },
+            contactos_adicionales: []
+          }));
+        }
+      }
+    } catch (errC) {
+      console.warn('[ARJ] Aviso cargando clientes de Supabase:', errC);
+    }
+
+    if (resultado.clientes.length === 0) {
+      resultado.clientes = JSON.parse(JSON.stringify(DEFAULT_CLIENTES));
+    }
+
+    // 4. Facturas
+    try {
+      const { data: facs, error: eF } = await supabase
+        .from('facturas')
+        .select('*')
+        .order('fecha', { ascending: false });
+
+      if (!eF) {
+        resultado.conectado = true;
+        if (facs && facs.length > 0) {
+          resultado.todasFacturas = facs;
+          resultado.facturasCobrar = facs.filter(f => f.estado !== 'pagada' && f.estado !== 'anulada');
+        }
+      }
+    } catch (errF) {
+      console.warn('[ARJ] Aviso cargando facturas de Supabase:', errF);
+    }
+
+    if (resultado.facturasCobrar.length === 0) {
+      resultado.facturasCobrar = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
+      resultado.todasFacturas = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
+    }
+
+  } catch (err) {
+    console.error('[ARJ] Error global cargando Supabase:', err);
+    resultado.productos = JSON.parse(JSON.stringify(DEFAULT_PRODUCTOS));
+    resultado.clientes = JSON.parse(JSON.stringify(DEFAULT_CLIENTES));
+    resultado.facturasCobrar = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
+    resultado.todasFacturas = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
+  }
+
+  return resultado;
+}
+
+// Guardar factura en Supabase con tolerancia
+export async function guardarFacturaEnSupabase(factura) {
+  try {
+    const { data, error } = await supabase.from('facturas').insert([factura]).select();
+    if (error) {
+      console.warn('[ARJ] Error al guardar factura en Supabase:', error.message);
+      return { ok: false, error };
+    }
+    return { ok: true, data: data ? data[0] : null };
+  } catch (err) {
+    console.warn('[ARJ] Excepcion guardando factura en Supabase:', err);
+    return { ok: false, error: err };
+  }
+}
+
+// Guardar nuevo cliente
+export async function guardarClienteEnSupabase(cliente) {
+  try {
+    const { data, error } = await supabase.from('clientes').insert([cliente]).select();
+    if (error) {
+      console.warn('[ARJ] Error al guardar cliente en Supabase:', error.message);
+      return { ok: false, error };
+    }
+    return { ok: true, data: data ? data[0] : null };
+  } catch (err) {
+    console.warn('[ARJ] Excepcion guardando cliente en Supabase:', err);
+    return { ok: false, error: err };
+  }
+}

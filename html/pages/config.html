@@ -1,0 +1,148 @@
+﻿    <div class="page" id="page-config">
+      <h1 class="page-title"><i class="ti ti-settings"></i> Configuración</h1>
+      <p class="page-sub">Tasas · Parámetros ARJ · Datos de empresa · Usuarios · Backups</p>
+
+      <div class="config-grid">
+        <div class="config-card">
+          <h3><i class="ti ti-currency-dollar" style="color:var(--blue)"></i> Tasas de cambio</h3>
+          <div class="config-row"><label>Dólar paralelo</label><input class="val-input" id="cfg-par" value=""
+              type="number" step="0.01" placeholder="Sin cargar" onchange="actualizarTasas()"></div>
+          <div class="config-row"><label>Dólar BCV</label><input class="val-input" id="cfg-bcv" value=""
+              type="number" step="0.01" placeholder="Sin cargar" onchange="actualizarTasas()"></div>
+          <div class="config-row"><label>Euro</label><input class="val-input" value="232.40" type="number" step="0.01">
+          </div>
+          <div class="config-row" style="border:none;padding-top:14px;flex-direction:column;align-items:stretch;gap:8px">
+            <div id="cfg-tasas-estado" style="font-size:11.5px;text-align:center;line-height:1.5"></div>
+            <button class="btn btn-primary btn-sm" style="margin:0 auto" onclick="confirmarTasasHoy()"><i
+                class="ti ti-check"></i> Confirmar tasas de hoy</button>
+            <button class="btn btn-secondary btn-sm" style="margin:0 auto" onclick="avisoTasaAuto()"><i
+                class="ti ti-refresh"></i> Traer desde BCV.org.ve</button>
+          </div>
+        </div>
+
+        <div class="config-card">
+          <h3><i class="ti ti-adjustments" style="color:var(--blue)"></i> Parámetros ARJ</h3>
+          <div class="config-row"><label>Factor landed por defecto</label><input class="val-input" id="cfg-factor" value="1.471" type="number"
+              step="0.001" min="1" max="5" onchange="actualizarFactorDefault(this.value)"></div>
+          <div class="config-row"><label style="font-size:11px;color:var(--dgray)">Solo aplica a productos NUEVOS</label><label
+              style="font-size:11px;color:var(--dgray)">No toca los ya cargados</label></div>
+          <div class="config-row"><label>Costos fijos — mes</label><input class="val-input" id="cfg-fijos-mes"
+              type="month" onchange="cambiarPeriodoFijos()"></div>
+          <div class="config-row"><label>Monto del mes USD</label><input class="val-input" id="cfg-fijos"
+              value="0" type="number" step="0.01" min="0" onchange="actualizarCostosFijos(this.value)"></div>
+          <div class="config-row" style="border:none;padding-top:4px"><label
+              style="font-size:11px;color:var(--dgray)">Cada mes guarda su propio monto</label></div>
+          <div id="cfg-fijos-lista" style="font-size:11px;color:var(--dgray);padding:0 0 8px"></div>
+          <div class="config-row"><label>Costos fijos /mes</label><input class="val-input" value="6148" type="number"
+              step="50"></div>
+          <div class="config-row"><label>IVA Venezuela</label><input class="val-input" value="0" type="number"
+              step="0.1" style="background:#FCE4D6;border-color:var(--red);color:var(--red)" disabled></div>
+          <div class="config-row"><label style="font-size:11px;color:var(--gold)">⚠ IVA bloqueado en 0%</label><label
+              style="font-size:11px;color:var(--dgray)">Repuestos agrícolas exentos</label></div>
+        </div>
+      </div>
+
+      <div class="config-grid">
+        <div class="config-card">
+          <h3><i class="ti ti-database" style="color:var(--green)"></i> Backup y datos guardados</h3>
+          <div class="config-row"><label>Persistencia local</label><span style="color:var(--green);font-weight:600"><i
+                class="ti ti-circle-check"></i> Activa · localStorage</span></div>
+          <div class="config-row"><label>Auto-guardado</label><span style="font-size:11px">Cada cambio + cada 60
+              seg.</span></div>
+          <div class="config-row"><label>Último guardado</label><span style="font-size:11px"
+              id="cfg-ultimo-guardado">—</span></div>
+          <div class="config-row"><label>Tamaño en localStorage</label><span style="font-size:11px"
+              id="cfg-tam-storage">—</span></div>
+          <div
+            style="background:#FFF8E1;border:1px solid #FFE082;border-radius:6px;padding:10px 12px;margin:10px 0;font-size:11.5px;color:#5D4037">
+            <strong><i class="ti ti-info-circle"></i> Importante:</strong> los datos se guardan en este equipo y este
+            navegador. Si cambias de PC o limpias historial, se pierden. <strong>Exporta un respaldo en JSON
+              periódicamente.</strong>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+            <button class="btn btn-primary btn-sm" onclick="exportarDatosJSON()"><i class="ti ti-download"></i> Exportar
+              JSON</button>
+            <button class="btn btn-secondary btn-sm" onclick="importarDatosJSON()"><i class="ti ti-upload"></i> Importar
+              JSON</button>
+          </div>
+          <div style="margin-top:8px">
+            <button class="btn btn-secondary btn-sm" onclick="resetearDatosDemo()"
+              style="width:100%;color:var(--red);border-color:var(--red)"><i class="ti ti-refresh-alert"></i> Resetear a
+              datos demo</button>
+          </div>
+          <input type="file" id="input-import-json" accept=".json,application/json" style="display:none"
+            onchange="_procesarArchivoImport(event)">
+        </div>
+
+        <div class="config-card">
+          <h3><i class="ti ti-users" style="color:var(--blue)"></i> Usuarios del sistema</h3>
+          <div style="font-size:11.5px;color:var(--dgray);margin-bottom:10px">Cada vendedor está asignado a UNA empresa.
+            Solo el gerente puede ver y operar en ambas.</div>
+          <table class="simple-tbl" style="font-size:11.5px">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Empresa</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="usuarios-body"></tbody>
+          </table>
+          <div style="margin-top:12px;text-align:right">
+            <button class="btn btn-secondary btn-sm"><i class="ti ti-user-plus"></i> Agregar usuario</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LISTAS DE PRECIOS PERSONALIZADAS -->
+      <div style="margin-top:14px">
+        <div class="config-card">
+          <h3><i class="ti ti-list" style="color:var(--blue)"></i> Listas de precios personalizadas</h3>
+          <p style="font-size:12px;color:var(--dgray);margin-bottom:12px">Más allá de los 4 tramos fijos (Público, T1,
+            T2, T3), puedes crear listas especiales para casos puntuales: familiares, clientes VIP, precio costo, etc.
+          </p>
+          <div id="listas-precios-cont"></div>
+          <div style="margin-top:12px;text-align:right">
+            <button class="btn btn-primary btn-sm" onclick="abrirNuevaLista()"><i class="ti ti-plus"></i> Crear lista
+              personalizada</button>
+          </div>
+        </div>
+
+        <!-- RESPALDO (v13.30) -->
+        <div class="config-card" id="card-respaldo">
+          <h3><i class="ti ti-database-export" style="color:var(--green)"></i> Respaldo de la base de datos</h3>
+          <p style="font-size:12px;color:var(--dgray);margin-bottom:10px;line-height:1.55">
+            Descarga <strong>todo</strong> lo que hay en Supabase a un solo archivo en tu computadora: productos,
+            facturas, renglones, pagos, clientes, embarques, movimientos y bitácora.
+            El plan Free de Supabase <strong>no hace respaldos automáticos</strong>, así que este archivo es
+            tu única copia si algo le pasa a la base.
+          </p>
+          <div style="background:#FFF4E5;border-left:3px solid #BF8F00;border-radius:6px;padding:9px 11px;font-size:12px;line-height:1.55;margin-bottom:12px">
+            <strong>Hazlo cada viernes</strong> y guarda el archivo en OneDrive, no solo en el disco de la PC.
+            Un respaldo que vive en la misma máquina no te salva si se daña la máquina.
+          </div>
+          <div id="resp-estado" style="font-size:12.5px;margin-bottom:10px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary" id="btn-respaldar" onclick="respaldarTodo()">
+              <i class="ti ti-download"></i> Respaldar todo ahora</button>
+            <span style="font-size:11.5px;color:var(--dgray)" id="resp-ultimo"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTÓN AYUDA -->
+  <button class="help-fab" onclick="mostrarAyuda()" title="Ayuda"><i class="ti ti-help"></i></button>
+
+  <!-- HINT DE ATAJO -->
+  <div class="shortcut-hint" id="shortcut-hint">
+    <i class="ti ti-keyboard"></i> Tip: presiona <kbd>Esc</kbd> para salir rápido
+  </div>
+
+  <!-- NOTIF TOAST -->
+  <div class="notif" id="notif"><i class="ti ti-circle-check"></i> <span id="notif-text">Mensaje</span></div>
+
+  <!-- MODAL FACTURA EMITIDA -->

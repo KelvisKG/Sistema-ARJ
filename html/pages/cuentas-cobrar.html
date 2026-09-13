@@ -1,0 +1,42 @@
+﻿    <div class="page" id="page-cobrar">
+      <h1 class="page-title"><i class="ti ti-cash"></i> Cuentas por Cobrar</h1>
+      <p class="page-sub">Empresa: <strong id="emp-cobrar">Venta Directa</strong></p>
+
+      <div class="help-box">
+        <i class="ti ti-info-circle"></i>
+        <div><strong>Código de colores:</strong> <span style="color:var(--red);font-weight:600">Rojo</span> vencida ·
+          <span style="color:#EF9F27;font-weight:600">Amarillo</span> por vencer · <span
+            style="color:var(--green);font-weight:600">Verde</span> al día.</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card blue">
+          <div class="kpi-icon"><i class="ti ti-coin"></i></div>
+          <div class="kpi-label">Por cobrar total</div>
+          <div class="kpi-val" id="kpi-cobrar-total">$ 0</div>
+          <div class="kpi-sub" id="kpi-cobrar-total-sub">0 facturas</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-icon"><i class="ti ti-alert-triangle"></i></div>
+          <div class="kpi-label">Vencidas</div>
+          <div class="kpi-val" style="color:var(--red)" id="kpi-cobrar-vencidas">$ 0</div>
+          <div class="kpi-sub" id="kpi-cobrar-vencidas-sub">0 facturas</div>
+        </div>
+        <div class="kpi-card gold">
+          <div class="kpi-icon"><i class="ti ti-clock"></i></div>
+          <div class="kpi-label">Por vencer ≤7d</div>
+          <div class="kpi-val" style="color:var(--gold)" id="kpi-cobrar-porvencer">$ 0</div>
+          <div class="kpi-sub" id="kpi-cobrar-porvencer-sub">0 facturas</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-icon"><i class="ti ti-circle-check"></i></div>
+          <div class="kpi-label" title="Valor en dólares físicos: los pagos en Bs se registran a su poder de recompra (tasa paralelo), no a tasa BCV. No es comparable con el monto facturado, que está en $BCV.">Cobrado mes ($ verde)</div>
+          <div class="kpi-val" style="color:var(--green)" id="kpi-cobrado-mes">$ 0</div>
+          <div class="kpi-sub" id="kpi-cobrado-mes-sub">0 pagos</div>
+        </div>
+      </div>
+
+      <div id="deudas-list"></div>
+    </div>
+
+    <!-- ───── PRESUPUESTOS (antes COTIZACIONES) ───── -->

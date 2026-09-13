@@ -1,0 +1,64 @@
+﻿    <div class="modal" id="modal-traspaso">
+      <div class="modal-content" style="max-width:760px;text-align:left;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:12px">
+          <h3 style="margin:0;font-size:18px;color:var(--navy);font-weight:600"><i class="ti ti-arrows-exchange"></i> Despachar a Venta Directa</h3>
+          <button class="btn btn-secondary btn-sm" onclick="cerrarTraspaso()"><i class="ti ti-x"></i></button>
+        </div>
+        <div>
+          <div id="tras-paso1">
+            <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">
+              <button class="btn btn-sm" id="tras-tab-sel" onclick="trasTab('sel')"><i class="ti ti-list-check"></i> Seleccionar</button>
+              <button class="btn btn-secondary btn-sm" id="tras-tab-txt" onclick="trasTab('txt')"><i class="ti ti-clipboard"></i> Pegar lista</button>
+            </div>
+            <div style="margin-bottom:10px">
+              <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:3px">Referencia / motivo (opcional)</label>
+              <input type="text" class="val-input" id="tras-ref" placeholder="Ej: Reposición mostrador semana 33" style="width:100%">
+            </div>
+
+            <div id="tras-modo-sel">
+              <div style="background:var(--lblue);border-radius:6px;padding:9px 12px;margin-bottom:10px;font-size:11.5px;color:var(--navy)">
+                <i class="ti ti-ship"></i> Solo aparecen productos <strong>sellados con embarque</strong> y con stock en Distribuidora. Lo que no se ha sellado todavía no ha llegado al galpón.
+              </div>
+              <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:8px;margin-bottom:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:3px">Embarque</label>
+                  <select class="val-input" id="tras-emb" onchange="trasRenderSel()" style="width:100%"></select>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:3px">Buscar</label>
+                  <input type="text" class="val-input" id="tras-buscar" oninput="trasRenderSel()" placeholder="Código o descripción" style="width:100%">
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">
+                <button class="btn btn-secondary btn-sm" onclick="trasMitad()"><i class="ti ti-divide"></i> La mitad de todo</button>
+                <button class="btn btn-secondary btn-sm" onclick="trasLimpiar()"><i class="ti ti-eraser"></i> Limpiar</button>
+                <span style="font-size:10.5px;color:var(--dgray)">La mitad del stock actual en Distribuidora, redondeando hacia abajo</span>
+              </div>
+              <div id="tras-lista" style="max-height:290px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+              <div id="tras-contador" style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:8px 11px;background:var(--gray);border-radius:6px;font-size:12px"></div>
+            </div>
+
+            <div id="tras-modo-txt" style="display:none">
+              <div style="background:var(--lblue);border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:11.5px;color:var(--navy)">
+                <i class="ti ti-info-circle"></i> Mueve stock de <strong>Distribuidora</strong> a <strong>Venta Directa</strong>. Pega <strong>código</strong> y <strong>cantidad</strong>, una línea por producto.
+              </div>
+              <textarea id="tras-texto" placeholder="5198060	5&#10;82025254	2"
+                style="width:100%;min-height:170px;background:#FFF;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical"></textarea>
+            </div>
+          </div>
+          <div id="tras-paso2" style="display:none">
+            <div id="tras-resumen"></div>
+            <div id="tras-tabla" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-top:10px"></div>
+          </div>
+          <div id="tras-paso3" style="display:none"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--gray);padding-top:12px">
+          <button class="btn btn-secondary" onclick="cerrarTraspaso()" id="tras-btn-cancelar">Cancelar</button>
+          <button class="btn btn-secondary" onclick="trasVolver()" id="tras-btn-volver" style="display:none">← Corregir</button>
+          <button class="btn btn-primary" onclick="trasRevisar()" id="tras-btn-analizar"><i class="ti ti-eye"></i> Revisar</button>
+          <button class="btn btn-primary" onclick="trasAplicar()" id="tras-btn-aplicar" style="display:none"><i class="ti ti-check"></i> Despachar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ MODAL RECEPCIÓN DE MERCANCÍA (v13.4) ═══ -->

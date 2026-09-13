@@ -1,0 +1,53 @@
+﻿  <div class="confirm-modal" id="modal-lp-analisis">
+    <div class="confirm-box lpa-box">
+      <h3><i class="ti ti-chart-bar"></i> Simulador de precios &middot; uso interno</h3>
+      <div class="lpa-fijo" id="lpa-kpis"></div>
+      <div class="lpa-fijo"
+        style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px;background:#F2F5FA;border-radius:6px;font-size:12px">
+        <span style="color:var(--dgray)">Multiplicador a todos:</span>
+        <input type="number" id="lpa-mult-global" step="0.1" min="0" placeholder="2.5"
+          style="width:66px;padding:4px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:12px;font-family:inherit">
+        <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:12px"
+          onclick="_lpaAplicarGlobal()">Aplicar</button>
+        <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:12px"
+          onclick="_lpaSubirBajos()">Subir los bajos al 30%</button>
+        <button type="button" class="btn btn-secondary" style="padding:4px 9px;font-size:12px"
+          onclick="_lpaRestaurar()">Restaurar</button>
+        <span style="color:var(--dgray);margin-left:6px">Distribuidora:</span>
+        <select id="lpa-tier" onchange="_lpaCambioTier(this.value)"
+          style="padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit">
+          <option value="Publico">Precio público</option>
+          <option value="T1">Aliado T1 −5%</option>
+          <option value="T2">Aliado T2 −10%</option>
+          <option value="T3">Aliado T3 −20%</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto">
+          <input type="checkbox" id="lpa-solo-bajos" onchange="_lpaToggleBajos(this.checked)"> Solo margen bajo
+        </label>
+      </div>
+      <div class="lpa-tabla-wrap">
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr style="position:sticky;top:0;z-index:1">
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:left">Producto</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:right">V. Directa</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:right">Distrib.</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:right">FOB</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:right">Costo</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:center">×FOB</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:center">Precio</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:right">Margen</th>
+            <th style="background:#BF8F00;color:#FFF;padding:5px 6px;text-align:right">Total</th>
+          </tr></thead>
+          <tbody id="lpa-tbody"></tbody>
+        </table>
+      </div>
+      <div class="lpa-fijo" style="font-size:10px;color:var(--dgray)">
+        <strong>Simulación</strong> — no se guarda en el catálogo. No contempla costos fijos.
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="_lpaPDF()"><i class="ti ti-file-type-pdf"></i> Informe PDF</button>
+        <button class="btn btn-secondary" onclick="_lpaCSV()"><i class="ti ti-file-spreadsheet"></i> CSV interno</button>
+        <button class="btn btn-secondary" onclick="cerrarLpAnalisis()">Cerrar</button>
+      </div>
+    </div>
+  </div>

@@ -1,0 +1,163 @@
+/* =====================================================================
+   SISTEMA ARJ · VENTANAS MODALES MODERNAS (GLASSMORPHISM & POP ANIMATION)
+   ===================================================================== */
+
+.modal,
+.confirm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.modal.show,
+.confirm-modal.show {
+  display: flex;
+  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-content,
+.confirm-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  width: 100%;
+  max-width: 600px;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 24px;
+  position: relative;
+  animation: modalPopIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--text);
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Modal Headers */
+.modal-content h2,
+.modal-content h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-top: 0;
+  letter-spacing: -0.01em;
+}
+
+.modal-sub {
+  color: var(--dgray);
+  font-size: 13px;
+  margin-bottom: 18px;
+  line-height: 1.45;
+}
+
+/* Resumen en Modal */
+.modal-summary {
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+
+.modal-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 13px;
+}
+
+.modal-summary-row strong {
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--gray);
+}
+
+/* Confirm Box Centrado */
+.confirm-box {
+  max-width: 440px;
+  text-align: center;
+  padding: 28px 24px;
+}
+
+.confirm-box h3 {
+  font-size: 18px;
+  margin: 10px 0 8px;
+}
+
+.confirm-box p {
+  font-size: 13px;
+  color: var(--dgray);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.confirm-box .actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* Botón Flotante Help FAB */
+.help-fab {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  background: linear-gradient(135deg, #1E3A5F 0%, #0F2744 100%);
+  color: #FFF;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px -4px rgba(15, 39, 68, 0.4);
+  z-index: 7000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all var(--trans-fast);
+}
+
+.help-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 12px 25px -4px rgba(15, 39, 68, 0.5);
+}
+
+body.dark .help-fab {
+  background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+  box-shadow: 0 8px 20px -4px rgba(2, 132, 199, 0.4);
+}

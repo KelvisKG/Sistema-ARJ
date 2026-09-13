@@ -1,0 +1,54 @@
+﻿    <div class="page" id="page-turnos">
+      <h1 class="page-title"><i class="ti ti-clock-play"></i> Turnos y cierre de caja</h1>
+      <p class="page-sub">Control de efectivo · Apertura y cierre por turno · Cuadre automático</p>
+
+      <div class="help-box">
+        <i class="ti ti-info-circle"></i>
+        <div><strong>¿Cómo funciona?</strong> Al inicio del día cada vendedor abre turno declarando cuánto efectivo
+          recibe. Al final lo cierra contando lo que queda. El sistema calcula automáticamente cuánto debería haber
+          según las ventas en efectivo y muestra si falta o sobra.</div>
+      </div>
+
+      <!-- Mi turno actual -->
+      <div class="card" id="mi-turno-card" style="border-left:4px solid var(--green)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div
+              style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500;margin-bottom:4px">
+              Tu turno actual</div>
+            <h3 id="mi-turno-titulo" style="font-size:16px;color:var(--navy);font-weight:600;margin-bottom:6px">Turno
+              cerrado</h3>
+            <p id="mi-turno-info" style="font-size:12.5px;color:var(--dgray);margin:0">No tienes un turno abierto. Abre
+              uno para comenzar a registrar ventas en efectivo.</p>
+          </div>
+          <div id="mi-turno-acciones" style="display:flex;gap:8px"></div>
+        </div>
+        <div id="mi-turno-detalle"
+          style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--gray)"></div>
+      </div>
+
+      <!-- Turnos del día -->
+      <h2 style="font-size:14px;color:var(--navy);font-weight:600;margin:18px 0 10px"><i class="ti ti-list"></i> Turnos
+        de hoy</h2>
+      <div class="card" style="padding:0">
+        <table class="simple-tbl">
+          <thead>
+            <tr>
+              <th>Vendedor</th>
+              <th>Empresa</th>
+              <th>Apertura</th>
+              <th>Cierre</th>
+              <th class="num">Efectivo apertura</th>
+              <th class="num">Ventas efectivo</th>
+              <th class="num">Esperado</th>
+              <th class="num">Real</th>
+              <th class="num">Diferencia</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="turnos-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ───── ALERTAS INTELIGENTES ───── -->

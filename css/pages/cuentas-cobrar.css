@@ -1,0 +1,68 @@
+﻿/* === Cuentas por Cobrar === */
+    /* CxC */
+    .deuda-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-left: 4px solid #C0DD97;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      transition: transform 0.15s
+    }
+
+    .deuda-row:hover {
+      transform: translateX(2px)
+    }
+
+    .deuda-row.vencida {
+      border-left-color: #E24B4A;
+      background: #FEF5F5
+    }
+
+    .deuda-row.por_vencer {
+      border-left-color: #EF9F27;
+      background: #FFFAF0
+    }
+
+    .deuda-info-block {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1
+    }
+
+    .deuda-cliente {
+      font-weight: 600;
+      color: #222;
+      font-size: 13.5px
+    }
+
+    .deuda-fecha {
+      font-size: 11.5px;
+      color: var(--dgray)
+    }
+
+    .deuda-fecha.vencida {
+      color: var(--red);
+      font-weight: 500
+    }
+
+    .deuda-monto-block {
+      text-align: right;
+      margin-right: 12px
+    }
+
+    .deuda-monto {
+      font-weight: 700;
+      color: var(--navy);
+      font-size: 15px
+    }
+
+    .deuda-abono {
+      font-size: 11px;
+      color: var(--dgray);
+      margin-top: 2px
+    }

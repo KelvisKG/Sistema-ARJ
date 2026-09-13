@@ -1,0 +1,117 @@
+﻿/* === Alertas === */
+    /* ═══ LOTE B: FILTROS DE ALERTAS ═══ */
+    .filtro-alerta {
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 13px;
+      font-size: 12px;
+      color: var(--dgray);
+      cursor: pointer;
+      font-weight: 500;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s
+    }
+
+    .filtro-alerta:hover {
+      border-color: var(--navy);
+      color: var(--navy)
+    }
+
+    .filtro-alerta.active {
+      background: var(--navy);
+      color: #FFF;
+      border-color: var(--navy)
+    }
+
+    .filtro-alerta i {
+      font-size: 13px
+    }
+
+    /* ═══ TARJETAS DE ALERTA ═══ */
+    .alerta-card {
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start
+    }
+
+    .alerta-card.critica {
+      border-left-color: var(--red);
+      background: #FEF5F5
+    }
+
+    .alerta-card.warning {
+      border-left-color: var(--gold);
+      background: #FFFAF0
+    }
+
+    .alerta-card.info {
+      border-left-color: var(--blue);
+      background: #F5F8FC
+    }
+
+    .alerta-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0
+    }
+
+    .alerta-card.critica .alerta-icon {
+      background: var(--lred);
+      color: var(--red)
+    }
+
+    .alerta-card.warning .alerta-icon {
+      background: var(--lgold);
+      color: var(--gold)
+    }
+
+    .alerta-card.info .alerta-icon {
+      background: var(--lblue);
+      color: var(--blue)
+    }
+
+    .alerta-content {
+      flex: 1
+    }
+
+    .alerta-titulo {
+      font-weight: 600;
+      color: #222;
+      font-size: 13.5px;
+      margin-bottom: 3px
+    }
+
+    .alerta-desc {
+      font-size: 12.5px;
+      color: var(--dgray);
+      line-height: 1.5;
+      margin-bottom: 6px
+    }
+
+    .alerta-meta {
+      font-size: 11px;
+      color: var(--dgray);
+      display: flex;
+      gap: 10px;
+      align-items: center
+    }
+
+    .alerta-acciones {
+      display: flex;
+      gap: 6px
+    }

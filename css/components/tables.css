@@ -1,0 +1,112 @@
+/* =====================================================================
+   SISTEMA ARJ · TABLAS MODERNAS, REPORTES Y KARDEX
+   ===================================================================== */
+
+.tbl,
+.simple-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+}
+
+.tbl th,
+.simple-tbl th {
+  background: #F8FAFC;
+  color: var(--dgray);
+  text-align: left;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1.5px solid var(--border);
+  white-space: nowrap;
+}
+
+.tbl th:first-child,
+.simple-tbl th:first-child {
+  border-top-left-radius: var(--radius-sm);
+}
+
+.tbl th:last-child,
+.simple-tbl th:last-child {
+  border-top-right-radius: var(--radius-sm);
+}
+
+.tbl th.num,
+.tbl td.num,
+.simple-tbl th.num,
+.simple-tbl td.num {
+  text-align: right;
+}
+
+.tbl td,
+.simple-tbl td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.tbl tr:last-child td,
+.simple-tbl tr:last-child td {
+  border-bottom: none;
+}
+
+.tbl tr:hover td,
+.simple-tbl tr:hover td {
+  background: rgba(37, 99, 235, 0.025);
+}
+
+/* Celdas de edición rápida de precio y cantidad */
+.price-edit-cell {
+  background: #FFFBEB;
+  border: 1.5px solid #F59E0B;
+  border-radius: 6px;
+  padding: 4px 8px;
+  width: 85px;
+  text-align: right;
+  font-weight: 700;
+  color: #B45309;
+  font-size: 12.5px;
+  font-family: inherit;
+  outline: none;
+  transition: all var(--trans-fast);
+}
+
+.price-edit-cell:focus {
+  background: #FEF3C7;
+  border-color: #D97706;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.qty-cell {
+  background: var(--input-bg);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  width: 60px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12.5px;
+  font-family: inherit;
+  outline: none;
+  transition: all var(--trans-fast);
+}
+
+.qty-cell:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Contenedor de tabla con scroll suave */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  background: var(--card-bg);
+}

@@ -1,0 +1,59 @@
+﻿  <div class="modal" id="modal-nota-credito">
+    <div class="modal-content" style="max-width:680px;text-align:left">
+      <div
+        style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:12px">
+        <div>
+          <h2 style="margin:0;text-align:left;color:var(--gold)"><i class="ti ti-receipt-refund"></i> Nota de crédito
+          </h2>
+          <p style="margin:3px 0 0;color:var(--dgray);font-size:13px" id="nc-info">F-2026-XXXXX · Cliente · Devolución
+            parcial</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="cerrarNotaCredito()"><i class="ti ti-x"></i></button>
+      </div>
+      <div
+        style="background:#FFF8E1;border:1px solid #FFC107;border-left:4px solid var(--gold);border-radius:6px;padding:10px 12px;font-size:12.5px;color:#5D4037;margin-bottom:14px">
+        <i class="ti ti-info-circle"></i> Selecciona qué productos devuelve el cliente. El stock de esos productos se
+        restaura y se descuenta del saldo del cliente.
+      </div>
+      <table class="simple-tbl">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="num">Facturado</th>
+            <th class="num">Ya devuelto</th>
+            <th class="num">Precio</th>
+            <th class="num">Devolver</th>
+            <th class="num">Crédito $</th>
+          </tr>
+        </thead>
+        <tbody id="nc-items"></tbody>
+      </table>
+      <div
+        style="background:var(--lgreen);border-radius:6px;padding:10px 14px;margin-top:12px;display:flex;justify-content:space-between;font-weight:600;color:var(--green)">
+        <span>Total nota de crédito:</span>
+        <span id="nc-total">$ 0,00</span>
+      </div>
+      <!-- v13.8: qué se hace con el crédito. Solo aparece cuando la factura ya
+           está pagada y no hay saldo contra el cual descontar. -->
+      <div id="nc-destino-wrap" style="display:none;margin-top:12px">
+        <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:4px">Esta factura ya está pagada. ¿Qué se hace con el crédito?</label>
+        <select class="val-input" id="nc-destino" style="width:100%">
+          <option value="favor">Dejarlo a favor del cliente (baja su saldo o queda de anticipo)</option>
+          <option value="efectivo">Devolver el efectivo (sale de caja hoy)</option>
+        </select>
+      </div>
+      <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:6px;margin-top:10px">
+        <label>Motivo:</label>
+        <textarea id="nc-motivo" placeholder="Ej: Cliente devolvió 2 filtros por garantía..."
+          style="width:100%;min-height:60px;background:#FFF;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+      <div
+        style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid var(--gray)">
+        <button class="btn btn-secondary" onclick="cerrarNotaCredito()">Cancelar</button>
+        <button class="btn btn-gold" id="nc-btn-emitir" onclick="confirmarNotaCredito()"><i class="ti ti-receipt-refund"></i> Emitir nota
+          de crédito</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ESTADO DE CUENTA WHATSAPP -->
