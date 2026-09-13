@@ -110,3 +110,54 @@
   box-shadow: var(--shadow-xs);
   background: var(--card-bg);
 }
+
+/* =====================================================================
+   RESPONSIVIDAD (TABLAS A TARJETAS EN MÓVILES)
+   ===================================================================== */
+@media (max-width: 768px) {
+  .tbl, .simple-tbl {
+    display: block;
+    background: transparent;
+  }
+  .tbl thead, .simple-tbl thead {
+    display: none;
+  }
+  .tbl tbody, .simple-tbl tbody {
+    display: block;
+  }
+  .tbl tr, .simple-tbl tr {
+    display: flex;
+    flex-wrap: wrap;
+    background: var(--card-bg);
+    margin-bottom: 12px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    box-shadow: var(--shadow-sm);
+  }
+  .tbl td, .simple-tbl td {
+    display: flex;
+    align-items: center;
+    border: none;
+    padding: 6px 4px;
+    font-size: 13.5px;
+  }
+  
+  /* Comportamiento genérico de columnas para que luzca como tarjeta */
+  .tbl td:first-child {
+    width: 100%;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--blue);
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 8px;
+  }
+  .tbl td:nth-child(2) {
+    width: 100%;
+    font-weight: 600;
+  }
+  .tbl td:nth-child(n+3) {
+    width: 50%; /* Las demás columnas se dividen en 2 por fila */
+  }
+}

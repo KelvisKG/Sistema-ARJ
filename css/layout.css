@@ -295,3 +295,82 @@
     transform: translateY(0);
   }
 }
+
+/* =====================================================================
+   RESPONSIVIDAD (MÓVILES Y TABLETS)
+   ===================================================================== */
+@media (max-width: 768px) {
+  .header {
+    padding: 0 14px;
+    height: 56px;
+  }
+  
+  .brand span,
+  .brand p {
+    display: none; /* Ocultar texto largo en móviles */
+  }
+
+  .empresa-switch {
+    margin-left: auto;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .empresa-switch i {
+    display: none;
+  }
+
+  .tasa-info {
+    display: none; /* Ocultar tasas en el header móvil, se pueden mover al menú */
+  }
+
+  .user-pill {
+    display: none; /* Ocultar usuario en móvil */
+  }
+
+  .panic-btn {
+    padding: 6px 8px;
+  }
+  .panic-btn span {
+    display: none;
+  }
+
+  .nav {
+    padding: 0 10px;
+  }
+
+  /* Hamburger menu base styles */
+  .hamburger-btn {
+    display: block;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    margin-right: 10px;
+  }
+
+  .nav {
+    display: none;
+    flex-direction: column;
+    padding: 10px;
+    background: var(--card-bg);
+    position: absolute;
+    top: 56px;
+    left: 0;
+    right: 0;
+    z-index: 4000;
+    box-shadow: var(--shadow-md);
+  }
+
+  .nav.mobile-open {
+    display: flex;
+    animation: slideDown 0.2s ease-out;
+  }
+
+  .nav-item {
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding: 12px 15px;
+  }
+}

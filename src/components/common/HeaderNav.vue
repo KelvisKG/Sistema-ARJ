@@ -3,6 +3,9 @@
     <!-- HEADER CON COLOR SEGÚN EMPRESA (GOLD PARA DIRECTA / NAVY PARA DISTRIBUIDORA) -->
     <div :class="['header', store.empresa === 'directa' ? 'empresa-directa' : 'empresa-dist']" id="header">
       <div style="display:flex;align-items:center">
+        <button class="hamburger-btn" @click="menuAbierto = !menuAbierto" title="Menú">
+          <i class="ti ti-menu-2"></i>
+        </button>
         <div class="brand">
           <i class="ti ti-building-store"></i> Sistema ARJ 
         </div>
@@ -86,8 +89,8 @@
       </div>
     </div>
 
-    <!-- BARRA DE NAVEGACIÓN COMPLETA (13 PESTAÑAS DEL MONOLITO) -->
-    <div class="nav" id="nav">
+    <!-- BARRA DE NAVEGACIÓN COMPLETA -->
+    <div :class="['nav', { 'mobile-open': menuAbierto }]" id="nav">
       <div
         :class="['nav-item', { active: store.vistaActiva === 'facturacion' }]"
         @click="store.cambiarVista('facturacion')"
@@ -215,6 +218,7 @@ const store = useArjStore();
 const notifsAbiertas = ref(false);
 const mostrarModalEmpresa = ref(false);
 const modoOscuro = ref(false);
+const menuAbierto = ref(false);
 
 const nombreEmpresaActual = computed(() => {
   return store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora ARJ';
@@ -251,6 +255,7 @@ onMounted(() => {
       else if (store.mostrarNuevoClienteModal) store.mostrarNuevoClienteModal = false;
       else if (notifsAbiertas.value) notifsAbiertas.value = false;
       else if (mostrarModalEmpresa.value) mostrarModalEmpresa.value = false;
+      else if (menuAbierto.value) menuAbierto.value = false;
     }
   });
 });
