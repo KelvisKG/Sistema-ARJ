@@ -149,6 +149,8 @@ onMounted(async () => {
 <style>
 #arj-root {
   min-height: 100vh;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 /* Transiciones de Vista */
