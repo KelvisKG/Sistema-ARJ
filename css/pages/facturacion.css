@@ -1,9 +1,15 @@
-﻿/* === Facturacion === */
+/* === Facturacion === */
     /* ═══ FACTURACIÓN ═══ */
     .factura-layout {
       display: grid;
       grid-template-columns: 1.5fr 1fr;
-      gap: 16px
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .factura-layout {
+        grid-template-columns: 1fr;
+      }
     }
 
     .total-box {

@@ -209,7 +209,8 @@ textarea.is-invalid {
    RESPONSIVIDAD (FORMULARIOS 1 COLUMNA EN MÓVIL)
    ===================================================================== */
 @media (max-width: 768px) {
-  div[style*="grid-template-columns"] {
+  /* Forzar grillas a 1 columna en móviles, EXCEPTO las que ya son responsivas (auto-fit/auto-fill) */
+  div[style*="grid-template-columns"]:not([style*="auto-fit"]):not([style*="auto-fill"]) {
     grid-template-columns: 1fr !important;
   }
   

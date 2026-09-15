@@ -190,6 +190,10 @@
   box-shadow: 0 4px 10px rgba(220, 38, 38, 0.4);
 }
 
+.hamburger-btn {
+  display: none;
+}
+
 /* ═══ BARRA DE NAVEGACIÓN MODERNA ═══ */
 .nav {
   display: flex;
