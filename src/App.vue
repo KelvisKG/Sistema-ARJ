@@ -110,6 +110,8 @@ import RecepcionModal from './components/modals/RecepcionModal.vue';
 import ToastNotification from './components/common/ToastNotification.vue';
 
 const store = useArjStore();
+store.restaurarSesion(); // Restaurar sesión síncronamente antes del primer render
+
 const mostrarModalAyuda = ref(false);
 
 const vistasMap = {

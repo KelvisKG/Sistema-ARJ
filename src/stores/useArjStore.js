@@ -264,6 +264,27 @@ export const useArjStore = defineStore('arj', {
   },
 
   actions: {
+    // Restauración síncrona de sesión para evitar parpadeos
+    restaurarSesion() {
+      const sesionGuardada = localStorage.getItem('arj_sesion');
+      if (sesionGuardada) {
+        try {
+          const dataSesion = JSON.parse(sesionGuardada);
+          if (dataSesion && dataSesion.autenticado) {
+            this.autenticado = true;
+            this.rol = dataSesion.rol;
+            this.usuarioNombre = dataSesion.usuarioNombre;
+          }
+        } catch(e) {}
+      }
+      
+      // Check inactividad
+      if (localStorage.getItem('arj_inactividad_expulsado') === 'true') {
+        this.inactividadExpulsado = true;
+        localStorage.removeItem('arj_inactividad_expulsado');
+      }
+    },
+
     // Inicialización del sistema
     async initApp() {
       this.cargando = true;
@@ -277,26 +298,8 @@ export const useArjStore = defineStore('arj', {
         this.tasa_par = datos.tasas.tasa_par;
         this.dto_divisa = datos.tasas.dto_divisa;
         this.supabaseConectado = datos.conectado;
+        this.supabaseConectado = datos.conectado;
         
-        // Restaurar sesión si existe
-        const sesionGuardada = localStorage.getItem('arj_sesion');
-        if (sesionGuardada) {
-          try {
-            const dataSesion = JSON.parse(sesionGuardada);
-            if (dataSesion && dataSesion.autenticado) {
-              this.autenticado = true;
-              this.rol = dataSesion.rol;
-              this.usuarioNombre = dataSesion.usuarioNombre;
-            }
-          } catch(e) {}
-        }
-        
-        // Check inactividad
-        if (localStorage.getItem('arj_inactividad_expulsado') === 'true') {
-          this.inactividadExpulsado = true;
-          localStorage.removeItem('arj_inactividad_expulsado');
-        }
-
         this.logBitacora('sistema', 'Sistema ARJ inicializado correctamente');
       } catch (e) {
         console.error('[ARJ Store] Error inicializando:', e);
