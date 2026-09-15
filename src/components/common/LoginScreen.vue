@@ -7,6 +7,10 @@
         <p>Acceso seguro · Repuestos Agrícolas</p>
       </div>
 
+      <div v-if="store.inactividadExpulsado" class="login-error" style="display:block; background-color: var(--orange-light, #fff3cd); color: var(--orange, #856404); border-color: #ffeeba;">
+        <i class="ti ti-clock-pause"></i> Has sido expulsado por inactividad de 5 minutos.
+      </div>
+
       <div v-if="errorVisible" class="login-error" style="display:block">
         <i class="ti ti-x"></i> {{ errorMessage }}
       </div>

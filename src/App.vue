@@ -4,25 +4,16 @@
     <LoginScreen v-if="!store.autenticado" />
 
     <!-- Sistema Principal -->
-    <div v-else :class="['app-wrapper', `empresa-${store.empresa}`]">
+    <div v-else :class="['app-wrapper', `empresa-${store.empresa}`]" style="transition: background-color 0.5s ease, color 0.5s ease;">
+      <InactivityMonitor />
       <!-- Header y Barra de Navegación -->
       <HeaderNav />
 
       <!-- Vistas Principales (13 Vistas Completas del Monolito) -->
       <main class="main-content" style="padding:14px 20px 40px">
-        <FacturacionView v-if="store.vistaActiva === 'facturacion'" />
-        <PresupuestosView v-else-if="store.vistaActiva === 'presupuestos'" />
-        <HistorialView v-else-if="store.vistaActiva === 'historial'" />
-        <TurnosView v-else-if="store.vistaActiva === 'turnos'" />
-        <InventarioView v-else-if="store.vistaActiva === 'inventario'" />
-        <CuentasCobrarView v-else-if="store.vistaActiva === 'cxc'" />
-        <MovimientosView v-else-if="store.vistaActiva === 'movimientos'" />
-        <ClientesView v-else-if="store.vistaActiva === 'clientes'" />
-        <ReportesView v-else-if="store.vistaActiva === 'reportes'" />
-        <AlertasView v-else-if="store.vistaActiva === 'alertas'" />
-        <BitacoraView v-else-if="store.vistaActiva === 'bitacora'" />
-        <ExportarFiscalView v-else-if="store.vistaActiva === 'exportar'" />
-        <ConfigView v-else-if="store.vistaActiva === 'config'" />
+        <Transition name="view-fade" mode="out-in">
+          <component :is="vistaComponenteActual" :key="store.vistaActiva" />
+        </Transition>
       </main>
 
       <!-- Modales Globales del Sistema -->
@@ -42,10 +33,6 @@
       <button class="help-fab" @click="mostrarModalAyuda = true" title="Ayuda y atajos">
         <i class="ti ti-help"></i>
       </button>
-
-      <div class="shortcut-hint" id="shortcut-hint">
-        <i class="ti ti-keyboard"></i> Tip: presiona <kbd>Esc</kbd> para cerrar o salir rápido
-      </div>
 
       <!-- MODAL DE AYUDA Y ATAJOS -->
       <div v-if="mostrarModalAyuda" class="modal show">
@@ -85,11 +72,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useArjStore } from './stores/useArjStore.js';
 
 // Vistas (13 Vistas)
 import LoginScreen from './components/common/LoginScreen.vue';
+import InactivityMonitor from './components/common/InactivityMonitor.vue';
 import HeaderNav from './components/common/HeaderNav.vue';
 import FacturacionView from './views/FacturacionView.vue';
 import PresupuestosView from './views/PresupuestosView.vue';
@@ -122,6 +110,26 @@ import ToastNotification from './components/common/ToastNotification.vue';
 const store = useArjStore();
 const mostrarModalAyuda = ref(false);
 
+const vistasMap = {
+  facturacion: FacturacionView,
+  presupuestos: PresupuestosView,
+  historial: HistorialView,
+  turnos: TurnosView,
+  inventario: InventarioView,
+  cxc: CuentasCobrarView,
+  movimientos: MovimientosView,
+  clientes: ClientesView,
+  reportes: ReportesView,
+  alertas: AlertasView,
+  bitacora: BitacoraView,
+  exportar: ExportarFiscalView,
+  config: ConfigView
+};
+
+const vistaComponenteActual = computed(() => {
+  return vistasMap[store.vistaActiva] || FacturacionView;
+});
+
 onMounted(async () => {
   // Inicializar tema guardado en body
   const tema = localStorage.getItem('arj_tema');
@@ -139,30 +147,26 @@ onMounted(async () => {
   min-height: 100vh;
 }
 
-.shortcut-hint {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: rgba(31, 56, 100, 0.88);
-  color: #FFF;
-  padding: 8px 14px;
-  border-radius: 20px;
-  font-size: 11.5px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  pointer-events: none;
-  z-index: 6000;
-  backdrop-filter: blur(4px);
+/* Transiciones de Vista */
+.view-fade-enter-active,
+.view-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-.shortcut-hint kbd {
-  background: rgba(255, 255, 255, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: inherit;
-  font-weight: 700;
+.view-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
 }
+
+.view-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* Transiciones globales de empresa */
+.header, .sidebar, .btn, .card, .nav-item {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+}
+
+
 </style>

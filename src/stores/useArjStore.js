@@ -24,6 +24,8 @@ export const useArjStore = defineStore('arj', {
     usuarioNombre: 'JJ (Gerente General)',
     usuarioEmail: 'josehjimenezcas@gmail.com',
 
+    inactividadExpulsado: false, // Flag to show modal in login screen
+
     // Empresa Activa: 'directa' (Venta Directa) | 'distribuidora' (Distribuidora)
     empresa: 'directa',
 
@@ -273,6 +275,26 @@ export const useArjStore = defineStore('arj', {
         this.tasa_par = datos.tasas.tasa_par;
         this.dto_divisa = datos.tasas.dto_divisa;
         this.supabaseConectado = datos.conectado;
+        
+        // Restaurar sesión si existe
+        const sesionGuardada = localStorage.getItem('arj_sesion');
+        if (sesionGuardada) {
+          try {
+            const dataSesion = JSON.parse(sesionGuardada);
+            if (dataSesion && dataSesion.autenticado) {
+              this.autenticado = true;
+              this.rol = dataSesion.rol;
+              this.usuarioNombre = dataSesion.usuarioNombre;
+            }
+          } catch(e) {}
+        }
+        
+        // Check inactividad
+        if (localStorage.getItem('arj_inactividad_expulsado') === 'true') {
+          this.inactividadExpulsado = true;
+          localStorage.removeItem('arj_inactividad_expulsado');
+        }
+
         this.logBitacora('sistema', 'Sistema ARJ inicializado correctamente');
       } catch (e) {
         console.error('[ARJ Store] Error inicializando:', e);
@@ -313,15 +335,36 @@ export const useArjStore = defineStore('arj', {
       this.rol = rol;
       this.usuarioNombre = nombre || (rol === 'gerente' ? 'JJ (Gerente General)' : 'HUMBERTO ARJ (Ventas)');
       this.autenticado = true;
+      this.inactividadExpulsado = false;
+      
+      // Persistir sesión
+      localStorage.setItem('arj_sesion', JSON.stringify({
+        autenticado: true,
+        rol: this.rol,
+        usuarioNombre: this.usuarioNombre
+      }));
+
       this.logBitacora('sesion', `Usuario ${this.usuarioNombre} ingresó como ${rol.toUpperCase()}`);
       this.notif(`Bienvenido ${this.usuarioNombre}`, 'success');
     },
 
-    logout() {
-      this.logBitacora('sesion', `Usuario ${this.usuarioNombre} cerró sesión`);
+    logout(porInactividad = false) {
+      if (this.autenticado) {
+        this.logBitacora('sesion', `Usuario ${this.usuarioNombre} cerró sesión${porInactividad ? ' por inactividad' : ''}`);
+      }
       this.autenticado = false;
+      
+      // Limpiar sesión
+      localStorage.removeItem('arj_sesion');
+      if (porInactividad) {
+        this.inactividadExpulsado = true;
+        localStorage.setItem('arj_inactividad_expulsado', 'true');
+      }
+
       this.limpiarCarrito();
-      this.notif('Sesión cerrada correctamente', 'info');
+      if (!porInactividad) {
+        this.notif('Sesión cerrada correctamente', 'info');
+      }
     },
 
     // Cambio de empresa (Directa vs Distribuidora)
