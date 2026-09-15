@@ -28,6 +28,8 @@ export const useArjStore = defineStore('arj', {
 
     // Empresa Activa: 'directa' (Venta Directa) | 'distribuidora' (Distribuidora)
     empresa: 'directa',
+    empresaDestino: '',
+    mostrandoTransicionEmpresa: false,
 
     // Navegación
     vistaActiva: 'facturacion',
@@ -367,26 +369,40 @@ export const useArjStore = defineStore('arj', {
       }
     },
 
-    // Cambio de empresa (Directa vs Distribuidora)
+    // Cambio de Empresa (Directa vs Distribuidora) con Transición
     cambiarEmpresa(emp) {
       if (emp !== 'directa' && emp !== 'distribuidora') return;
-      this.empresa = emp;
-      document.body.classList.remove('empresa-directa', 'empresa-distribuidora');
-      document.body.classList.add(`empresa-${emp}`);
+      if (emp === this.empresa) return; // Ya estamos en esta empresa
 
-      // En Venta Directa siempre aplica Precio Público por defecto; en Distribuidora el tier del cliente
-      if (emp === 'directa') {
-        this.carrito.tier = 'Publico';
-      } else if (this.carrito.cliente_id) {
-        const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
-        if (cli && cli.nivel) this.carrito.tier = cli.nivel;
-      }
-      this.actualizarPreciosCarrito();
-      this.logBitacora('empresa', `Cambio de contexto operativo a ${emp === 'directa' ? 'ARJ Venta Directa' : 'Distribuidora ARJ'}`);
-      this.notif(
-        emp === 'directa' ? 'Operando en ARJ Venta Directa (Mostrador)' : 'Operando en Distribuidora ARJ (Mayorista)',
-        'info'
-      );
+      // Iniciar la transición
+      this.empresaDestino = emp;
+      this.mostrandoTransicionEmpresa = true;
+
+      // Esperar 400ms para hacer el cambio lógico por detrás mientras la pantalla está tapada
+      setTimeout(() => {
+        this.empresa = emp;
+        document.body.classList.remove('empresa-directa', 'empresa-distribuidora');
+        document.body.classList.add(`empresa-${emp}`);
+
+        // En Venta Directa siempre aplica Precio Público por defecto; en Distribuidora el tier del cliente
+        if (emp === 'directa') {
+          this.carrito.tier = 'Publico';
+        } else if (this.carrito.cliente_id) {
+          const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
+          if (cli && cli.nivel) this.carrito.tier = cli.nivel;
+        }
+        this.actualizarPreciosCarrito();
+        this.logBitacora('empresa', `Cambio de contexto operativo a ${emp === 'directa' ? 'ARJ Venta Directa' : 'Distribuidora ARJ'}`);
+        this.notif(
+          emp === 'directa' ? 'Operando en ARJ Venta Directa (Mostrador)' : 'Operando en Distribuidora ARJ (Mayorista)',
+          'info'
+        );
+      }, 400);
+
+      // Ocultar la transición después de la animación (1.5s total = 1500ms)
+      setTimeout(() => {
+        this.mostrandoTransicionEmpresa = false;
+      }, 1450);
     },
 
     cambiarVista(vista) {

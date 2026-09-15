@@ -17,6 +17,7 @@
       </main>
 
       <!-- Modales Globales del Sistema -->
+      <EmpresaTransitionModal />
       <FacturaModal />
       <TraspasoModal />
       <EditProdModal />
@@ -94,6 +95,7 @@ import ExportarFiscalView from './views/ExportarFiscalView.vue';
 import ConfigView from './views/ConfigView.vue';
 
 // Modales
+import EmpresaTransitionModal from './components/modals/EmpresaTransitionModal.vue';
 import FacturaModal from './components/modals/FacturaModal.vue';
 import TraspasoModal from './components/modals/TraspasoModal.vue';
 import EditProdModal from './components/modals/EditProdModal.vue';
