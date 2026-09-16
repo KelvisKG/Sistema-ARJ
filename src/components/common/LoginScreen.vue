@@ -65,6 +65,7 @@
 import { ref } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { isNonEmpty, isValidEmail } from '../../services/validators.js';
+import { supabase } from '../../services/supabase.js';
 
 const store = useArjStore();
 const email = ref('');
@@ -93,11 +94,38 @@ function handleLogin() {
     return;
   }
 
-  // Si es demo o gerencia
-  if (email.value.includes('gerente') || email.value.includes('admin')) {
-    store.login('gerente', 'JJ (Gerente)');
+  store.cargando = true;
+
+  // Intentar Auth real en Supabase
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email: email.value,
+    password: password.value
+  });
+
+  if (authError) {
+    // Si falla el auth real, permitir acceso con credenciales demo si coincide el formato
+    if (email.value.includes('gerente') || email.value.includes('admin')) {
+      store.login('gerente', 'JJ (Gerente)');
+      await store.initApp();
+    } else if (email.value.includes('vendedor') || email.value.includes('demo')) {
+      store.login('vendedor', 'HUMBERTO ARJ');
+      await store.initApp();
+    } else {
+      errorVisible.value = true;
+      errorMessage.value = 'Email o contraseña incorrectos';
+    }
   } else {
-    store.login('vendedor', 'HUMBERTO ARJ');
+    // Auth exitoso, buscar perfil
+    const { data: perfil } = await supabase.from('perfiles').select('*').eq('id', authData.user.id).single();
+    if (perfil) {
+      store.login(perfil.rol, perfil.nombre_display);
+    } else {
+      // Si no tiene perfil, usamos algo basico
+      store.login('vendedor', email.value);
+    }
+    await store.initApp(); // Cargar los datos desde Supabase YA autenticados!
   }
+  
+  store.cargando = false;
 }
 </script>

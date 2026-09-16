@@ -75,6 +75,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useArjStore } from './stores/useArjStore.js';
+import { supabase } from './services/supabase.js';
 
 // Vistas (13 Vistas)
 import LoginScreen from './components/common/LoginScreen.vue';
@@ -141,8 +142,12 @@ onMounted(async () => {
     document.body.classList.add('dark');
   }
 
-  await store.initApp();
   document.body.classList.add(`empresa-${store.empresa}`);
+
+  if (store.autenticado) {
+    await supabase.auth.getSession(); // Wait for Supabase to restore token
+    await store.initApp();
+  }
 });
 </script>
 
