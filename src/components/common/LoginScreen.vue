@@ -49,8 +49,12 @@
         </span>
       </div>
 
-      <button class="login-btn" id="btn-login-submit" @click="handleLogin">
-        <i class="ti ti-login"></i> Iniciar sesión
+      <button class="login-btn" id="btn-login-submit" @click="handleLogin" :disabled="store.cargando">
+        <i class="ti ti-login"></i> {{ store.cargando ? 'Conectando...' : 'Iniciar sesión' }}
+      </button>
+
+      <button class="login-btn" style="background:var(--gray);color:var(--navy);margin-top:10px" @click="handleDirectLogin">
+        <i class="ti ti-plug-x"></i> Acceso Directo (Sin Nube)
       </button>
 
       <div class="login-hint">
@@ -66,6 +70,7 @@ import { ref } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { isNonEmpty, isValidEmail } from '../../services/validators.js';
 import { supabase } from '../../services/supabase.js';
+import { DEFAULT_PRODUCTOS, DEFAULT_CLIENTES, DEFAULT_FACTURAS_COBRAR } from '../../services/seedData.js';
 
 const store = useArjStore();
 const email = ref('');
@@ -114,9 +119,23 @@ async function handleLogin() {
       // Si no tiene perfil, usamos algo basico
       store.login('vendedor', email.value);
     }
+    localStorage.removeItem('arj_modo_directo');
     await store.initApp(); // Cargar los datos desde Supabase YA autenticados!
   }
   
   store.cargando = false;
+}
+
+function handleDirectLogin() {
+  store.login('gerente', 'JJ (Local)');
+  // Bypass Supabase and load seed data directly to avoid RLS block
+  store.productos = JSON.parse(JSON.stringify(DEFAULT_PRODUCTOS));
+  store.clientes = JSON.parse(JSON.stringify(DEFAULT_CLIENTES));
+  store.facturasCobrar = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
+  store.todasFacturas = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
+  store.bitacora = [];
+  store.supabaseConectado = false;
+  localStorage.setItem('arj_modo_directo', 'true');
+  store.logBitacora('sistema', 'Sistema iniciado en Modo Directo (Sin conexión a Base de Datos)');
 }
 </script>
