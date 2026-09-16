@@ -310,6 +310,33 @@ export const useArjStore = defineStore('arj', {
       }
     },
 
+    // Gestión de Tasas
+    calcularBrecha() {
+      const b = this.tasa_bcv > 0 ? this.tasa_par / this.tasa_bcv : 1;
+      const neutro = b > 0 ? (1 - 1 / b) * 100 : 0;
+      // Actualizamos el descuento divisa igual al neutro por defecto
+      this.dto_divisa = Math.round(neutro * 100) / 100;
+    },
+
+    async confirmarTasas() {
+      this.tasasConfirmadasHoy = true;
+      this.logBitacora('sistema', `Tasas actualizadas: BCV Bs.${this.tasa_bcv} / Paralelo Bs.${this.tasa_par}`);
+      
+      if (this.supabaseConectado) {
+        import('../services/supabase.js').then(async ({ supabase }) => {
+          try {
+            await supabase.from('configuracion').update({
+              tasa_bcv: this.tasa_bcv,
+              tasa_par: this.tasa_par,
+              dto_divisa: this.dto_divisa
+            }).eq('id', 1);
+          } catch(e) {
+            console.warn('[ARJ] Error actualizando tasas en BD:', e);
+          }
+        });
+      }
+    },
+
     // Notificaciones Toast
     notif(mensaje, tipo = 'info') {
       this.toast.mensaje = mensaje;
