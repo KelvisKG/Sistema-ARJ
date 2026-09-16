@@ -103,17 +103,8 @@ async function handleLogin() {
   });
 
   if (authError) {
-    // Si falla el auth real, permitir acceso con credenciales demo si coincide el formato
-    if (email.value.includes('gerente') || email.value.includes('admin')) {
-      store.login('gerente', 'JJ (Gerente)');
-      await store.initApp();
-    } else if (email.value.includes('vendedor') || email.value.includes('demo')) {
-      store.login('vendedor', 'HUMBERTO ARJ');
-      await store.initApp();
-    } else {
-      errorVisible.value = true;
-      errorMessage.value = 'Email o contraseña incorrectos';
-    }
+    errorVisible.value = true;
+    errorMessage.value = 'Email o contraseña incorrectos. Verifica tus credenciales de la base de datos.';
   } else {
     // Auth exitoso, buscar perfil
     const { data: perfil } = await supabase.from('perfiles').select('*').eq('id', authData.user.id).single();

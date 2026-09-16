@@ -79,10 +79,6 @@ export async function cargarDatosCompletos() {
       console.warn('[ARJ] Aviso cargando productos de Supabase:', errP);
     }
 
-    if (resultado.productos.length === 0) {
-      resultado.productos = JSON.parse(JSON.stringify(DEFAULT_PRODUCTOS));
-    }
-
     // 3. Clientes
     try {
       const { data: clis, error: eC } = await supabase
@@ -121,10 +117,6 @@ export async function cargarDatosCompletos() {
       console.warn('[ARJ] Aviso cargando clientes de Supabase:', errC);
     }
 
-    if (resultado.clientes.length === 0) {
-      resultado.clientes = JSON.parse(JSON.stringify(DEFAULT_CLIENTES));
-    }
-
     // 4. Facturas
     try {
       const { data: facs, error: eF } = await supabase
@@ -141,11 +133,6 @@ export async function cargarDatosCompletos() {
       }
     } catch (errF) {
       console.warn('[ARJ] Aviso cargando facturas de Supabase:', errF);
-    }
-
-    if (resultado.facturasCobrar.length === 0) {
-      resultado.facturasCobrar = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
-      resultado.todasFacturas = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
     }
 
     // 5. Bitácora
@@ -174,10 +161,6 @@ export async function cargarDatosCompletos() {
 
   } catch (err) {
     console.error('[ARJ] Error global cargando Supabase:', err);
-    resultado.productos = JSON.parse(JSON.stringify(DEFAULT_PRODUCTOS));
-    resultado.clientes = JSON.parse(JSON.stringify(DEFAULT_CLIENTES));
-    resultado.facturasCobrar = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
-    resultado.todasFacturas = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
   }
 
   return resultado;
