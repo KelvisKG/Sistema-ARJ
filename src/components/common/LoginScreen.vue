@@ -74,7 +74,7 @@ const errors = ref({});
 const errorVisible = ref(false);
 const errorMessage = ref('');
 
-function handleLogin() {
+async function handleLogin() {
   errors.value = {};
   errorVisible.value = false;
 
