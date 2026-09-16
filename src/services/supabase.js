@@ -23,6 +23,7 @@ export async function cargarDatosCompletos() {
     facturasCobrar: [],
     todasFacturas: [],
     embarques: [],
+    bitacora: [],
     tasas: { tasa_par: 58.50, tasa_bcv: 47.80, dto_divisa: 18.29 },
     conectado: false
   };
@@ -147,6 +148,30 @@ export async function cargarDatosCompletos() {
       resultado.todasFacturas = JSON.parse(JSON.stringify(DEFAULT_FACTURAS_COBRAR));
     }
 
+    // 5. Bitácora
+    try {
+      const { data: logs, error: eB } = await supabase
+        .from('bitacora')
+        .select('*')
+        .order('fecha', { ascending: false })
+        .limit(50);
+        
+      if (!eB && logs) {
+        resultado.bitacora = logs.map(l => ({
+          id: l.id || Date.now() + Math.random(),
+          fecha: new Date(l.fecha).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          fecha_completa: new Date(l.fecha).toLocaleDateString('es-VE') + ' ' + new Date(l.fecha).toLocaleTimeString('es-VE'),
+          tipo: l.accion || 'sistema',
+          usuario: l.usuario || 'Sistema',
+          empresa: l.empresa || 'directa',
+          mensaje: l.descripcion || '',
+          esAlerta: l.critico || false
+        }));
+      }
+    } catch (errB) {
+      console.warn('[ARJ] Aviso cargando bitacora de Supabase:', errB);
+    }
+
   } catch (err) {
     console.error('[ARJ] Error global cargando Supabase:', err);
     resultado.productos = JSON.parse(JSON.stringify(DEFAULT_PRODUCTOS));
@@ -185,5 +210,21 @@ export async function guardarClienteEnSupabase(cliente) {
   } catch (err) {
     console.warn('[ARJ] Excepcion guardando cliente en Supabase:', err);
     return { ok: false, error: err };
+  }
+}
+
+// Guardar bitácora
+export async function guardarBitacoraEnSupabase(log) {
+  try {
+    const { data, error } = await supabase.from('bitacora').insert([{
+      usuario: log.usuario,
+      empresa: log.empresa,
+      accion: log.tipo,
+      descripcion: log.mensaje,
+      critico: log.esAlerta
+    }]);
+    if (error) console.warn('[ARJ] Error guardando bitacora:', error.message);
+  } catch (e) {
+    console.warn('[ARJ] Excepcion bitacora:', e);
   }
 }

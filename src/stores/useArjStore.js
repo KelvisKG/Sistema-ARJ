@@ -3,7 +3,7 @@
 // 100% fiel a toda la arquitectura y funcionalidades del Sistema ARJ
 // =====================================================================
 import { defineStore } from 'pinia';
-import { cargarDatosCompletos, guardarFacturaEnSupabase } from '../services/supabase.js';
+import { cargarDatosCompletos, guardarFacturaEnSupabase, guardarBitacoraEnSupabase } from '../services/supabase.js';
 import {
   precioConTier,
   precioBaseItem,
@@ -298,7 +298,9 @@ export const useArjStore = defineStore('arj', {
         this.tasa_par = datos.tasas.tasa_par;
         this.dto_divisa = datos.tasas.dto_divisa;
         this.supabaseConectado = datos.conectado;
-        this.supabaseConectado = datos.conectado;
+        if (datos.bitacora && datos.bitacora.length > 0) {
+          this.bitacora = datos.bitacora;
+        }
         
         this.logBitacora('sistema', 'Sistema ARJ inicializado correctamente');
       } catch (e) {
@@ -333,6 +335,9 @@ export const useArjStore = defineStore('arj', {
         esAlerta
       };
       this.bitacora.unshift(reg);
+      if (this.supabaseConectado && tipo !== 'sistema') {
+        guardarBitacoraEnSupabase(reg);
+      }
     },
 
     // Control de sesión
