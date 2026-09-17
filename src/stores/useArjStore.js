@@ -4,6 +4,7 @@
 // =====================================================================
 import { defineStore } from 'pinia';
 import { cargarDatosCompletos, guardarFacturaEnSupabase, guardarBitacoraEnSupabase } from '../services/supabase.js';
+import { cargarDatosLocal } from '../services/persistence.js';
 import {
   precioConTier,
   precioBaseItem,
@@ -35,8 +36,8 @@ export const useArjStore = defineStore('arj', {
     vistaActiva: 'facturacion',
 
     // Divisas, Tasas y Brecha
-    tasa_bcv: 47.80,
-    tasa_par: 58.50,
+    tasa_bcv: 500.80,
+    tasa_par: 580.50,
     dto_divisa: 18.29,
     tasasConfirmadasHoy: true,
 
@@ -49,98 +50,15 @@ export const useArjStore = defineStore('arj', {
     clientes: [],
     facturasCobrar: [],
     todasFacturas: [],
-    presupuestos: [
-      {
-        id: 1,
-        num: 'PRE-2026-00042',
-        empresa: 'directa',
-        cliente: 'AGROPECUARIA EL TURPIAL C.A.',
-        cliente_id: 201,
-        fecha: '02 mar 2026',
-        fecha_raw: '2026-03-02T10:00:00.000Z',
-        vence: '16 abr 2026',
-        total: 820.00,
-        estado: 'activo',
-        vendedor: 'JJ',
-        items: [
-          { id: 101, cod_alt: 'BOM-JD-5075', desc: 'Bomba de agua completa con polea John Deere 5075E', cant: 2, precio: 125.00, fob: 48.50 },
-          { id: 102, cod_alt: 'EMB-MF-290', desc: 'Kit embrague doble 12" Massey Ferguson 285 / 290', cant: 1, precio: 290.00, fob: 115.00 },
-          { id: 103, cod_alt: 'FIL-DON-P550008', desc: 'Filtro de lubricante motor servicio pesado Donaldson', cant: 10, precio: 28.00, fob: 9.20 }
-        ]
-      }
-    ],
+    presupuestos: [],
     apartados: [],
     notasCredito: [],
-    movimientos: [
-      {
-        id: 1,
-        fecha: '28 feb 2026 09:30',
-        tipo: 'entrada',
-        producto: 'Bomba de agua JD 5075E',
-        cod_alt: 'BOM-JD-5075',
-        cant: 10,
-        empresa: 'directa',
-        motivo: 'Recepción embarque EMB-2026-01',
-        usuario: 'JJ'
-      },
-      {
-        id: 2,
-        fecha: '01 mar 2026 14:15',
-        tipo: 'traspaso',
-        producto: 'Kit embrague doble MF 290',
-        cod_alt: 'EMB-MF-290',
-        cant: 4,
-        empresa: 'distribuidora -> directa',
-        motivo: 'Reposición de stock para mostrador',
-        usuario: 'JJ'
-      }
-    ],
-    embarques: [
-      {
-        id: 'EMB-2026-01',
-        proveedor: 'A&I Products USA',
-        fecha: '15 ene 2026',
-        estado: 'sellado',
-        fob_total: 12450.00,
-        flete: 1850.00,
-        aduana: 2100.00,
-        pct_divisas: 25.0,
-        factor_landed: 1.471,
-        items_count: 42
-      }
-    ],
-    turnos: [
-      {
-        id: 1,
-        cajero: 'JJ',
-        fecha_apertura: '11 sep 2026 08:00',
-        fecha_cierre: null,
-        inicial_usd: 150.00,
-        inicial_bs: 2500.00,
-        ventas_usd: 850.00,
-        ventas_bs: 12400.00,
-        estado: 'abierto'
-      }
-    ],
-    turnoActual: {
-      id: 1,
-      cajero: 'JJ',
-      fecha_apertura: '11 sep 2026 08:00',
-      inicial_usd: 150.00,
-      inicial_bs: 2500.00,
-      estado: 'abierto'
-    },
-    bitacora: [
-      {
-        id: 1,
-        fecha: new Date().toLocaleTimeString('es-VE'),
-        tipo: 'sesion',
-        usuario: 'JJ',
-        mensaje: 'Inicio de sesión en el sistema ARJ',
-        esAlerta: false
-      }
-    ],
-    favoritos: ['BOM-JD-5075', 'EMB-MF-290', 'FIL-DON-P550008', 'FIL-RAC-R90P', 'COR-GAT-8PK1420'],
+    movimientos: [],
+    embarques: [],
+    turnos: [],
+    turnoActual: null,
+    bitacora: [],
+    favoritos: [],
 
     // Carrito de Facturación
     carrito: {
@@ -275,9 +193,9 @@ export const useArjStore = defineStore('arj', {
             this.rol = dataSesion.rol;
             this.usuarioNombre = dataSesion.usuarioNombre;
           }
-        } catch(e) {}
+        } catch (e) { }
       }
-      
+
       // Check inactividad
       if (localStorage.getItem('arj_inactividad_expulsado') === 'true') {
         this.inactividadExpulsado = true;
@@ -289,20 +207,27 @@ export const useArjStore = defineStore('arj', {
     async initApp() {
       this.cargando = true;
       try {
+        // Carga offline-first instantánea
+        cargarDatosLocal(this);
+
+        // Intento de refresco en background desde Supabase
         const datos = await cargarDatosCompletos();
-        this.productos = datos.productos;
-        this.clientes = datos.clientes;
-        this.facturasCobrar = datos.facturasCobrar;
-        this.todasFacturas = datos.todasFacturas;
-        this.tasa_bcv = datos.tasas.tasa_bcv;
-        this.tasa_par = datos.tasas.tasa_par;
-        this.dto_divisa = datos.tasas.dto_divisa;
-        this.supabaseConectado = datos.conectado;
-        if (datos.bitacora && datos.bitacora.length > 0) {
-          this.bitacora = datos.bitacora;
+        if (datos.conectado) {
+          this.productos = datos.productos;
+          this.clientes = datos.clientes;
+          this.facturasCobrar = datos.facturasCobrar;
+          this.todasFacturas = datos.todasFacturas;
+          this.tasa_bcv = datos.tasas.tasa_bcv;
+          this.tasa_par = datos.tasas.tasa_par;
+          this.dto_divisa = datos.tasas.dto_divisa;
+          this.supabaseConectado = true;
+          if (datos.bitacora && datos.bitacora.length > 0) {
+            this.bitacora = datos.bitacora;
+          }
+          this.logBitacora('sistema', 'Sistema ARJ inicializado y sincronizado');
+        } else {
+          this.logBitacora('sistema', 'Sistema ARJ en modo Offline');
         }
-        
-        this.logBitacora('sistema', 'Sistema ARJ inicializado correctamente');
       } catch (e) {
         console.error('[ARJ Store] Error inicializando:', e);
       } finally {
@@ -321,7 +246,7 @@ export const useArjStore = defineStore('arj', {
     async confirmarTasas() {
       this.tasasConfirmadasHoy = true;
       this.logBitacora('sistema', `Tasas actualizadas: BCV Bs.${this.tasa_bcv} / Paralelo Bs.${this.tasa_par}`);
-      
+
       if (this.supabaseConectado) {
         import('../services/supabase.js').then(async ({ supabase }) => {
           try {
@@ -330,7 +255,7 @@ export const useArjStore = defineStore('arj', {
               tasa_par: this.tasa_par,
               dto_divisa: this.dto_divisa
             }).eq('id', 1);
-          } catch(e) {
+          } catch (e) {
             console.warn('[ARJ] Error actualizando tasas en BD:', e);
           }
         });
@@ -373,7 +298,7 @@ export const useArjStore = defineStore('arj', {
       this.usuarioNombre = nombre || (rol === 'gerente' ? 'JJ (Gerente General)' : 'HUMBERTO ARJ (Ventas)');
       this.autenticado = true;
       this.inactividadExpulsado = false;
-      
+
       // Persistir sesión
       localStorage.setItem('arj_sesion', JSON.stringify({
         autenticado: true,
@@ -390,7 +315,7 @@ export const useArjStore = defineStore('arj', {
         this.logBitacora('sesion', `Usuario ${this.usuarioNombre} cerró sesión${porInactividad ? ' por inactividad' : ''}`);
       }
       this.autenticado = false;
-      
+
       // Limpiar sesión
       localStorage.removeItem('arj_sesion');
       if (porInactividad) {

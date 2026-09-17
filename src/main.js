@@ -4,6 +4,7 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
+import { guardarDatosLocal } from './services/persistence.js';
 
 // Importar Estilos Base y Sistema de Diseño ARJ
 import '../css/variables.css';
@@ -32,4 +33,12 @@ const app = createApp(App);
 const pinia = createPinia();
 
 app.use(pinia);
+
+// Autoguardado del store en cada cambio
+pinia.use(({ store }) => {
+  store.$subscribe((mutation, state) => {
+    guardarDatosLocal(state);
+  }, { detached: true });
+});
+
 app.mount('#app');

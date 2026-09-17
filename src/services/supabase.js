@@ -4,6 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_PRODUCTOS, DEFAULT_CLIENTES, DEFAULT_FACTURAS_COBRAR } from './seedData.js';
 import { FACTOR_LANDED_FALLBACK } from './pricing.js';
+import { encolarAccion } from './syncQueue.js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
@@ -166,48 +167,54 @@ export async function cargarDatosCompletos() {
   return resultado;
 }
 
-// Guardar factura en Supabase con tolerancia
+// Guardar factura en Supabase con tolerancia (Offline-first via Sync Queue)
 export async function guardarFacturaEnSupabase(factura) {
   try {
-    const { data, error } = await supabase.from('facturas').insert([factura]).select();
-    if (error) {
-      console.warn('[ARJ] Error al guardar factura en Supabase:', error.message);
-      return { ok: false, error };
+    // Si hay internet intentamos guardar directo primero
+    if (navigator.onLine) {
+      const { data, error } = await supabase.from('facturas').insert([factura]).select();
+      if (!error) return { ok: true, data: data ? data[0] : null };
     }
-    return { ok: true, data: data ? data[0] : null };
+    // Si falla o no hay red, encolar
+    encolarAccion('FACTURA', factura);
+    return { ok: true, data: factura }; // Retorna éxito simulado localmente
   } catch (err) {
-    console.warn('[ARJ] Excepcion guardando factura en Supabase:', err);
-    return { ok: false, error: err };
+    encolarAccion('FACTURA', factura);
+    return { ok: true, data: factura };
   }
 }
 
-// Guardar nuevo cliente
+// Guardar nuevo cliente (Offline-first via Sync Queue)
 export async function guardarClienteEnSupabase(cliente) {
   try {
-    const { data, error } = await supabase.from('clientes').insert([cliente]).select();
-    if (error) {
-      console.warn('[ARJ] Error al guardar cliente en Supabase:', error.message);
-      return { ok: false, error };
+    if (navigator.onLine) {
+      const { data, error } = await supabase.from('clientes').insert([cliente]).select();
+      if (!error) return { ok: true, data: data ? data[0] : null };
     }
-    return { ok: true, data: data ? data[0] : null };
+    encolarAccion('CLIENTE', cliente);
+    return { ok: true, data: cliente };
   } catch (err) {
-    console.warn('[ARJ] Excepcion guardando cliente en Supabase:', err);
-    return { ok: false, error: err };
+    encolarAccion('CLIENTE', cliente);
+    return { ok: true, data: cliente };
   }
 }
 
-// Guardar bitácora
+// Guardar bitácora (Offline-first via Sync Queue)
 export async function guardarBitacoraEnSupabase(log) {
+  const payload = {
+    usuario: log.usuario,
+    empresa: log.empresa,
+    accion: log.tipo,
+    descripcion: log.mensaje,
+    critico: log.esAlerta
+  };
   try {
-    const { data, error } = await supabase.from('bitacora').insert([{
-      usuario: log.usuario,
-      empresa: log.empresa,
-      accion: log.tipo,
-      descripcion: log.mensaje,
-      critico: log.esAlerta
-    }]);
-    if (error) console.warn('[ARJ] Error guardando bitacora:', error.message);
+    if (navigator.onLine) {
+      const { error } = await supabase.from('bitacora').insert([payload]);
+      if (!error) return;
+    }
+    encolarAccion('BITACORA', payload);
   } catch (e) {
-    console.warn('[ARJ] Excepcion bitacora:', e);
+    encolarAccion('BITACORA', payload);
   }
 }
