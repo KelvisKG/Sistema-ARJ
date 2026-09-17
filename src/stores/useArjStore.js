@@ -201,7 +201,7 @@ export const useArjStore = defineStore('arj', {
     async initApp() {
       this.cargando = true;
       try {
-        // Carga offline-first instantánea
+        // Carga offline-first instantánea de datos y carrito
         cargarDatosLocal(this);
 
         // Intento de refresco en background desde Supabase
@@ -211,22 +211,71 @@ export const useArjStore = defineStore('arj', {
           this.clientes = datos.clientes;
           this.facturasCobrar = datos.facturasCobrar;
           this.todasFacturas = datos.todasFacturas;
-          this.tasa_bcv = datos.tasas.tasa_bcv;
-          this.tasa_par = datos.tasas.tasa_par;
-          this.dto_divisa = datos.tasas.dto_divisa;
           this.supabaseConectado = true;
+          
           if (datos.bitacora && datos.bitacora.length > 0) {
             this.bitacora = datos.bitacora;
           }
+
+          // Priorizar SIEMPRE las tasas locales sobre las de Supabase para la misma máquina
+          const tasasGuardadas = localStorage.getItem('ARJ_TASAS');
+          if (tasasGuardadas) {
+            try {
+               const p = JSON.parse(tasasGuardadas);
+               this.tasa_bcv = p.bcv || this.tasa_bcv;
+               this.tasa_par = p.par || this.tasa_par;
+               this.dto_divisa = p.dto || this.dto_divisa;
+            } catch(e) {}
+          } else {
+            this.tasa_bcv = datos.tasas.tasa_bcv;
+            this.tasa_par = datos.tasas.tasa_par;
+            this.dto_divisa = datos.tasas.dto_divisa;
+          }
+
           this.logBitacora('sistema', 'Sistema ARJ inicializado y sincronizado');
         } else {
+          // Si no conectó pero hay tasas locales, las cargamos
+          const tasasGuardadas = localStorage.getItem('ARJ_TASAS');
+          if (tasasGuardadas) {
+            try {
+               const p = JSON.parse(tasasGuardadas);
+               this.tasa_bcv = p.bcv || this.tasa_bcv;
+               this.tasa_par = p.par || this.tasa_par;
+               this.dto_divisa = p.dto || this.dto_divisa;
+            } catch(e) {}
+          }
           this.logBitacora('sistema', 'Sistema ARJ en modo Offline');
         }
+
+        this.iniciarSincronizacionOnline();
       } catch (e) {
         console.error('[ARJ Store] Error inicializando:', e);
       } finally {
         this.cargando = false;
       }
+    },
+
+    iniciarSincronizacionOnline() {
+      if (this._escuchandoRed) return;
+      this._escuchandoRed = true;
+      window.addEventListener('online', async () => {
+        if (!this.autenticado) return;
+        this.notif('Conexión recuperada. Extrayendo datos actualizados...', 'info');
+        try {
+          const { cargarDatosCompletos } = await import('../services/supabase.js');
+          const datos = await cargarDatosCompletos();
+          if (datos.conectado) {
+            this.productos = datos.productos;
+            this.clientes = datos.clientes;
+            this.facturasCobrar = datos.facturasCobrar;
+            this.todasFacturas = datos.todasFacturas;
+            this.supabaseConectado = true;
+            this.notif('Sistema actualizado con los últimos datos de la nube.', 'success');
+          }
+        } catch(e) {
+          console.error('[ARJ] Error en sincronización online:', e);
+        }
+      });
     },
 
     // Gestión de Tasas
@@ -235,6 +284,15 @@ export const useArjStore = defineStore('arj', {
       const neutro = b > 0 ? (1 - 1 / b) * 100 : 0;
       // Actualizamos el descuento divisa igual al neutro por defecto
       this.dto_divisa = Math.round(neutro * 100) / 100;
+      this.guardarTasasLocales();
+    },
+
+    guardarTasasLocales() {
+      localStorage.setItem('ARJ_TASAS', JSON.stringify({
+        bcv: this.tasa_bcv,
+        par: this.tasa_par,
+        dto: this.dto_divisa
+      }));
     },
 
     async confirmarTasas() {
@@ -314,12 +372,13 @@ export const useArjStore = defineStore('arj', {
         supabase.auth.signOut().catch(() => {});
       });
 
-      // 2. Destruir TODA la caché de raíz (excepto el tema visual)
+      // 2. Destruir TODA la caché de raíz (excepto tema y tasas locales fijadas)
       const theme = localStorage.getItem('arj_tema');
+      const tasasLocales = localStorage.getItem('ARJ_TASAS');
       localStorage.clear();
-      if (theme) {
-        localStorage.setItem('arj_tema', theme);
-      }
+      
+      if (theme) localStorage.setItem('arj_tema', theme);
+      if (tasasLocales) localStorage.setItem('ARJ_TASAS', tasasLocales);
 
       this.limpiarCarrito();
 

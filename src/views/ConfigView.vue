@@ -426,13 +426,21 @@ function confirmarTasasHoy() {
   store.notif('Tasas de cambio confirmadas formalmente para la jornada de hoy', 'success');
 }
 
-function avisoTasaAuto() {
+async function avisoTasaAuto() {
   store.notif('Consultando tipo de cambio oficial del BCV...', 'info');
-  setTimeout(() => {
-    store.tasa_bcv = 47.80;
-    store.calcularBrecha();
-    store.notif('Tasa BCV verificada: 47.80 Bs/$ (Fecha valor vigente)', 'success');
-  }, 700);
+  try {
+    const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+    if (!res.ok) throw new Error('Error en la API');
+    const data = await res.json();
+    if (data && data.promedio) {
+      store.tasa_bcv = data.promedio;
+      store.calcularBrecha();
+      store.tasasConfirmadasHoy = false;
+      store.notif(`Tasa BCV verificada: ${data.promedio} Bs/$ (Fecha valor vigente)`, 'success');
+    }
+  } catch (error) {
+    store.notif('Error consultando BCV. Verifica tu conexión a internet.', 'error');
+  }
 }
 
 function cambiarPeriodoFijos() {
