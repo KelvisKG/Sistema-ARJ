@@ -195,12 +195,6 @@ export const useArjStore = defineStore('arj', {
           }
         } catch (e) { }
       }
-
-      // Check inactividad
-      if (localStorage.getItem('arj_inactividad_expulsado') === 'true') {
-        this.inactividadExpulsado = true;
-        localStorage.removeItem('arj_inactividad_expulsado');
-      }
     },
 
     // Inicialización del sistema
@@ -297,7 +291,6 @@ export const useArjStore = defineStore('arj', {
       this.rol = rol;
       this.usuarioNombre = nombre || (rol === 'gerente' ? 'JJ (Gerente General)' : 'HUMBERTO ARJ (Ventas)');
       this.autenticado = true;
-      this.inactividadExpulsado = false;
 
       // Persistir sesión
       localStorage.setItem('arj_sesion', JSON.stringify({
@@ -316,17 +309,24 @@ export const useArjStore = defineStore('arj', {
       }
       this.autenticado = false;
 
-      // Limpiar sesión
-      localStorage.removeItem('arj_sesion');
-      if (porInactividad) {
-        this.inactividadExpulsado = true;
-        localStorage.setItem('arj_inactividad_expulsado', 'true');
+      // 1. Limpiar sesión en Supabase para evitar autologin fantasma
+      import('../services/supabase.js').then(({ supabase }) => {
+        supabase.auth.signOut().catch(() => {});
+      });
+
+      // 2. Destruir TODA la caché de raíz (excepto el tema visual)
+      const theme = localStorage.getItem('arj_tema');
+      localStorage.clear();
+      if (theme) {
+        localStorage.setItem('arj_tema', theme);
       }
 
       this.limpiarCarrito();
-      if (!porInactividad) {
-        this.notif('Sesión cerrada correctamente', 'info');
-      }
+
+      // 3. Forzar una recarga total de la página para destruir cualquier estado residual en memoria
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     },
 
     // Cambio de Empresa (Directa vs Distribuidora) con Transición

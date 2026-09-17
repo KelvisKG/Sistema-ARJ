@@ -13,13 +13,6 @@ function serializarEstado(state) {
     schema_version: ARJ_SCHEMA_VERSION,
     fecha_guardado: new Date().toISOString(),
     
-    // Sesión
-    autenticado: state.autenticado,
-    rol: state.rol,
-    usuarioNombre: state.usuarioNombre,
-    usuarioEmail: state.usuarioEmail,
-    empresa: state.empresa,
-    
     // Tasas
     tasa_bcv: state.tasa_bcv,
     tasa_par: state.tasa_par,
@@ -71,11 +64,6 @@ export function cargarDatosLocal(store) {
     
     // Aplicar los datos al store usando $patch para reactividad
     store.$patch((state) => {
-      if (datos.autenticado !== undefined) state.autenticado = datos.autenticado;
-      if (datos.rol) state.rol = datos.rol;
-      if (datos.usuarioNombre) state.usuarioNombre = datos.usuarioNombre;
-      if (datos.usuarioEmail) state.usuarioEmail = datos.usuarioEmail;
-      if (datos.empresa) state.empresa = datos.empresa;
       
       if (datos.tasa_bcv) state.tasa_bcv = datos.tasa_bcv;
       if (datos.tasa_par) state.tasa_par = datos.tasa_par;
