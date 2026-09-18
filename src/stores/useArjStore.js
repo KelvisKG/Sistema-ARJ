@@ -58,6 +58,7 @@ export const useArjStore = defineStore('arj', {
     turnos: [],
     turnoActual: null,
     bitacora: [],
+    ventasRecientes: [],
     favoritos: [],
 
     // Carrito de Facturación
@@ -209,8 +210,11 @@ export const useArjStore = defineStore('arj', {
         if (datos.conectado) {
           this.productos = datos.productos;
           this.clientes = datos.clientes;
-          this.facturasCobrar = datos.facturasCobrar;
-          this.todasFacturas = datos.todasFacturas;
+          this.facturasCobrar = datos.facturasCobrar || [];
+          this.todasFacturas = datos.todasFacturas || [];
+          this.ventasRecientes = datos.ventasRecientes || [];
+          this.presupuestos = datos.presupuestos || [];
+          
           this.supabaseConectado = true;
           
           if (datos.bitacora && datos.bitacora.length > 0) {
@@ -265,10 +269,12 @@ export const useArjStore = defineStore('arj', {
           const { cargarDatosCompletos } = await import('../services/supabase.js');
           const datos = await cargarDatosCompletos();
           if (datos.conectado) {
-            this.productos = datos.productos;
-            this.clientes = datos.clientes;
-            this.facturasCobrar = datos.facturasCobrar;
-            this.todasFacturas = datos.todasFacturas;
+            this.productos = datos.productos || [];
+            this.clientes = datos.clientes || [];
+            this.facturasCobrar = datos.facturasCobrar || [];
+            this.todasFacturas = datos.todasFacturas || [];
+            this.ventasRecientes = datos.ventasRecientes || [];
+            this.presupuestos = datos.presupuestos || [];
             this.supabaseConectado = true;
             this.notif('Sistema actualizado con los últimos datos de la nube.', 'success');
           }
