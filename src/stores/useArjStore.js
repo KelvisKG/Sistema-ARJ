@@ -394,6 +394,34 @@ export const useArjStore = defineStore('arj', {
       }, 100);
     },
 
+    async registrarUsuario(email, password, nombre, empresa) {
+      this.cargando = true;
+      try {
+        const { supabase } = await import('../services/supabase.js');
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              nombre: nombre,
+              empresa: empresa || 'ambas'
+            }
+          }
+        });
+        
+        if (error) {
+          throw error;
+        }
+        
+        return { ok: true, data };
+      } catch (err) {
+        console.error('[ARJ Store] Error registrando usuario:', err);
+        return { ok: false, error: err.message };
+      } finally {
+        this.cargando = false;
+      }
+    },
+
     // Cambio de Empresa (Directa vs Distribuidora) con Transición
     cambiarEmpresa(emp) {
       if (emp !== 'directa' && emp !== 'distribuidora') return;

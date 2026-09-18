@@ -38,79 +38,78 @@ export async function cargarDatosCompletos() {
         resultado.tasas.tasa_par = parseFloat(cfg.tasa_par);
         resultado.tasas.tasa_bcv = parseFloat(cfg.tasa_bcv);
         resultado.tasas.dto_divisa = parseFloat(cfg.dto_divisa || 0);
-        
+
         resultado.configuracion = {
           factor_default: parseFloat(cfg.factor_landed_default) || 1.471,
           costos_fijos_mes: parseFloat(cfg.costos_fijos_mes) || 0,
           equipo: cfg.equipo || []
         };
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // 2. Productos
     try {
       const { data: prods, error: eP } = await supabase.from('productos').select('*').eq('activo', true).order('cod_alt');
-      if (!eP && prods && prods.length > 0) {
-        resultado.conectado = true;
-        resultado.productos = prods.map(p => ({
-          id: p.id,
-          cod_alt: p.cod_alt,
-          cod_orig: p.cod_orig || '',
-          cod_barras: p.cod_barras || '',
-          desc: p.descripcion,
-          marca: p.marca || '',
-          fob: parseFloat(p.fob) || 0,
-          stock_vd: p.stock_vd || 0,
-          stock_dist: p.stock_dist || 0,
-          marca_modelo: p.marca_modelo || '',
-          sistema: p.sistema || '',
-          precio_manual: p.precio_manual ? parseFloat(p.precio_manual) : null,
-          imagen_url: p.imagen_url || '',
-          origen: p.origen || 'importado',
-          factor_landed: p.factor_landed != null ? parseFloat(p.factor_landed) : 1.471,
-          proveedor: p.proveedor || '',
-          embarque_id: p.embarque_id || null
-        }));
-      }
+      if (eP) throw eP;
+      
+      resultado.productos = (prods || []).map(p => ({
+        id: p.id,
+        cod_alt: p.cod_alt,
+        cod_orig: p.cod_orig || '',
+        cod_barras: p.cod_barras || '',
+        desc: p.descripcion,
+        marca: p.marca || '',
+        fob: parseFloat(p.fob) || 0,
+        stock_vd: p.stock_vd || 0,
+        stock_dist: p.stock_dist || 0,
+        marca_modelo: p.marca_modelo || '',
+        sistema: p.sistema || '',
+        precio_manual: p.precio_manual ? parseFloat(p.precio_manual) : null,
+        imagen_url: p.imagen_url || '',
+        origen: p.origen || 'importado',
+        factor_landed: p.factor_landed != null ? parseFloat(p.factor_landed) : 1.471,
+        proveedor: p.proveedor || '',
+        embarque_id: p.embarque_id || null
+      }));
     } catch (errP) { console.warn('[ARJ] Error cargando productos:', errP); }
 
     // 3. Clientes y Contactos
     try {
       const { data: clis, error: eC } = await supabase.from('clientes').select('*').eq('activo', true).order('nombre');
-      if (!eC && clis && clis.length > 0) {
-        resultado.conectado = true;
-        const { data: contactos } = await supabase.from('contactos_cliente').select('*');
-        const contactosPorCliente = {};
-        if (contactos) {
-          contactos.forEach(c => {
-            if (!contactosPorCliente[c.cliente_id]) contactosPorCliente[c.cliente_id] = [];
-            contactosPorCliente[c.cliente_id].push(c);
-          });
-        }
-        
-        resultado.clientes = clis.map(c => {
-          const cts = contactosPorCliente[c.id] || [];
-          const principal = cts.find(x => x.es_principal) || cts[0] || null;
-          const adicionales = cts.filter(x => !x.es_principal || (principal && x.id !== principal.id));
-          return {
-            id: c.id,
-            nombre: c.nombre,
-            rif: c.rif || '',
-            nivel: c.nivel || 'T1',
-            tipo: c.tipo_pago || c.tipo || 'contado',
-            saldo_vd: parseFloat(c.saldo_vd) || 0,
-            saldo_dist: parseFloat(c.saldo_dist) || 0,
-            tel: c.telefono || '',
-            empresa: c.empresa || 'ambas',
-            origen: c.origen || 'mostrador',
-            origen_detalle: c.origen_detalle || '',
-            direccion: c.direccion || '',
-            notas: c.notas || '',
-            contacto_principal: principal ? { nombre: principal.nombre, cargo: principal.cargo || '', tel: principal.telefono || '' } : { nombre: '—', cargo: '—', tel: '' },
-            contactos_adicionales: adicionales.map(a => ({ nombre: a.nombre, cargo: a.cargo || '', tel: a.telefono || '' }))
-          };
+      if (eC) throw eC;
+      
+      resultado.conectado = true;
+      const { data: contactos } = await supabase.from('contactos_cliente').select('*');
+      const contactosPorCliente = {};
+      if (contactos) {
+        contactos.forEach(c => {
+          if (!contactosPorCliente[c.cliente_id]) contactosPorCliente[c.cliente_id] = [];
+          contactosPorCliente[c.cliente_id].push(c);
         });
       }
+      
+      resultado.clientes = (clis || []).map(c => {
+        const cts = contactosPorCliente[c.id] || [];
+        const principal = cts.find(x => x.es_principal) || cts[0] || null;
+        const adicionales = cts.filter(x => !x.es_principal || (principal && x.id !== principal.id));
+        return {
+          id: c.id,
+          nombre: c.nombre,
+          rif: c.rif || '',
+          nivel: c.nivel || 'T1',
+          tipo: c.tipo_pago || c.tipo || 'contado',
+          saldo_vd: parseFloat(c.saldo_vd) || 0,
+          saldo_dist: parseFloat(c.saldo_dist) || 0,
+          tel: c.telefono || '',
+          empresa: c.empresa || 'ambas',
+          origen: c.origen || 'mostrador',
+          origen_detalle: c.origen_detalle || '',
+          direccion: c.direccion || '',
+          notas: c.notas || '',
+          contacto_principal: principal ? { nombre: principal.nombre, cargo: principal.cargo || '', tel: principal.telefono || '' } : { nombre: '—', cargo: '—', tel: '' },
+          contactos_adicionales: adicionales.map(a => ({ nombre: a.nombre, cargo: a.cargo || '', tel: a.telefono || '' }))
+        };
+      });
     } catch (errC) { console.warn('[ARJ] Error cargando clientes:', errC); }
 
     // 4. Facturas (TODAS, COBRAR, RECIENTES)
@@ -125,7 +124,7 @@ export async function cargarDatosCompletos() {
           const ahora = new Date();
           const fechaVence = f.fecha_vence ? new Date(f.fecha_vence) : null;
           const diasVence = fechaVence ? Math.ceil((fechaVence - ahora) / (1000 * 60 * 60 * 24)) : 0;
-          
+
           let est = f.estado;
           if (est === 'pendiente' && fechaVence && fechaVence < ahora) est = 'vencida';
 
@@ -153,11 +152,11 @@ export async function cargarDatosCompletos() {
           };
 
           resultado.todasFacturas.push(obj);
-          
+
           if (est !== 'pagada' && est !== 'anulada') {
             resultado.facturasCobrar.push(obj);
           }
-          
+
           if (resultado.ventasRecientes.length < 20) {
             const fechaCorta = new Date(f.fecha);
             resultado.ventasRecientes.push({
@@ -180,7 +179,7 @@ export async function cargarDatosCompletos() {
           const { data: cits } = await supabase.from('cotizacion_items').select('cotizacion_id').in('cotizacion_id', cotIds);
           if (cits) cits.forEach(ci => { itemCount[ci.cotizacion_id] = (itemCount[ci.cotizacion_id] || 0) + 1; });
         }
-        
+
         resultado.presupuestos = cots.map(c => {
           const vence = new Date(c.fecha_vence);
           const ahora = new Date();
@@ -188,7 +187,7 @@ export async function cargarDatosCompletos() {
           let est = c.estado;
           if (est === 'activa' && diasRest <= 5) est = 'por_vencer';
           if (est === 'activa' && diasRest < 0) est = 'vencida';
-          
+
           return {
             id: c.id, num: c.numero, empresa: c.empresa, cliente: c.cliente_nombre,
             fecha: new Date(c.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -198,7 +197,7 @@ export async function cargarDatosCompletos() {
           };
         });
       }
-    } catch(errCot) { console.warn('[ARJ] Error cargando cotizaciones:', errCot); }
+    } catch (errCot) { console.warn('[ARJ] Error cargando cotizaciones:', errCot); }
 
     // 6. Sistemas
     resultado.sistemas = [];
@@ -207,7 +206,7 @@ export async function cargarDatosCompletos() {
       if (!eSis && sists) {
         resultado.sistemas = sists.map(s => s.nombre);
       }
-    } catch(errSis) {}
+    } catch (errSis) { }
 
     // 7. Bitácora
     try {
