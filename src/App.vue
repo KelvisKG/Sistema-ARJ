@@ -145,18 +145,8 @@ onMounted(async () => {
   document.body.classList.add(`empresa-${store.empresa}`);
 
   if (store.autenticado) {
-    if (localStorage.getItem('arj_modo_directo') === 'true') {
-      import('./services/seedData.js').then(seed => {
-        store.productos = JSON.parse(JSON.stringify(seed.DEFAULT_PRODUCTOS));
-        store.clientes = JSON.parse(JSON.stringify(seed.DEFAULT_CLIENTES));
-        store.facturasCobrar = JSON.parse(JSON.stringify(seed.DEFAULT_FACTURAS_COBRAR));
-        store.todasFacturas = JSON.parse(JSON.stringify(seed.DEFAULT_FACTURAS_COBRAR));
-        store.supabaseConectado = false;
-      });
-    } else {
-      await supabase.auth.getSession(); // Wait for Supabase to restore token
-      await store.initApp();
-    }
+    await supabase.auth.getSession(); // Wait for Supabase to restore token
+    await store.initApp();
   }
 });
 </script>
