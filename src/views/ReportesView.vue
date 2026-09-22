@@ -40,8 +40,8 @@
         <div class="kpi-card red" style="background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 16px">
           <div class="kpi-icon" style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--lred);color:var(--red);margin-bottom:8px"><i class="ti ti-package"></i></div>
           <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;font-weight:500">Stock crítico</div>
-          <div style="font-size:21px;color:var(--navy);font-weight:600">{{ stockCritico }}</div>
-          <div style="font-size:11px;color:var(--dgray);margin-top:3px">≤ 5 uds agotándose</div>
+          <div style="font-size:21px;color:var(--navy);font-weight:600">{{ stockCritico.bajos }}</div>
+          <div style="font-size:11px;color:var(--dgray);margin-top:3px">1 a 10 ud · {{ stockCritico.agotados }} agotados de {{ store.productos.length }}</div>
         </div>
         
         <div class="kpi-card green" style="background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 16px">
@@ -76,26 +76,33 @@
           <h3 style="margin:0;font-size:15px;color:var(--navy);font-weight:600"><i class="ti ti-world" style="color:var(--blue)"></i> Importado vs Local <span style="font-weight:500;color:var(--dgray);font-size:13px">— Este mes · {{ facturasMes }} factura(s)</span></h3>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div style="background:#F2F5FA;border-radius:8px;padding:12px;border:1px solid #EAF0F8">
+          <div style="background:#EAF0F8;border-radius:8px;padding:12px">
             <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;font-weight:600;margin-bottom:4px"><i class="ti ti-ship"></i> Importado</div>
             <div style="font-size:18px;color:var(--navy);font-weight:700">{{ fmtUSD(origenData.importado.venta) }}</div>
-            <div style="font-size:11px;color:var(--dgray);margin-bottom:8px">{{ origenData.importado.pct.toFixed(1) }}% de la venta</div>
-            <div style="background:var(--gray);border-radius:4px;height:6px;overflow:hidden;margin-bottom:8px">
-              <div style="background:var(--gold);height:100%;width:100%"></div>
+            <div style="font-size:11px;color:var(--dgray);margin-bottom:8px">{{ origenData.importado.pct.toFixed(1) }}% de la venta · {{ origenData.importado.uds }} uds · {{ origenData.importado.renglones }} renglones</div>
+            <div style="background:#FFF;border-radius:4px;height:6px;overflow:hidden;margin-bottom:8px">
+              <div :style="`background:var(--gold);height:100%;width:${origenData.importado.pct}%`"></div>
             </div>
             <div style="font-size:11.5px;color:var(--dgray)">Costo <strong>{{ fmtUSD(origenData.importado.costo) }}</strong></div>
-            <div style="font-size:11.5px;color:var(--dgray)">Utilidad <strong style="color:var(--green)">{{ fmtUSD(origenData.importado.utilidad) }}</strong> · margen <strong>{{ origenData.importado.margen.toFixed(1) }}%</strong></div>
+            <div style="font-size:11.5px;color:var(--dgray)">Utilidad <strong :style="{ color: origenData.importado.utilidad >= 0 ? '#1E7B34' : '#B00020' }">{{ fmtUSD(origenData.importado.utilidad) }}</strong> · margen <strong>{{ origenData.importado.margen.toFixed(1) }}%</strong></div>
+            <div style="font-size:11.5px;color:var(--dgray)">Aporta {{ (origenData.importado.utilidad / (origenData.importado.utilidad + origenData.local.utilidad) * 100 || 0).toFixed(1) }}% de la utilidad</div>
+            <div v-if="origenData.importado.verde > 0" style="font-size:11.5px;color:#1E7B34;font-weight:600;margin-top:2px">≈ {{ fmtUSD(origenData.importado.verde) }} en efectivo verde</div>
           </div>
-          <div style="background:#FBF3E0;border-radius:8px;padding:12px;border:1px solid #F5E6C8">
+          <div style="background:#FBF3E0;border-radius:8px;padding:12px">
             <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;font-weight:600;margin-bottom:4px"><i class="ti ti-building-store"></i> Compra Local</div>
             <div style="font-size:18px;color:var(--navy);font-weight:700">{{ fmtUSD(origenData.local.venta) }}</div>
-            <div style="font-size:11px;color:var(--dgray);margin-bottom:8px">{{ origenData.local.pct.toFixed(1) }}% de la venta</div>
-            <div style="background:var(--gray);border-radius:4px;height:6px;overflow:hidden;margin-bottom:8px">
-              <div style="background:#D4A828;height:100%;width:100%"></div>
+            <div style="font-size:11px;color:var(--dgray);margin-bottom:8px">{{ origenData.local.pct.toFixed(1) }}% de la venta · {{ origenData.local.uds }} uds · {{ origenData.local.renglones }} renglones</div>
+            <div style="background:#FFF;border-radius:4px;height:6px;overflow:hidden;margin-bottom:8px">
+              <div :style="`background:var(--gold);height:100%;width:${origenData.local.pct}%`"></div>
             </div>
             <div style="font-size:11.5px;color:var(--dgray)">Costo <strong>{{ fmtUSD(origenData.local.costo) }}</strong></div>
-            <div style="font-size:11.5px;color:var(--dgray)">Utilidad <strong style="color:var(--green)">{{ fmtUSD(origenData.local.utilidad) }}</strong> · margen <strong>{{ origenData.local.margen.toFixed(1) }}%</strong></div>
+            <div style="font-size:11.5px;color:var(--dgray)">Utilidad <strong :style="{ color: origenData.local.utilidad >= 0 ? '#1E7B34' : '#B00020' }">{{ fmtUSD(origenData.local.utilidad) }}</strong> · margen <strong>{{ origenData.local.margen.toFixed(1) }}%</strong></div>
+            <div style="font-size:11.5px;color:var(--dgray)">Aporta {{ (origenData.local.utilidad / (origenData.importado.utilidad + origenData.local.utilidad) * 100 || 0).toFixed(1) }}% de la utilidad</div>
+            <div v-if="origenData.local.verde > 0" style="font-size:11.5px;color:#1E7B34;font-weight:600;margin-top:2px">≈ {{ fmtUSD(origenData.local.verde) }} en efectivo verde</div>
           </div>
+        </div>
+        <div v-if="origenData.local.venta > 0 && origenData.importado.venta > 0" style="margin-top:12px;font-size:12px;color:var(--dgray)">
+          El margen de <strong>{{ origenData.importado.margen >= origenData.local.margen ? 'importado' : 'local' }}</strong> es {{ Math.abs(origenData.importado.margen - origenData.local.margen).toFixed(1) }} puntos mayor. Utilidad total del mes: <strong>{{ fmtUSD(origenData.importado.utilidad + origenData.local.utilidad) }}</strong>.
         </div>
       </div>
 
@@ -352,8 +359,16 @@ const margenCatalogo = computed(() => {
   return totalP > 0 ? Math.round(((totalP - totalC) / totalP) * 100) : 0;
 });
 
-const stockCritico = computed(() => store.productos.filter(p => (p.stock_vd > 0 && p.stock_vd <= 5) || (p.stock_dist > 0 && p.stock_dist <= 5)).length);
-const listCriticos = computed(() => store.productos.filter(p => (p.stock_vd > 0 && p.stock_vd <= 5) || (p.stock_dist > 0 && p.stock_dist <= 5)));
+const stockCritico = computed(() => {
+  const stockField = store.empresa === 'directa' ? 'stock_vd' : 'stock_dist';
+  const bajos = store.productos.filter(p => p[stockField] > 0 && p[stockField] <= 10).length;
+  const agotados = store.productos.filter(p => (p[stockField] || 0) <= 0).length;
+  return { bajos, agotados };
+});
+const listCriticos = computed(() => {
+  const stockField = store.empresa === 'directa' ? 'stock_vd' : 'stock_dist';
+  return store.productos.filter(p => p[stockField] > 0 && p[stockField] <= 10);
+});
 
 const itemsVentasMes = ref([]);
 const cargandoItems = ref(false);
@@ -412,21 +427,36 @@ const puntoEquilibrio = computed(() => {
 // IMPORTADO VS LOCAL
 // ==========================================
 const origenData = computed(() => {
-  let impV = 0, impC = 0;
-  let locV = 0, locC = 0;
+  let impV = 0, impC = 0, impU = 0, impR = 0;
+  let locV = 0, locC = 0, locU = 0, locR = 0;
+  const brecha = (store.configuracion?.tasa_par || 1) / (store.configuracion?.tasa_bcv || 1);
+  const brechaEfectiva = brecha > 0 ? brecha : 1;
 
   itemsVentasMes.value.forEach(it => {
     let costo = 0;
     let esImportado = false;
     
-    if (parseFloat(it.fob_unitario) > 0) {
-      costo = parseFloat(it.fob_unitario) * parseFloat(it.factor_landed || 1.471);
-      esImportado = true;
+    // Determinar origen como en el prototipo
+    const o = (it.origen || '').toString().trim().toLowerCase();
+    if (o === 'local' || o === 'importado') {
+      esImportado = o === 'importado';
+    } else {
+      const prod = store.productos.find(p => p.id === it.producto_id || p.cod_alt === it.cod_alt);
+      const oc = prod ? (prod.origen || '').toString().trim().toLowerCase() : '';
+      if (oc === 'local' || oc === 'importado') {
+        esImportado = oc === 'importado';
+      } else {
+        const f = parseFloat(it.factor_landed);
+        esImportado = !(isFinite(f) && f > 0 && f <= 1.001);
+      }
+    }
+    
+    if (parseFloat(it.fob_unitario) > 0 && parseFloat(it.factor_landed) > 0) {
+      costo = parseFloat(it.fob_unitario) * parseFloat(it.factor_landed);
     } else {
       const prod = store.productos.find(p => p.id === it.producto_id || p.cod_alt === it.cod_alt);
       if (prod) {
         costo = costoLanded(prod, store.productos);
-        esImportado = parseFloat(prod.fob) > 0;
       } else {
         const precioUnit = (parseFloat(it.total_linea) / (parseFloat(it.cantidad) || 1)) || parseFloat(it.precio_unitario) || 0;
         costo = precioUnit * 0.6;
@@ -435,18 +465,21 @@ const origenData = computed(() => {
 
     const ventaTotal = parseFloat(it.total_linea) || 0;
     const costoTotal = costo * (parseFloat(it.cantidad) || 1);
+    const uds = parseFloat(it.cantidad) || 1;
 
     if (esImportado) {
-      impV += ventaTotal; impC += costoTotal;
+      impV += ventaTotal; impC += costoTotal; impU += uds; impR++;
     } else {
-      locV += ventaTotal; locC += costoTotal;
+      locV += ventaTotal; locC += costoTotal; locU += uds; locR++;
     }
   });
 
   const tV = (impV + locV) || 1;
+  const utilImp = impV - impC;
+  const utilLoc = locV - locC;
   return {
-    importado: { venta: impV, costo: impC, utilidad: impV - impC, margen: impV > 0 ? ((impV - impC) / impV * 100) : 0, pct: (impV / tV) * 100 },
-    local: { venta: locV, costo: locC, utilidad: locV - locC, margen: locV > 0 ? ((locV - locC) / locV * 100) : 0, pct: (locV / tV) * 100 }
+    importado: { venta: impV, costo: impC, utilidad: utilImp, margen: impV > 0 ? (utilImp / impV * 100) : 0, pct: (impV / tV) * 100, uds: impU, renglones: impR, verde: utilImp / brechaEfectiva },
+    local: { venta: locV, costo: locC, utilidad: utilLoc, margen: locV > 0 ? (utilLoc / locV * 100) : 0, pct: (locV / tV) * 100, uds: locU, renglones: locR, verde: utilLoc / brechaEfectiva }
   };
 });
 
