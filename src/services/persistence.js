@@ -34,6 +34,8 @@ function serializarEstado(state) {
     turnoActual: state.turnoActual,
     bitacora: state.bitacora,
     favoritos: state.favoritos,
+    metas_hist: state.metas_hist,
+    equipo_ventas: state.equipo_ventas,
     
     // Carrito actual (para no perder una factura a medias)
     carrito: state.carrito
@@ -85,6 +87,9 @@ export function cargarDatosLocal(store) {
       if (datos.turnoActual !== undefined) state.turnoActual = datos.turnoActual;
       if (datos.bitacora) state.bitacora = datos.bitacora;
       if (datos.favoritos) state.favoritos = datos.favoritos;
+      
+      if (datos.metas_hist) state.metas_hist = datos.metas_hist;
+      if (datos.equipo_ventas) state.equipo_ventas = datos.equipo_ventas;
       
       if (datos.carrito) state.carrito = datos.carrito;
     });

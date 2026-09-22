@@ -61,6 +61,10 @@ export const useArjStore = defineStore('arj', {
     bitacora: [],
     ventasRecientes: [],
     favoritos: [],
+    
+    // Metas de Venta y Equipo (guardado local)
+    metas_hist: {},
+    equipo_ventas: [],
 
     // Carrito de Facturación
     carrito: {
