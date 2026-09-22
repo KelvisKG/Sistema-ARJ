@@ -164,14 +164,7 @@ export function generarFacturaPDF(factura, empresa) {
   y += 30;
 
   // Tabla de productos
-  const listaItems = (factura.items && factura.items.length > 0) 
-    ? factura.items 
-    : [{
-        cod_alt: 'GEN-000',
-        desc: 'Repuestos Agrícolas (Detalle de sistema heredado)',
-        cant: 1,
-        precio: factura.total || 0
-      }];
+  const listaItems = factura.items || [];
 
   const items = listaItems.map((it, idx) => [
     idx + 1,
@@ -327,14 +320,7 @@ export function generarPresupuestoPDF(presupuesto, tasa_bcv) {
   y += 16;
 
   // Tabla de items
-  const listaItemsPres = (presupuesto.items && Array.isArray(presupuesto.items) && presupuesto.items.length > 0) 
-    ? presupuesto.items 
-    : [{
-        cod_alt: 'GEN-000',
-        desc: 'Repuestos Agrícolas (Cotización heredada)',
-        cant: 1,
-        precio: presupuesto.total || 0
-      }];
+  const listaItemsPres = presupuesto.items || [];
 
   const items = listaItemsPres.map((it, idx) => [
     idx + 1,

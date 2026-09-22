@@ -74,6 +74,22 @@
         </div>
       </div>
 
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="field-col" style="margin-bottom:0">
+          <label>Correo Electrónico</label>
+          <input v-model="form.correo" type="email" placeholder="cliente@correo.com" class="val-input">
+        </div>
+        <div class="field-col" style="margin-bottom:0">
+          <label>Canal de Venta</label>
+          <select v-model="form.canal_venta" class="val-input">
+            <option value="Mostrador">Mostrador</option>
+            <option value="Instagram">Instagram</option>
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Vendedor de Zona">Vendedor de Zona</option>
+          </select>
+        </div>
+      </div>
+
       <div class="field-col">
         <label>Dirección o Ubicación de Entrega</label>
         <input v-model="form.direccion" type="text" placeholder="Carretera Nacional Vía Payara..." class="val-input">
@@ -87,6 +103,23 @@
         <div class="field-col" style="margin-bottom:0">
           <label>Cargo del Contacto</label>
           <input v-model="form.contacto_cargo" type="text" placeholder="Jefe de Maquinaria" class="val-input">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="field-col" style="margin-bottom:0">
+          <label>¿Cómo nos consiguió?</label>
+          <select v-model="form.como_consiguio" class="val-input">
+            <option value="Boca a boca">Boca a boca / Recomendación</option>
+            <option value="Redes Sociales">Redes Sociales</option>
+            <option value="Valla Publicitaria">Valla Publicitaria</option>
+            <option value="Radio">Radio</option>
+            <option value="Sin clasificar">Sin clasificar</option>
+          </select>
+        </div>
+        <div class="field-col" style="margin-bottom:0">
+          <label>Notas</label>
+          <input v-model="form.notas" type="text" placeholder="Alguna nota adicional..." class="val-input">
         </div>
       </div>
 
@@ -114,6 +147,10 @@ const form = ref({
   nivel: 'Publico',
   tipo: 'contado',
   direccion: '',
+  correo: '',
+  canal_venta: 'Mostrador',
+  como_consiguio: 'Sin clasificar',
+  notas: '',
   contacto_nombre: '',
   contacto_cargo: ''
 });
@@ -146,6 +183,10 @@ function guardarCliente() {
     nivel: form.value.nivel,
     tipo: form.value.tipo,
     direccion: form.value.direccion.trim(),
+    correo: (form.value.correo || '').trim(),
+    canal_venta: form.value.canal_venta,
+    como_consiguio: form.value.como_consiguio,
+    notas: (form.value.notas || '').trim(),
     saldo_vd: 0,
     saldo_dist: 0,
     contacto_principal: {
@@ -169,6 +210,10 @@ function guardarCliente() {
     nivel: 'Publico',
     tipo: 'contado',
     direccion: '',
+    correo: '',
+    canal_venta: 'Mostrador',
+    como_consiguio: 'Sin clasificar',
+    notas: '',
     contacto_nombre: '',
     contacto_cargo: ''
   };

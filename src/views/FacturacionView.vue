@@ -433,6 +433,14 @@
             <span>Cobrar en Bs (BCV {{ store.tasa_bcv }})</span>
             <span id="t-bs" style="font-weight:700;color:#FFF">{{ fmtBs(store.totalCarritoUSD, store.tasa_bcv) }}</span>
           </div>
+          <div class="total-row small" style="border:none;padding-bottom:0;color:var(--lgold)">
+            <span>Equivalente Paralelo ({{ store.tasa_par }})</span>
+            <span style="font-weight:700">{{ fmtBs(store.totalCarritoUSD, store.tasa_par) }}</span>
+          </div>
+          <div class="total-row small" style="border:none;padding-top:4px;color:rgba(255,255,255,0.6);font-size:10px;justify-content:flex-end;gap:8px">
+            <span>Brecha cambiaria:</span>
+            <span style="font-weight:600">{{ brechaCambiaria }}%</span>
+          </div>
         </div>
 
         <!-- SECCIÓN DE PAGOS MÚLTIPLES -->
@@ -572,6 +580,11 @@ const fechaHoy = computed(() => {
 const clienteSeleccionado = computed(() => {
   if (!store.carrito.cliente_id) return null;
   return store.clientes.find(c => c.id === store.carrito.cliente_id);
+});
+
+const brechaCambiaria = computed(() => {
+  if (store.tasa_bcv <= 0) return '0.00';
+  return (((store.tasa_par - store.tasa_bcv) / store.tasa_bcv) * 100).toFixed(2);
 });
 
 const productosFiltrados = computed(() => {

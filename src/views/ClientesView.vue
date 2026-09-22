@@ -17,7 +17,7 @@
       </div>
     </div>
 
-    <div style="margin-bottom:16px">
+    <div style="margin-bottom:16px;display:flex;gap:12px;align-items:center">
       <input
         v-model="busqueda"
         type="text"
@@ -25,6 +25,22 @@
         class="val-input"
         style="width:360px"
       >
+      <!-- Gráfica Analítica: CÓMO NOS CONSIGUIERON -->
+      <div style="flex:1;background:#F8FAFC;padding:8px 12px;border-radius:6px;border:1px solid #E2E8F0;font-size:11px">
+        <div style="margin-bottom:6px;font-weight:700;color:var(--navy);display:flex;justify-content:space-between">
+          <span>¿Cómo nos consiguieron? (Analítica de Captación)</span>
+          <span>{{ store.clientes.length }} Clientes</span>
+        </div>
+        <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px">
+          <div v-for="st in statsCaptacion" :key="st.label" :style="{ width: st.pct + '%', background: st.color }" :title="st.label + ': ' + st.count"></div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap">
+          <span v-for="st in statsCaptacion" :key="st.label" style="display:flex;align-items:center;gap:4px">
+            <span :style="{ background: st.color, width:'8px', height:'8px', borderRadius:'50%' }"></span>
+            {{ st.label }} ({{ st.pct }}%)
+          </span>
+        </div>
+      </div>
     </div>
 
     <div class="card" style="overflow-x:auto">
@@ -91,7 +107,12 @@
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="field-col">
+          <label>Dirección o Ubicación</label>
+          <input v-model="nuevoCli.direccion" type="text" placeholder="Ej: Zona Industrial..." class="val-input">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <div class="field-col" style="margin-bottom:0">
             <label>Nivel de Precio</label>
             <select v-model="nuevoCli.nivel" class="val-input">
@@ -106,6 +127,39 @@
             <select v-model="nuevoCli.tipo" class="val-input">
               <option value="contado">Contado</option>
               <option value="credito">A Crédito</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="field-col" style="margin-bottom:0">
+            <label>Persona de Contacto</label>
+            <input v-model="nuevoCli.contacto_nombre" type="text" placeholder="Ing. Carlos Pérez" class="val-input">
+          </div>
+          <div class="field-col" style="margin-bottom:0">
+            <label>Cargo del Contacto</label>
+            <input v-model="nuevoCli.contacto_cargo" type="text" placeholder="Jefe de Compras" class="val-input">
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="field-col" style="margin-bottom:0">
+            <label>¿Cómo nos consiguió?</label>
+            <select v-model="nuevoCli.como_consiguio" class="val-input">
+              <option value="Boca a boca">Boca a boca / Recomendación</option>
+              <option value="Redes Sociales">Redes Sociales</option>
+              <option value="Valla Publicitaria">Valla Publicitaria</option>
+              <option value="Radio">Radio</option>
+              <option value="Sin clasificar">Sin clasificar</option>
+            </select>
+          </div>
+          <div class="field-col" style="margin-bottom:0">
+            <label>Canal de Venta</label>
+            <select v-model="nuevoCli.canal_venta" class="val-input">
+              <option value="Mostrador">Mostrador</option>
+              <option value="Instagram">Instagram</option>
+              <option value="WhatsApp">WhatsApp</option>
+              <option value="Vendedor de Zona">Vendedor de Zona</option>
             </select>
           </div>
         </div>
@@ -135,7 +189,35 @@ const nuevoCli = ref({
   rif: '',
   tel: '',
   nivel: 'T1',
-  tipo: 'contado'
+  tipo: 'contado',
+  direccion: '',
+  contacto_nombre: '',
+  contacto_cargo: '',
+  como_consiguio: 'Sin clasificar',
+  canal_venta: 'Mostrador'
+});
+
+const statsCaptacion = computed(() => {
+  const total = store.clientes.length;
+  if (total === 0) return [];
+  const map = {
+    'Boca a boca': { count: 0, color: '#3B82F6' },
+    'Redes Sociales': { count: 0, color: '#10B981' },
+    'Valla Publicitaria': { count: 0, color: '#F59E0B' },
+    'Radio': { count: 0, color: '#8B5CF6' },
+    'Sin clasificar': { count: 0, color: '#94A3B8' }
+  };
+  store.clientes.forEach(c => {
+    const k = map[c.como_consiguio] ? c.como_consiguio : 'Sin clasificar';
+    map[k].count++;
+  });
+  const arr = [];
+  for (const k in map) {
+    if (map[k].count > 0) {
+      arr.push({ label: k, count: map[k].count, pct: Math.round((map[k].count / total) * 100), color: map[k].color });
+    }
+  }
+  return arr.sort((a,b) => b.count - a.count);
 });
 
 const clientesFiltrados = computed(() => {
@@ -169,9 +251,16 @@ function guardarNuevoCliente() {
     tel: nuevoCli.value.tel,
     nivel: nuevoCli.value.nivel,
     tipo: nuevoCli.value.tipo,
+    direccion: nuevoCli.value.direccion,
+    como_consiguio: nuevoCli.value.como_consiguio,
+    canal_venta: nuevoCli.value.canal_venta,
     saldo_vd: 0,
     saldo_dist: 0,
-    contacto_principal: { nombre: '', cargo: '', tel: '' }
+    contacto_principal: { 
+      nombre: nuevoCli.value.contacto_nombre, 
+      cargo: nuevoCli.value.contacto_cargo, 
+      tel: nuevoCli.value.tel 
+    }
   };
   store.clientes.unshift(item);
   mostrarModalNuevo.value = false;

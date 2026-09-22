@@ -21,9 +21,23 @@
         <button
           v-if="store.rol === 'gerente'"
           class="btn btn-secondary"
+          @click="store.notif('Módulo de Notas de Entrega en desarrollo', 'info')"
+        >
+          <i class="ti ti-file-description"></i> Notas de Entrega
+        </button>
+        <button
+          v-if="store.rol === 'gerente'"
+          class="btn btn-secondary"
           @click="store.modalRecepcionActivo = true"
         >
-          <i class="ti ti-truck-delivery"></i> Conteo / Recepción
+          <i class="ti ti-truck-delivery"></i> Recepciones / Conteo
+        </button>
+        <button
+          v-if="store.rol === 'gerente'"
+          class="btn btn-secondary"
+          @click="store.notif('Importador Excel en desarrollo', 'info')"
+        >
+          <i class="ti ti-upload"></i> Importar Excel
         </button>
         <button
           v-if="store.rol === 'gerente'"
@@ -226,6 +240,20 @@
           </div>
         </div>
 
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="field-col" style="margin-bottom:0">
+            <label>Origen del Repuesto</label>
+            <select v-model="nuevoProd.origen" class="val-input">
+              <option value="importado">Importado</option>
+              <option value="local">Nacional / Compras Locales</option>
+            </select>
+          </div>
+          <div class="field-col" style="margin-bottom:0">
+            <label>Proveedor (Opcional)</label>
+            <input v-model="nuevoProd.proveedor" type="text" placeholder="Ej: John Deere Miami..." class="val-input">
+          </div>
+        </div>
+
         <div class="field-col" style="margin-bottom:12px">
           <label>Descripción Completa del Repuesto *</label>
           <input
@@ -260,6 +288,38 @@
             <span v-if="errors.fob" class="field-error">
               <i class="ti ti-alert-circle"></i> {{ errors.fob }}
             </span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px" v-if="nuevoProd.origen === 'importado'">
+          <div class="field-col" style="margin-bottom:0">
+            <label>Factor Landed (Costos de imp. y flete)</label>
+            <input
+              v-model.number="nuevoProd.factor_landed"
+              type="number"
+              step="0.001"
+              class="val-input"
+            >
+          </div>
+          <div class="field-col" style="margin-bottom:0">
+            <label>Costo Real (Landed)</label>
+            <div style="padding:8px 12px;background:#F1F5F9;border-radius:6px;border:1px solid #E2E8F0;font-weight:700;color:var(--navy)">
+              ${{ ((nuevoProd.fob || 0) * (nuevoProd.factor_landed || 1)).toFixed(2) }}
+            </div>
+          </div>
+        </div>
+
+        <div class="field-col" style="margin-bottom:16px">
+          <label>Simulador de Margen de Ganancia Rápido</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 1.30">x1.30 (+30%)</button>
+            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 1.50">x1.50 (+50%)</button>
+            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 1.70">x1.70 (+70%)</button>
+            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 2.00">x2.00 (+100%)</button>
+            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 2.50">x2.50 (+150%)</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--dgray)">
+            Precio Público Sugerido: <strong style="color:var(--green);font-size:14px">${{ (((nuevoProd.fob || 0) * (nuevoProd.origen === 'importado' ? (nuevoProd.factor_landed || 1) : 1)) * simuladorMargen).toFixed(2) }}</strong>
           </div>
         </div>
 
@@ -339,8 +399,13 @@ const nuevoProd = ref({
   stock_vd: 0,
   stock_dist: 0,
   sistema: 'Motor',
-  marca_modelo: ''
+  marca_modelo: '',
+  origen: 'importado',
+  factor_landed: 1.471,
+  proveedor: ''
 });
+
+const simuladorMargen = ref(1.5);
 
 function stockActivo(p) {
   return store.empresa === 'directa' ? (p.stock_vd || 0) : (p.stock_dist || 0);
@@ -403,8 +468,12 @@ function abrirModalNuevo() {
     stock_vd: 0,
     stock_dist: 0,
     sistema: 'Motor',
-    marca_modelo: ''
+    marca_modelo: '',
+    origen: 'importado',
+    factor_landed: 1.471,
+    proveedor: ''
   };
+  simuladorMargen.value = 1.5;
   mostrarModalNuevo.value = true;
 }
 
@@ -452,8 +521,9 @@ function guardarNuevoProducto() {
     stock_dist: parseInt(nuevoProd.value.stock_dist) || 0,
     sistema: nuevoProd.value.sistema || 'Motor',
     marca_modelo: (nuevoProd.value.marca_modelo || '').trim(),
-    factor_landed: 1.471,
-    origen: 'importado'
+    factor_landed: parseFloat(nuevoProd.value.factor_landed) || 1.471,
+    origen: nuevoProd.value.origen || 'importado',
+    proveedor: (nuevoProd.value.proveedor || '').trim()
   };
   store.productos.unshift(item);
   mostrarModalNuevo.value = false;

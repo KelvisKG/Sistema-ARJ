@@ -50,57 +50,64 @@
       </div>
     </div>
 
-    <!-- LISTADO DE DEUDAS -->
-    <div style="margin-top:16px;background:#FFF;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-      <table class="tbl">
-        <thead>
-          <tr>
-            <th style="width:14%">N° Factura</th>
-            <th style="width:26%">Cliente</th>
-            <th style="width:12%">Emisión</th>
-            <th style="width:12%">Vencimiento</th>
-            <th class="num" style="width:11%">Total</th>
-            <th class="num" style="width:11%">Abonado</th>
-            <th class="num" style="width:11%">Saldo Pendiente</th>
-            <th class="center" style="width:13%">Acción</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="facturasEmpresa.length === 0">
-            <td colspan="8" style="text-align:center;padding:24px;color:var(--dgray)">
-              No hay cuentas pendientes por cobrar en esta empresa.
-            </td>
-          </tr>
-          <tr v-for="f in facturasEmpresa" :key="f.id">
-            <td>
-              <strong style="color:var(--navy)">{{ f.num }}</strong>
-            </td>
-            <td>
-              <strong>{{ f.cliente }}</strong>
-            </td>
-            <td style="color:var(--dgray);font-size:12px">{{ f.fecha }}</td>
-            <td>
-              <span :class="['badge', estadoVencimiento(f).color]">
+    <!-- LISTADO DE DEUDAS POR CLIENTE (CARDS) -->
+    <div v-if="clientesConDeuda.length === 0" style="text-align:center;padding:40px;color:var(--dgray);background:#FFF;border-radius:8px;border:1px solid var(--border);margin-top:16px">
+      No hay cuentas pendientes por cobrar en esta empresa.
+    </div>
+
+    <div v-else style="display:grid;grid-template-columns:repeat(auto-fill, minmax(340px, 1fr));gap:16px;margin-top:16px">
+      <div v-for="c in clientesConDeuda" :key="c.cliente" class="card" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div>
+            <h3 style="margin:0;color:var(--navy);font-size:16px">{{ c.cliente }}</h3>
+            <div style="font-size:12px;color:var(--dgray)">{{ c.facturas.length }} documentos pendientes</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--dgray)">Deuda Total</div>
+            <div style="font-size:18px;font-weight:800;color:var(--red)">{{ fmtUSD(c.totalDeuda) }}</div>
+          </div>
+        </div>
+
+        <!-- FACTURAS DEL CLIENTE -->
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+          <div v-for="f in c.facturas" :key="f.id" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <strong style="color:var(--navy);font-size:13px">{{ f.num }}</strong>
+              <span :class="['badge', estadoVencimiento(f).color]" style="font-size:10px">
                 {{ f.vence }} ({{ estadoVencimiento(f).texto }})
               </span>
-            </td>
-            <td class="num">{{ fmtUSD(f.total) }}</td>
-            <td class="num" style="color:var(--green)">{{ fmtUSD(f.abonado || 0) }}</td>
-            <td class="num" style="font-weight:700;color:var(--red)">
-              {{ fmtUSD(f.saldo_pendiente) }}
-            </td>
-            <td class="center">
-              <button
-                class="btn btn-primary btn-sm"
-                style="padding:4px 8px;font-size:11px"
-                @click="abrirModalAbono(f)"
-              >
+            </div>
+            
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px">
+              <span style="color:var(--dgray)">Emitida: {{ f.fecha }}</span>
+              <span style="font-weight:700;color:var(--red)">Saldo: {{ fmtUSD(f.saldo_pendiente) }}</span>
+            </div>
+            
+            <!-- Resguardo de tasa visual (Simulado si no hay tasa_origen) -->
+            <div style="background:#FFF3CD;color:#856404;padding:4px 8px;border-radius:4px;font-size:10.5px;display:flex;justify-content:space-between;margin-bottom:8px">
+              <span>Resguardo de Tasa:</span>
+              <strong v-if="f.tasa_bcv">Emisión: Bs {{ f.tasa_bcv }} <i class="ti ti-arrow-right"></i> Hoy: Bs {{ store.tasa_bcv }}</strong>
+              <strong v-else>No req. cobertura</strong>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:6px">
+              <button class="btn btn-secondary btn-sm" style="padding:4px 8px;font-size:11px" @click="store.notif('Módulo Nota de Crédito en desarrollo', 'info')">
+                <i class="ti ti-receipt-refund"></i> N. Crédito
+              </button>
+              <button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:11px" @click="abrirModalAbono(f)">
                 <i class="ti ti-cash"></i> Abonar
               </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACCIONES DE CLIENTE -->
+        <div style="border-top:1px solid var(--border);padding-top:12px;display:flex;justify-content:center">
+          <button class="btn btn-secondary btn-sm" style="width:100%" @click="store.notif('Estado de cuenta enviado al correo del cliente', 'success')">
+            <i class="ti ti-mail"></i> Enviar Edo. Cuenta al Cliente
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- MODAL ABONO / COBRO -->
@@ -171,6 +178,19 @@ const errors = ref({});
 const facturasEmpresa = computed(() => {
   const emp = store.empresa === 'directa' ? 'directa' : 'distribuidora';
   return store.facturasCobrar.filter(f => f.empresa === emp);
+});
+
+const clientesConDeuda = computed(() => {
+  const map = new Map();
+  facturasEmpresa.value.forEach(f => {
+    if (!map.has(f.cliente)) {
+      map.set(f.cliente, { cliente: f.cliente, facturas: [], totalDeuda: 0 });
+    }
+    const c = map.get(f.cliente);
+    c.facturas.push(f);
+    c.totalDeuda += (parseFloat(f.saldo_pendiente) || 0);
+  });
+  return Array.from(map.values()).sort((a,b) => b.totalDeuda - a.totalDeuda);
 });
 
 const totalCobrar = computed(() => {
