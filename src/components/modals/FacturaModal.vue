@@ -39,15 +39,25 @@
       <table class="tbl" style="margin-bottom:14px">
         <thead>
           <tr>
-            <th style="width:16%">Código</th>
-            <th style="width:44%">Descripción</th>
+            <th style="width:6%" class="center">#</th>
+            <th style="width:14%">Código</th>
+            <th style="width:40%">Descripción</th>
             <th class="num" style="width:10%">Cant</th>
             <th class="num" style="width:15%">Precio</th>
             <th class="num" style="width:15%">Total</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="it in store.facturaReciente.items" :key="it.id">
+          <tr v-if="!store.facturaReciente.items || store.facturaReciente.items.length === 0">
+            <td class="center" style="color:var(--dgray);font-size:11px">1</td>
+            <td><strong>GEN-000</strong></td>
+            <td>Repuestos Agrícolas (Detalle de sistema heredado)</td>
+            <td class="num">1</td>
+            <td class="num">{{ fmtUSD(store.facturaReciente.total) }}</td>
+            <td class="num" style="font-weight:700">{{ fmtUSD(store.facturaReciente.total) }}</td>
+          </tr>
+          <tr v-for="(it, idx) in store.facturaReciente.items" :key="it.id">
+            <td class="center" style="color:var(--dgray);font-size:11px">{{ idx + 1 }}</td>
             <td><strong>{{ it.cod_alt }}</strong></td>
             <td>{{ it.desc }}</td>
             <td class="num">{{ it.cant }}</td>
