@@ -290,8 +290,35 @@ export const useArjStore = defineStore('arj', {
           if (datos.conectado) {
             this.productos = datos.productos || [];
             this.clientes = datos.clientes || [];
-            this.facturasCobrar = datos.facturasCobrar || [];
-            this.todasFacturas = datos.todasFacturas || [];
+            
+            // Merge local items to preserve them
+            if (datos.todasFacturas) {
+              datos.todasFacturas.forEach(fSup => {
+                const fLoc = this.todasFacturas.find(f => f.id === fSup.id || f.num === fSup.num);
+                if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) {
+                  fSup.items = fLoc.items;
+                }
+              });
+              this.todasFacturas = datos.todasFacturas;
+            }
+            if (datos.facturasCobrar) {
+              datos.facturasCobrar.forEach(fSup => {
+                const fLoc = this.facturasCobrar.find(f => f.id === fSup.id || f.num === fSup.num);
+                if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) {
+                  fSup.items = fLoc.items;
+                }
+              });
+              this.facturasCobrar = datos.facturasCobrar;
+            }
+            if (datos.presupuestos) {
+              datos.presupuestos.forEach(pSup => {
+                const pLoc = this.presupuestos.find(p => p.id === pSup.id || p.num === pSup.num);
+                if (pLoc && pLoc.items && Array.isArray(pLoc.items) && pLoc.items.length > 0) {
+                  pSup.items = pLoc.items;
+                }
+              });
+              this.presupuestos = datos.presupuestos;
+            }
             this.ventasRecientes = datos.ventasRecientes || [];
             this.presupuestos = datos.presupuestos || [];
             this.supabaseConectado = true;
@@ -744,11 +771,11 @@ export const useArjStore = defineStore('arj', {
           vendedor: nuevaFactura.vendedor,
           total: nuevaFactura.total,
           abonado: nuevaFactura.abonado,
-          saldo_pendiente: nuevaFactura.saldo_pendiente,
           estado: nuevaFactura.estado,
           tipo_pago: nuevaFactura.tipo_pago,
           tasa_par: nuevaFactura.tasa_par,
-          tasa_bcv: nuevaFactura.tasa_bcv
+          tasa_bcv: nuevaFactura.tasa_bcv,
+          items: nuevaFactura.items
         });
       }
 

@@ -237,6 +237,7 @@ export async function guardarFacturaEnSupabase(factura) {
   try {
     // Si hay internet intentamos guardar directo primero
     if (navigator.onLine) {
+      // Pasamos los items si existen para que se inserten si la BD tiene una columna JSONB 'items'
       const { data, error } = await supabase.from('facturas').insert([factura]).select();
       if (!error) return { ok: true, data: data ? data[0] : null };
     }
