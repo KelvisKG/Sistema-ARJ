@@ -28,6 +28,7 @@ function serializarEstado(state) {
     apartados: state.apartados,
     notasCredito: state.notasCredito,
     movimientos: state.movimientos,
+    movimientosDinero: state.movimientosDinero,
     embarques: state.embarques,
     turnos: state.turnos,
     turnoActual: state.turnoActual,
@@ -78,6 +79,7 @@ export function cargarDatosLocal(store) {
       if (datos.apartados) state.apartados = datos.apartados;
       if (datos.notasCredito) state.notasCredito = datos.notasCredito;
       if (datos.movimientos) state.movimientos = datos.movimientos;
+      if (datos.movimientosDinero) state.movimientosDinero = datos.movimientosDinero;
       if (datos.embarques) state.embarques = datos.embarques;
       if (datos.turnos) state.turnos = datos.turnos;
       if (datos.turnoActual !== undefined) state.turnoActual = datos.turnoActual;

@@ -24,21 +24,25 @@
 
     <!-- KPIs -->
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <div class="kpi-card blue" style="margin:0;padding:10px 14px">
+      <div class="kpi-card blue" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'activo'">
         <div class="kpi-label">Activas</div>
         <div class="kpi-val" style="font-size:18px">{{ totalActivas }}</div>
       </div>
-      <div class="kpi-card gold" style="margin:0;padding:10px 14px">
+      <div class="kpi-card gold" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'por_vencer'">
         <div class="kpi-label">Por vencer</div>
         <div class="kpi-val" style="font-size:18px;color:var(--gold)">{{ totalPorVencer }}</div>
       </div>
-      <div class="kpi-card red" style="margin:0;padding:10px 14px">
+      <div class="kpi-card red" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'rechazado'">
         <div class="kpi-label">Vencidas / Rechazadas</div>
         <div class="kpi-val" style="font-size:18px;color:var(--red)">{{ totalRechazadas }}</div>
       </div>
-      <div class="kpi-card" style="margin:0;padding:10px 14px">
+      <div class="kpi-card" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'convertido'">
         <div class="kpi-label">Convertidas a Venta</div>
         <div class="kpi-val" style="font-size:18px;color:var(--green)">{{ totalConvertidas }}</div>
+      </div>
+      <div class="kpi-card" style="margin:0;padding:10px 14px;cursor:pointer;background:#F5F5F5" @click="filtroEstado = ''">
+        <div class="kpi-label" style="color:var(--dgray)">Limpiar Filtros</div>
+        <div class="kpi-val" style="font-size:18px;color:var(--navy)"><i class="ti ti-filter-off"></i></div>
       </div>
     </div>
 
@@ -192,6 +196,7 @@ import { generarPresupuestoPDF } from '../services/exportService.js';
 const store = useArjStore();
 const verRechazados = ref(false);
 const mostrarModalNuevo = ref(false);
+const filtroEstado = ref('');
 
 const clienteSel = ref('');
 const productoSel = ref('');
@@ -199,13 +204,19 @@ const cantSel = ref(1);
 const itemsTemp = ref([]);
 
 const presupuestosFiltrados = computed(() => {
-  if (verRechazados.value) return store.presupuestos;
-  return store.presupuestos.filter(p => p.estado !== 'rechazado');
+  let list = store.presupuestos;
+  if (!verRechazados.value) {
+    list = list.filter(p => p.estado !== 'rechazado' && p.estado !== 'vencida');
+  }
+  if (filtroEstado.value) {
+    list = list.filter(p => p.estado === filtroEstado.value || (filtroEstado.value === 'rechazado' && p.estado === 'vencida'));
+  }
+  return list;
 });
 
-const totalActivas = computed(() => store.presupuestos.filter(p => p.estado === 'activo').length);
-const totalPorVencer = computed(() => 1);
-const totalRechazadas = computed(() => store.presupuestos.filter(p => p.estado === 'rechazado').length);
+const totalActivas = computed(() => store.presupuestos.filter(p => p.estado === 'activo' || p.estado === 'activa').length);
+const totalPorVencer = computed(() => store.presupuestos.filter(p => p.estado === 'por_vencer').length);
+const totalRechazadas = computed(() => store.presupuestos.filter(p => p.estado === 'rechazado' || p.estado === 'vencida').length);
 const totalConvertidas = computed(() => store.presupuestos.filter(p => p.estado === 'convertido').length);
 
 const totalTemp = computed(() => {

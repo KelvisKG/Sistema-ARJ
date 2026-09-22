@@ -25,15 +25,15 @@
 
     <!-- KPIs Historial -->
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <div class="kpi-card blue" style="margin:0;padding:10px 14px">
+      <div class="kpi-card blue" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = ''">
         <div class="kpi-label">Total facturas</div>
         <div class="kpi-val" style="font-size:18px">{{ store.todasFacturas.length }}</div>
       </div>
-      <div class="kpi-card green" style="margin:0;padding:10px 14px">
+      <div class="kpi-card green" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'pagada'">
         <div class="kpi-label">Pagadas</div>
         <div class="kpi-val" style="font-size:18px;color:var(--green)">{{ totalPagadas }}</div>
       </div>
-      <div class="kpi-card gold" style="margin:0;padding:10px 14px">
+      <div class="kpi-card gold" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'pendiente'">
         <div class="kpi-label">Pendientes / Parciales</div>
         <div class="kpi-val" style="font-size:18px;color:var(--gold)">{{ totalPendientes }}</div>
       </div>
@@ -86,6 +86,14 @@
                 <button
                   class="btn btn-secondary btn-sm"
                   style="padding:2px 5px;font-size:10px"
+                  title="Descargar PDF"
+                  @click="descargarFacturaPDF(f)"
+                >
+                  <i class="ti ti-download"></i>
+                </button>
+                <button
+                  class="btn btn-secondary btn-sm"
+                  style="padding:2px 5px;font-size:10px"
                   title="Ver / Reimprimir Factura"
                   @click="verFactura(f)"
                 >
@@ -113,6 +121,7 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
+import { generarFacturaPDF } from '../services/exportService.js';
 
 const store = useArjStore();
 const busqueda = ref('');
@@ -128,6 +137,11 @@ function iniciarAnulacion(f) {
   store.modalAnularActivo = true;
 }
 
+function descargarFacturaPDF(f) {
+  generarFacturaPDF(f, store.empresa);
+  store.notif(`PDF de la factura ${f.num} generado`, 'success');
+}
+
 const facturasFiltradas = computed(() => {
   let list = store.todasFacturas;
   const q = busqueda.value.trim().toLowerCase();
@@ -139,7 +153,11 @@ const facturasFiltradas = computed(() => {
     );
   }
   if (filtroEstado.value) {
-    list = list.filter(f => f.estado === filtroEstado.value);
+    if (filtroEstado.value === 'pendiente') {
+      list = list.filter(f => f.estado === 'pendiente' || f.estado === 'parcial');
+    } else {
+      list = list.filter(f => f.estado === filtroEstado.value);
+    }
   }
   return list;
 });

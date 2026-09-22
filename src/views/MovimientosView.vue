@@ -401,45 +401,8 @@ import { useArjStore } from '../stores/useArjStore.js';
 const store = useArjStore();
 const tabActivo = ref('dinero');
 
-// Movimientos de dinero (Flujo de caja)
-const movimientosDinero = ref([
-  {
-    id: 1,
-    fecha: '02 mar 2026',
-    tipo: 'entrada',
-    categoria: 'Cobranza',
-    concepto: 'Cobro de factura a Agropecuaria El Turpial',
-    montoUSD: 820.00,
-    montoBs: 39196.00,
-    metodo: 'Transferencia USD',
-    empresa: 'Venta Directa',
-    clase: 'ingreso'
-  },
-  {
-    id: 2,
-    fecha: '01 mar 2026',
-    tipo: 'salida',
-    categoria: 'Alquiler',
-    concepto: 'Alquiler del galpón principal mes de marzo',
-    montoUSD: 450.00,
-    montoBs: 21510.00,
-    metodo: 'Transferencia Bs',
-    empresa: 'Ambas',
-    clase: 'opex'
-  },
-  {
-    id: 3,
-    fecha: '28 feb 2026',
-    tipo: 'salida',
-    categoria: 'Flete',
-    concepto: 'Transporte marítimo de repuestos Santos 1',
-    montoUSD: 320.00,
-    montoBs: null,
-    metodo: 'Zelle',
-    empresa: 'Distribuidora',
-    clase: 'inventario'
-  }
-]);
+// Movimientos de dinero (Flujo de caja) - Vinculado al Store
+const movimientosDinero = computed(() => store.movimientosDinero);
 
 const mostrarModalDinero = ref(false);
 const tipoDineroModal = ref('salida');
@@ -545,7 +508,7 @@ function guardarMovimientoDinero() {
   const catObj = categoriasDinero.find(c => c.nombre === categoriaDinero.value);
   const clase = catObj ? catObj.clase : (tipoDineroModal.value === 'entrada' ? 'ingreso' : 'opex');
 
-  movimientosDinero.value.unshift({
+  store.movimientosDinero.unshift({
     id: Date.now(),
     fecha: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
     tipo: tipoDineroModal.value,
@@ -557,6 +520,9 @@ function guardarMovimientoDinero() {
     empresa: empresaDinero.value === 'directa' ? 'Venta Directa' : empresaDinero.value === 'distribuidora' ? 'Distribuidora' : 'Ambas',
     clase
   });
+  
+  // Forzar guardado para persistencia (import persistence.js en store, o usar action)
+  import('../services/persistence.js').then(m => m.guardarDatosLocal(store.$state));
 
   store.notif(`Movimiento de ${tipoDineroModal.value} guardado por $${usd.toFixed(2)}`, 'success');
   mostrarModalDinero.value = false;

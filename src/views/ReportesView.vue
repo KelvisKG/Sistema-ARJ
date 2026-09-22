@@ -56,9 +56,9 @@
 
         <div class="kpi-card gold">
           <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
-          <div class="kpi-label">Margen del catálogo</div>
-          <div class="kpi-val">~44%</div>
-          <div class="kpi-sub">Cálculo sobre costo landed</div>
+          <div class="kpi-label">Margen promedio del catálogo</div>
+          <div class="kpi-val">{{ margenCatalogo }}%</div>
+          <div class="kpi-sub">Calculado sobre costo landed</div>
         </div>
 
         <div class="kpi-card red">
@@ -71,8 +71,8 @@
         <div class="kpi-card green">
           <div class="kpi-icon"><i class="ti ti-coin"></i></div>
           <div class="kpi-label">Utilidad bruta estimada</div>
-          <div class="kpi-val">{{ fmtUSD(ventasTotales * 0.42) }}</div>
-          <div class="kpi-sub">Margen comercial bruto</div>
+          <div class="kpi-val">{{ fmtUSD(utilidadEstimada) }}</div>
+          <div class="kpi-sub">Basada en margen promedio</div>
         </div>
 
         <div class="kpi-card blue">
@@ -216,7 +216,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD } from '../services/pricing.js';
+import { fmtUSD, precioPublico, costoLanded } from '../services/pricing.js';
 
 const store = useArjStore();
 const subRep = ref('resumen');
@@ -226,7 +226,24 @@ const ventasTotales = computed(() => {
 });
 
 const ventasHoy = computed(() => {
-  return store.todasFacturas.slice(0, 3).reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
+  const hoy = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
+  return store.todasFacturas.filter(f => f.fecha === hoy).reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
+});
+
+const margenCatalogo = computed(() => {
+  if (store.productos.length === 0) return 0;
+  let totalPrecio = 0;
+  let totalCosto = 0;
+  store.productos.forEach(p => {
+    totalPrecio += precioPublico(p.fob || 0);
+    totalCosto += costoLanded(p);
+  });
+  if (totalPrecio === 0) return 0;
+  return Math.round(((totalPrecio - totalCosto) / totalPrecio) * 100);
+});
+
+const utilidadEstimada = computed(() => {
+  return ventasTotales.value * (margenCatalogo.value / 100);
 });
 
 const carteraTotal = computed(() => {
@@ -234,7 +251,9 @@ const carteraTotal = computed(() => {
 });
 
 const itemsCriticos = computed(() => {
-  return store.productos.filter(p => (p.stock_vd <= 5 || p.stock_dist <= 5));
+  return store.productos.filter(p => 
+    (p.stock_vd > 0 && p.stock_vd <= 5) || (p.stock_dist > 0 && p.stock_dist <= 5)
+  );
 });
 
 const facturasVD = computed(() => store.todasFacturas.filter(f => f.empresa === 'directa'));

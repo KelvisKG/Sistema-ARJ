@@ -193,7 +193,7 @@ export async function cargarDatosCompletos() {
             fecha: new Date(c.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
             vence: vence.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
             total: parseFloat(c.subtotal_usd) || 0, estado: est, dias_restantes: diasRest,
-            items: itemCount[c.id] || 0, vendedor: c.vendedor
+            items_count: itemCount[c.id] || 0, vendedor: c.vendedor
           };
         });
       }

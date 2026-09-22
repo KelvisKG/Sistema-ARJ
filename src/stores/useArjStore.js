@@ -53,7 +53,8 @@ export const useArjStore = defineStore('arj', {
     presupuestos: [],
     apartados: [],
     notasCredito: [],
-    movimientos: [],
+    movimientos: [], // Kardex
+    movimientosDinero: [], // Flujo de caja
     embarques: [],
     turnos: [],
     turnoActual: null,
@@ -210,10 +211,31 @@ export const useArjStore = defineStore('arj', {
         if (datos.conectado) {
           this.productos = datos.productos;
           this.clientes = datos.clientes;
-          this.facturasCobrar = datos.facturasCobrar || [];
-          this.todasFacturas = datos.todasFacturas || [];
+          
+          // Merge local items to preserve them for PDF generation since Supabase doesn't return items
+          if (datos.todasFacturas) {
+            datos.todasFacturas.forEach(fSup => {
+              const fLoc = this.todasFacturas.find(f => f.id === fSup.id || f.num === fSup.num);
+              if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) fSup.items = fLoc.items;
+            });
+            this.todasFacturas = datos.todasFacturas;
+          }
+          if (datos.facturasCobrar) {
+            datos.facturasCobrar.forEach(fSup => {
+              const fLoc = this.facturasCobrar.find(f => f.id === fSup.id || f.num === fSup.num);
+              if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) fSup.items = fLoc.items;
+            });
+            this.facturasCobrar = datos.facturasCobrar;
+          }
+          if (datos.presupuestos) {
+            datos.presupuestos.forEach(pSup => {
+              const pLoc = this.presupuestos.find(p => p.id === pSup.id || p.num === pSup.num);
+              if (pLoc && pLoc.items && Array.isArray(pLoc.items) && pLoc.items.length > 0) pSup.items = pLoc.items;
+            });
+            this.presupuestos = datos.presupuestos;
+          }
+
           this.ventasRecientes = datos.ventasRecientes || [];
-          this.presupuestos = datos.presupuestos || [];
           
           this.supabaseConectado = true;
           
@@ -221,19 +243,12 @@ export const useArjStore = defineStore('arj', {
             this.bitacora = datos.bitacora;
           }
 
-          // Priorizar SIEMPRE las tasas locales sobre las de Supabase para la misma máquina
-          const tasasGuardadas = localStorage.getItem('ARJ_TASAS');
-          if (tasasGuardadas) {
-            try {
-               const p = JSON.parse(tasasGuardadas);
-               this.tasa_bcv = p.bcv || this.tasa_bcv;
-               this.tasa_par = p.par || this.tasa_par;
-               this.dto_divisa = p.dto || this.dto_divisa;
-            } catch(e) {}
-          } else {
-            this.tasa_bcv = datos.tasas.tasa_bcv;
-            this.tasa_par = datos.tasas.tasa_par;
-            this.dto_divisa = datos.tasas.dto_divisa;
+          // Priorizar SIEMPRE las tasas de la base de datos (Supabase) sobre las locales
+          if (datos.tasas) {
+             this.tasa_bcv = datos.tasas.tasa_bcv || this.tasa_bcv;
+             this.tasa_par = datos.tasas.tasa_par || this.tasa_par;
+             this.dto_divisa = datos.tasas.dto_divisa || this.dto_divisa;
+             this.guardarTasasLocales();
           }
 
           this.logBitacora('sistema', 'Sistema ARJ inicializado y sincronizado');

@@ -82,6 +82,10 @@
           placeholder="Buscar por código alternativo, original OEM, descripción o marca..."
         >
       </div>
+      <select v-model="filtroMarca" class="val-input" style="width:200px">
+        <option value="">Todas las marcas</option>
+        <option v-for="m in marcasDisponibles" :key="m" :value="m">{{ m }}</option>
+      </select>
     </div>
 
     <!-- CONTROLES POR APLICACIÓN -->
@@ -312,10 +316,19 @@ import { isNonEmpty, isPositiveNumber } from '../services/validators.js';
 const store = useArjStore();
 const tabInv = ref('general');
 const busquedaTexto = ref('');
+const filtroMarca = ref('');
 const busquedaModelo = ref('');
 const filtroSistema = ref('');
 const mostrarModalNuevo = ref(false);
 const errors = ref({});
+
+const marcasDisponibles = computed(() => {
+  const marcas = new Set();
+  store.productos.forEach(p => {
+    if (p.marca) marcas.add(p.marca.trim().toUpperCase());
+  });
+  return Array.from(marcas).sort();
+});
 
 const nuevoProd = ref({
   cod_alt: '',
@@ -349,6 +362,9 @@ const productosFiltrados = computed(() => {
         (p.desc || '').toLowerCase().includes(q) ||
         (p.marca || '').toLowerCase().includes(q)
       );
+    }
+    if (filtroMarca.value) {
+      list = list.filter(p => (p.marca || '').toUpperCase() === filtroMarca.value);
     }
   } else {
     const m = busquedaModelo.value.trim().toLowerCase();
