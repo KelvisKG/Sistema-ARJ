@@ -59,7 +59,10 @@
               <td class="num">{{ fmtUSD(it.precio) }}</td>
               <td class="num" style="font-weight:700">{{ fmtUSD(it.cant * it.precio) }}</td>
             </tr>
-            <tr v-if="!store.facturaReciente.items || store.facturaReciente.items.length === 0">
+            <tr v-if="cargandoDetalles">
+              <td colspan="6" class="center" style="padding:20px;color:var(--navy)"><i class="ti ti-loader"></i> Cargando productos...</td>
+            </tr>
+            <tr v-else-if="!store.facturaReciente.items || store.facturaReciente.items.length === 0">
               <td colspan="6" class="center" style="padding:20px;color:var(--dgray)">No hay productos registrados en esta factura.</td>
             </tr>
           </tbody>
@@ -89,7 +92,10 @@
                   <div v-if="pago.monto_bs" style="font-size:9px;color:var(--dgray);font-weight:400;margin-top:2px">{{ fmtBs(pago.monto_bs, 1).replace('$', 'Bs.') }}</div>
                 </td>
               </tr>
-              <tr v-if="!store.facturaReciente.pagos || store.facturaReciente.pagos.length === 0">
+              <tr v-if="cargandoDetalles">
+                <td colspan="4" class="center" style="padding:16px;color:var(--navy)"><i class="ti ti-loader"></i> Cargando pagos...</td>
+              </tr>
+              <tr v-else-if="!store.facturaReciente.pagos || store.facturaReciente.pagos.length === 0">
                 <td colspan="4" class="center" style="padding:16px;color:var(--dgray)">No se han registrado pagos.</td>
               </tr>
             </tbody>
@@ -171,13 +177,28 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD, fmtBs } from '../../services/pricing.js';
 import { generarFacturaPDF } from '../../services/exportService.js';
 import { guardarDatosLocal } from '../../services/persistence.js';
+import { cargarDetallesFactura } from '../../services/supabase.js';
 
 const store = useArjStore();
+const cargandoDetalles = ref(false);
+
+watch(() => store.facturaReciente, async (f) => {
+  if (f && store.modalFacturaActivo) {
+    // Si no tiene items/pagos o están vacíos, y el ID no es uno local (los locales empiezan con FAC-)
+    if ((!f.items || f.items.length === 0) && String(f.id).indexOf('FAC-') === -1) {
+      cargandoDetalles.value = true;
+      const det = await cargarDetallesFactura(f.id);
+      if (det.items) f.items = det.items;
+      if (det.pagos) f.pagos = det.pagos;
+      cargandoDetalles.value = false;
+    }
+  }
+}, { immediate: true });
 
 const totalAbonado = computed(() => {
   if (!store.facturaReciente || !store.facturaReciente.pagos) return 0;

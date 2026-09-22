@@ -284,3 +284,29 @@ export async function guardarBitacoraEnSupabase(log) {
     encolarAccion('BITACORA', payload);
   }
 }
+
+// Cargar items y pagos reales en demanda (Lazy Load) para modal de factura
+export async function cargarDetallesFactura(facturaId) {
+  if (!navigator.onLine) return { items: null, pagos: null };
+  try {
+    const [iRes, pRes] = await Promise.all([
+      supabase.from('factura_items').select('*').eq('factura_id', facturaId),
+      supabase.from('pagos').select('*').eq('factura_id', facturaId).order('fecha')
+    ]);
+    
+    // Mapeamos los campos del legacy a los que usa el nuevo sistema (desc, cant, precio)
+    const itemsMap = (iRes.data || []).map(it => ({
+      id: it.producto_id || Date.now() + Math.random(),
+      cod_alt: it.cod_alt || '',
+      desc: it.descripcion || '',
+      cant: it.cantidad || 0,
+      precio: parseFloat(it.precio_unitario) || 0,
+      total_linea: parseFloat(it.total_linea) || 0
+    }));
+    
+    return { items: itemsMap, pagos: pRes.data || [] };
+  } catch(e) {
+    console.error('[ARJ] Error cargando detalles lazy:', e);
+    return { items: null, pagos: null };
+  }
+}
