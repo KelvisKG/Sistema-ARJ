@@ -118,7 +118,12 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="movimientosDinero.length === 0">
+            <tr v-if="cargandoMovimientos">
+              <td colspan="7" style="text-align:center;padding:24px;color:var(--navy)">
+                <i class="ti ti-loader"></i> Cargando movimientos...
+              </td>
+            </tr>
+            <tr v-else-if="movimientosDinero.length === 0">
               <td colspan="7" style="text-align:center;padding:24px;color:var(--dgray)">
                 Sin movimientos de dinero registrados.
               </td>
@@ -395,11 +400,25 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
+import { cargarFlujoCajaBD } from '../services/supabase.js';
 
 const store = useArjStore();
 const tabActivo = ref('dinero');
+const cargandoMovimientos = ref(false);
+
+onMounted(async () => {
+  // Solo cargar si hay internet y la lista está vacía (o forzar carga cada vez que entramos)
+  if (navigator.onLine) {
+    cargandoMovimientos.value = true;
+    const movs = await cargarFlujoCajaBD();
+    if (movs && movs.length > 0) {
+      store.movimientosDinero = movs;
+    }
+    cargandoMovimientos.value = false;
+  }
+});
 
 // Movimientos de dinero (Flujo de caja) - Vinculado al Store
 const movimientosDinero = computed(() => store.movimientosDinero);

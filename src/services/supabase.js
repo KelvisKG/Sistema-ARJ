@@ -310,3 +310,74 @@ export async function cargarDetallesFactura(facturaId) {
     return { items: null, pagos: null };
   }
 }
+
+// Cargar movimientos de flujo de caja (Manuales + Pagos)
+export async function cargarFlujoCajaBD(fechaDesde, fechaHasta) {
+  if (!navigator.onLine) return [];
+  try {
+    const q1 = supabase.from('movimientos_caja').select('*').order('fecha', { ascending: false });
+    const q2 = supabase.from('pagos').select('id, factura_id, monto_usd, monto_bs, tasa_usada, metodo, referencia, fecha');
+    
+    // Si quisieramos filtrar por fechas lo agregariamos aca. Por ahora cargamos todo el mes/reciente (limite 500)
+    q1.limit(300);
+    q2.limit(300);
+
+    const [resMovs, resPagos] = await Promise.all([q1, q2]);
+    let lista = [];
+
+    // 1) Movimientos de la tabla movimientos_caja
+    if (resMovs.data) {
+      resMovs.data.forEach(m => {
+        lista.push({
+          id: 'M' + m.id,
+          fecha: new Date(m.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
+          tipo: m.tipo,
+          categoria: m.categoria,
+          concepto: m.concepto || '',
+          montoUSD: parseFloat(m.monto_usd) || 0,
+          montoBs: parseFloat(m.monto_bs) || 0,
+          metodo: m.metodo,
+          empresa: m.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora',
+          clase: m.clasificacion || 'opex'
+        });
+      });
+    }
+
+    // 2) Pagos (entradas automáticas por cobranza)
+    if (resPagos.data) {
+      // Necesitamos el número de factura y cliente para el concepto.
+      // Extraemos los IDs
+      const factIds = [...new Set(resPagos.data.map(p => p.factura_id).filter(Boolean))];
+      let mapFacts = {};
+      if (factIds.length > 0) {
+        const { data: facts } = await supabase.from('facturas').select('id, numero, empresa, cliente_nombre').in('id', factIds);
+        if (facts) {
+          facts.forEach(f => { mapFacts[f.id] = f; });
+        }
+      }
+
+      resPagos.data.forEach(p => {
+        const f = mapFacts[p.factura_id] || {};
+        lista.push({
+          id: 'P' + p.id,
+          fecha: p.fecha ? new Date(p.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          tipo: 'entrada',
+          categoria: 'Cobranza',
+          concepto: `Cobro de factura ${f.numero || p.factura_id} - ${f.cliente_nombre || ''}`,
+          montoUSD: parseFloat(p.monto_usd) || 0,
+          montoBs: parseFloat(p.monto_bs) || 0,
+          metodo: p.metodo || 'Efectivo',
+          empresa: f.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora',
+          clase: 'cobranza'
+        });
+      });
+    }
+
+    // Ordenar por ID o fecha aproximada (reversa)
+    lista.sort((a, b) => b.id.localeCompare(a.id));
+    return lista;
+  } catch (err) {
+    console.error('[ARJ] Error cargando flujo caja:', err);
+    return [];
+  }
+}

@@ -28,8 +28,8 @@
         <div style="background:#FBF3E0;padding:16px;border-radius:8px;border:1px solid #F5E6C8;text-align:right;display:flex;flex-direction:column;justify-content:center;align-items:flex-end">
           <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;font-weight:600;margin-bottom:6px">Estado</div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-            <span :style="`background:${store.facturaReciente.estado === 'anulada' ? 'var(--lred)' : (saldoPendiente <= 0 ? '#E8F5E9' : 'var(--lgold)')};color:${store.facturaReciente.estado === 'anulada' ? 'var(--red)' : (saldoPendiente <= 0 ? '#1E7B34' : 'var(--gold)')};padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase`">
-              {{ store.facturaReciente.estado === 'anulada' ? 'Anulada' : (saldoPendiente <= 0 ? 'Pagada' : 'Pendiente') }}
+            <span :style="`background:${store.facturaReciente.estado === 'anulada' ? 'var(--lred)' : ((store.facturaReciente.estado === 'pagada' || saldoPendiente <= 0) ? '#E8F5E9' : 'var(--lgold)')};color:${store.facturaReciente.estado === 'anulada' ? 'var(--red)' : ((store.facturaReciente.estado === 'pagada' || saldoPendiente <= 0) ? '#1E7B34' : 'var(--gold)')};padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase`">
+              {{ store.facturaReciente.estado === 'anulada' ? 'Anulada' : ((store.facturaReciente.estado === 'pagada' || saldoPendiente <= 0) ? 'Pagada' : 'Pendiente') }}
             </span>
             <span style="font-size:12px;color:var(--navy)">{{ (store.facturaReciente.tipo_pago || 'contado').charAt(0).toUpperCase() + (store.facturaReciente.tipo_pago || 'contado').slice(1) }}</span>
           </div>

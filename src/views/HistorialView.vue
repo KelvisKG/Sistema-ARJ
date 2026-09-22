@@ -54,10 +54,7 @@
       </div>
     </div>
 
-    <style>
-      .btn-toggle { background:transparent; border:none; padding:6px 14px; font-size:12px; cursor:pointer; color:var(--dgray); font-weight:600; transition:all 0.2s }
-      .btn-toggle.active { background:var(--navy); color:#FFF; }
-    </style>
+
 
     <div class="card" style="overflow-x:auto">
       <table class="tbl">
@@ -223,3 +220,20 @@ const totalFacturado = computed(() => {
   }).reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
 });
 </script>
+
+<style scoped>
+.btn-toggle {
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--dgray);
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-toggle.active {
+  background: var(--navy);
+  color: #FFF;
+}
+</style>
