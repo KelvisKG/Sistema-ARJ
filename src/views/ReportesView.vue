@@ -139,32 +139,7 @@
           </div>
         </div>
 
-        <div style="background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Metas por trabajador</div>
-            <button class="btn btn-secondary btn-sm" style="font-size:10.5px" @click="abrirModalEquipo"><i class="ti ti-plus"></i> Agregar</button>
-          </div>
-          <div v-if="equipoActivo.length === 0" style="padding:18px;text-align:center;color:var(--dgray);font-size:12px">
-            Todavía no hay trabajadores asignados.
-          </div>
-          <div v-for="t in equipoActivo" :key="t" style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px">
-              <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                <i class="ti ti-user" style="color:var(--blue);flex-shrink:0"></i>
-                <span style="font-weight:600;font-size:12.5px">{{ t }}</span>
-                <span v-if="esCumplida(t)" style="background:var(--lgreen);color:var(--green);padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">✓ CUMPLIDA</span>
-              </div>
-              <input type="number" v-model.number="metasVendedores[t]" class="val-input" style="width:90px;flex-shrink:0" @change="guardarMetas">
-            </div>
-            <div style="background:var(--gray);border-radius:4px;height:14px;overflow:hidden">
-              <div :style="`background:${esCumplida(t) ? 'linear-gradient(90deg,var(--green),#4CAF50)' : 'linear-gradient(90deg,var(--blue),var(--navy))'};height:100%;width:${pctVendedor(t)}%;transition:width 0.4s`"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:11px;color:var(--dgray)">
-              <span>{{ fmtUSD(ventasVendedor(t)) }} {{ metasVendedores[t] > 0 ? '(' + pctVendedor(t).toFixed(0) + '%)' : '' }}</span>
-              <span>{{ metasVendedores[t] > 0 ? 'Falta ' + fmtUSD(faltaVendedor(t)) : 'Sin meta asignada' }}</span>
-            </div>
-          </div>
-        </div>
+
       </div>
 
       <!-- COMPARATIVA -->

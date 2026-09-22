@@ -2,45 +2,46 @@
   <div class="page active" id="page-cotizaciones">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div>
-        <h1 class="page-title"><i class="ti ti-file-text"></i> Presupuestos y Cotizaciones</h1>
-        <p class="page-sub">Propuestas comerciales · Vigencia 45 días · No descuentan stock · Convertibles a venta</p>
+        <h1 class="page-title"><i class="ti ti-file-text"></i> Presupuestos</h1>
+        <p class="page-sub">Propuestas comerciales al cliente · Vigencia 45 días · No descuentan stock · Nada se borra: los rechazados y vencidos quedan archivados</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <label style="font-size:12px;color:var(--dgray);cursor:pointer;user-select:none">
-          <input type="checkbox" v-model="verRechazados" style="vertical-align:middle"> Ver archivados / rechazados
+          <input type="checkbox" v-model="verRechazados" style="vertical-align:middle"> Ver rechazados
         </label>
         <button class="btn btn-primary" @click="mostrarModalNuevo = true">
-          <i class="ti ti-plus"></i> Nuevo Presupuesto
+          <i class="ti ti-plus"></i> Nuevo presupuesto
         </button>
       </div>
     </div>
 
-    <div class="help-box">
-      <i class="ti ti-info-circle"></i>
-      <div>
-        <strong>¿Para qué sirven?</strong> Cuando un cliente pregunta precio antes de comprar. Generas una cotización con validez de 45 días. Si decide comprar, se convierte en venta (Facturación) en un clic.
-      </div>
+    <div class="help-toggle" @click="verAyuda = !verAyuda" style="cursor:pointer;background:#FFF8E1;border-left:3px solid var(--gold);border-radius:6px;padding:8px 14px;margin-bottom:14px;font-size:12.5px;color:#5D4037">
+      <i class="ti ti-info-circle"></i> Ayuda — click para ver
+    </div>
+    <div v-if="verAyuda" style="background:#FFFBF0;border:1px solid #F0E6C8;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#5D4037">
+      <strong>¿Para qué sirven?</strong> Cuando un cliente pregunta precio antes de comprar. Generas una cotización con validez de 45 días. Si decide comprar, se convierte en venta (Facturación) en un clic.
     </div>
 
     <!-- KPIs -->
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <div class="kpi-card blue" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'activo'">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <div :class="['kpi-card', filtroEstado === 'activa' ? 'blue' : '']" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = filtroEstado === 'activa' ? '' : 'activa'">
         <div class="kpi-label">Activas</div>
-        <div class="kpi-val" style="font-size:18px">{{ totalActivas }}</div>
+        <div class="kpi-val" style="font-size:18px">{{ kpiActivas }}</div>
       </div>
-      <div class="kpi-card gold" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'por_vencer'">
+      <div :class="['kpi-card', filtroEstado === 'por_vencer' ? 'gold' : '']" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = filtroEstado === 'por_vencer' ? '' : 'por_vencer'">
         <div class="kpi-label">Por vencer</div>
-        <div class="kpi-val" style="font-size:18px;color:var(--gold)">{{ totalPorVencer }}</div>
+        <div class="kpi-val" style="font-size:18px;color:var(--gold)">{{ kpiPorVencer }}</div>
       </div>
-      <div class="kpi-card red" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'rechazado'">
-        <div class="kpi-label">Vencidas / Rechazadas</div>
-        <div class="kpi-val" style="font-size:18px;color:var(--red)">{{ totalRechazadas }}</div>
+      <div :class="['kpi-card', filtroEstado === 'vencida' ? 'red' : '']" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = filtroEstado === 'vencida' ? '' : 'vencida'">
+        <div class="kpi-label">Vencidas</div>
+        <div class="kpi-val" style="font-size:18px;color:var(--red)">{{ kpiVencidas }}</div>
       </div>
-      <div class="kpi-card" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = 'convertido'">
-        <div class="kpi-label">Convertidas a Venta</div>
-        <div class="kpi-val" style="font-size:18px;color:var(--green)">{{ totalConvertidas }}</div>
+      <div :class="['kpi-card', filtroEstado === 'convertida' ? '' : '']" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = filtroEstado === 'convertida' ? '' : 'convertida'">
+        <div class="kpi-label">Convertidas</div>
+        <div class="kpi-val" style="font-size:18px;color:var(--green)">{{ kpiConvertidas }}</div>
+        <div style="font-size:10px;color:var(--dgray)">{{ kpiTasaCierre }}</div>
       </div>
-      <div class="kpi-card" style="margin:0;padding:10px 14px;cursor:pointer;background:#F5F5F5" @click="filtroEstado = ''">
+      <div v-if="filtroEstado" class="kpi-card" style="margin:0;padding:10px 14px;cursor:pointer;background:#F5F5F5" @click="filtroEstado = ''">
         <div class="kpi-label" style="color:var(--dgray)">Limpiar Filtros</div>
         <div class="kpi-val" style="font-size:18px;color:var(--navy)"><i class="ti ti-filter-off"></i></div>
       </div>
@@ -51,61 +52,52 @@
       <table class="tbl">
         <thead>
           <tr>
-            <th style="width:16%">N° Presupuesto</th>
-            <th style="width:28%">Cliente</th>
-            <th style="width:12%">Emisión</th>
-            <th style="width:12%">Vence (45d)</th>
-            <th class="num" style="width:12%">Total USD</th>
-            <th class="center" style="width:10%">Estado</th>
-            <th class="center" style="width:10%">Acciones</th>
+            <th>N° Presupuesto</th>
+            <th>Cliente</th>
+            <th>Fecha</th>
+            <th>Vence</th>
+            <th class="num">Total USD</th>
+            <th>Estado</th>
+            <th class="center" style="width:130px">Acciones</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="presupuestosFiltrados.length === 0">
-            <td colspan="7" style="text-align:center;padding:24px;color:var(--dgray)">
-              No hay presupuestos registrados. Haz clic en "Nuevo Presupuesto" para generar una propuesta.
+            <td colspan="7" style="text-align:center;padding:30px;color:var(--dgray)">
+              Sin presupuestos{{ store.empresa === 'directa' ? ' en Venta Directa' : ' en Distribuidora' }}
             </td>
           </tr>
-          <tr v-for="pre in presupuestosFiltrados" :key="pre.id">
-            <td><strong style="color:var(--navy)">{{ pre.num }}</strong></td>
+          <tr v-for="pre in presupuestosFiltrados" :key="pre.id" :style="pre.estado === 'rechazada' ? 'opacity:0.55' : ''">
+            <td>
+              <strong>{{ pre.num }}</strong>
+              <div style="font-size:10.5px;color:var(--dgray)">{{ pre.items_count || 0 }} ítems · {{ pre.vendedor || '—' }}</div>
+            </td>
             <td><strong>{{ pre.cliente }}</strong></td>
             <td style="font-size:12px;color:var(--dgray)">{{ pre.fecha }}</td>
-            <td style="font-size:12px;color:var(--dgray)">{{ pre.vence }}</td>
+            <td style="font-size:12px">
+              {{ pre.vence }}
+              <div style="font-size:10.5px;color:var(--dgray)">{{ diasRestantesTxt(pre) }}</div>
+            </td>
             <td class="num" style="font-weight:700">{{ fmtUSD(pre.total) }}</td>
-            <td class="center">
-              <span :class="['badge', pre.estado === 'activo' ? 'badge-success' : (pre.estado === 'convertido' ? 'badge-info' : 'badge-danger')]">
-                {{ pre.estado.toUpperCase() }}
+            <td>
+              <span :style="badgeStyle(pre)">
+                <i :class="badgeIcon(pre)"></i> {{ badgeText(pre) }}
               </span>
             </td>
-            <td class="center">
-              <div style="display:flex;gap:4px;justify-content:center">
-                <button
-                  class="btn btn-secondary btn-sm"
-                  style="padding:2px 6px;font-size:11px"
-                  title="Descargar PDF"
-                  @click="descargarPDF(pre)"
-                >
-                  <i class="ti ti-file-type-pdf"></i>
-                </button>
-                <button
-                  v-if="pre.estado === 'activo'"
-                  class="btn btn-green btn-sm"
-                  style="padding:2px 6px;font-size:11px"
-                  title="Convertir a Factura"
-                  @click="store.convertirPresupuestoEnVenta(pre.id)"
-                >
-                  <i class="ti ti-arrow-right"></i> Vender
-                </button>
-                <button
-                  v-if="pre.estado === 'activo'"
-                  class="btn btn-secondary btn-sm"
-                  style="padding:2px 6px;font-size:11px"
-                  title="Marcar Rechazado"
-                  @click="marcarRechazado(pre)"
-                >
-                  <i class="ti ti-x"></i>
-                </button>
-              </div>
+            <td class="center" style="white-space:nowrap">
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:11px" title="Ver / imprimir" @click="descargarPDF(pre)"><i class="ti ti-eye"></i></button>
+              <button
+                v-if="pre.estado === 'activa' || pre.estado === 'por_vencer'"
+                class="btn btn-sm" style="padding:2px 6px;font-size:11px;background:var(--green);color:#FFF;border:none"
+                title="Convertir a factura"
+                @click="store.convertirPresupuestoEnVenta(pre.id)"
+              ><i class="ti ti-file-invoice"></i></button>
+              <button
+                v-if="pre.estado !== 'convertida' && pre.estado !== 'rechazada'"
+                class="btn btn-sm" style="padding:2px 6px;font-size:11px;background:var(--red);color:#FFF;border:none"
+                title="Marcar como rechazado (se archiva, no se borra)"
+                @click="marcarRechazado(pre)"
+              ><i class="ti ti-archive"></i></button>
             </td>
           </tr>
         </tbody>
@@ -185,6 +177,7 @@
       </div>
     </div>
   </div>
+
 </template>
 
 <script setup>
@@ -195,6 +188,7 @@ import { generarPresupuestoPDF } from '../services/exportService.js';
 
 const store = useArjStore();
 const verRechazados = ref(false);
+const verAyuda = ref(false);
 const mostrarModalNuevo = ref(false);
 const filtroEstado = ref('');
 
@@ -203,21 +197,75 @@ const productoSel = ref('');
 const cantSel = ref(1);
 const itemsTemp = ref([]);
 
+// Filtra por empresa primero (como en el legacy)
+const presupuestosEmpresa = computed(() => {
+  return store.presupuestos.filter(p => p.empresa === store.empresa);
+});
+
+// KPIs — exactamente como en el legacy
+const kpiActivas = computed(() => presupuestosEmpresa.value.filter(c => c.estado === 'activa').length);
+const kpiPorVencer = computed(() => presupuestosEmpresa.value.filter(c => c.estado === 'por_vencer').length);
+const kpiVencidas = computed(() => presupuestosEmpresa.value.filter(c => c.estado === 'vencida').length);
+const kpiConvertidas = computed(() => presupuestosEmpresa.value.filter(c => c.estado === 'convertida').length);
+const kpiRechazadas = computed(() => presupuestosEmpresa.value.filter(c => c.estado === 'rechazada').length);
+const kpiTasaCierre = computed(() => {
+  const cerrados = kpiConvertidas.value + kpiRechazadas.value;
+  return cerrados > 0 ? Math.round(kpiConvertidas.value / cerrados * 100) + '% de cierre' : '—';
+});
+
 const presupuestosFiltrados = computed(() => {
-  let list = store.presupuestos;
+  let list = presupuestosEmpresa.value;
+  // Ocultar rechazados salvo que el usuario los pida
   if (!verRechazados.value) {
-    list = list.filter(p => p.estado !== 'rechazado' && p.estado !== 'vencida');
+    list = list.filter(p => p.estado !== 'rechazada');
   }
+  // Filtro por estado (KPI click)
   if (filtroEstado.value) {
-    list = list.filter(p => p.estado === filtroEstado.value || (filtroEstado.value === 'rechazado' && p.estado === 'vencida'));
+    list = list.filter(p => p.estado === filtroEstado.value);
   }
   return list;
 });
 
-const totalActivas = computed(() => store.presupuestos.filter(p => p.estado === 'activo' || p.estado === 'activa').length);
-const totalPorVencer = computed(() => store.presupuestos.filter(p => p.estado === 'por_vencer').length);
-const totalRechazadas = computed(() => store.presupuestos.filter(p => p.estado === 'rechazado' || p.estado === 'vencida').length);
-const totalConvertidas = computed(() => store.presupuestos.filter(p => p.estado === 'convertido').length);
+function diasRestantesTxt(pre) {
+  const dias = pre.dias_restantes;
+  if (dias === undefined || dias === null) return '';
+  if (dias >= 0) return `${dias} días restantes`;
+  return `Venció hace ${Math.abs(dias)} días`;
+}
+
+function badgeStyle(pre) {
+  const colors = {
+    'rechazada': 'var(--dgray)',
+    'convertida': 'var(--blue)',
+    'vencida': 'var(--red)',
+    'por_vencer': 'var(--gold)',
+    'activa': 'var(--green)'
+  };
+  const c = colors[pre.estado] || 'var(--dgray)';
+  return `background:${c}22;color:${c};padding:3px 8px;border-radius:10px;font-size:10.5px;font-weight:600`;
+}
+
+function badgeIcon(pre) {
+  const icons = {
+    'rechazada': 'ti ti-archive',
+    'convertida': 'ti ti-file-invoice',
+    'vencida': 'ti ti-x-circle',
+    'por_vencer': 'ti ti-alert-triangle',
+    'activa': 'ti ti-circle-check'
+  };
+  return icons[pre.estado] || 'ti ti-circle';
+}
+
+function badgeText(pre) {
+  const texts = {
+    'rechazada': 'RECHAZADA',
+    'convertida': 'CONVERTIDA',
+    'vencida': 'VENCIDA',
+    'por_vencer': 'POR VENCER',
+    'activa': 'ACTIVA'
+  };
+  return texts[pre.estado] || pre.estado?.toUpperCase() || '—';
+}
 
 const totalTemp = computed(() => {
   return itemsTemp.value.reduce((acc, it) => acc + (it.cant * it.precio), 0);
@@ -253,7 +301,7 @@ function guardarCotizacion() {
 }
 
 function marcarRechazado(pre) {
-  pre.estado = 'rechazado';
+  pre.estado = 'rechazada';
   store.logBitacora('presupuesto', `Cotización ${pre.num} marcada como rechazada/archivada`);
   store.notif(`Presupuesto ${pre.num} archivado`, 'info');
 }

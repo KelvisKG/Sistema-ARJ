@@ -825,8 +825,12 @@ export const useArjStore = defineStore('arj', {
 
     // Presupuestos
     guardarPresupuesto(datos) {
-      const correlativo = String(this.presupuestos.length + 1).padStart(5, '0');
-      const num = `PRE-2026-${correlativo}`;
+      const prefijo = this.empresa === 'directa' ? 'PRE-VD' : 'PRE-DIST';
+      const anio = new Date().getFullYear();
+      const correlativo = String(this.presupuestos.filter(p => p.empresa === this.empresa).length + 1).padStart(4, '0');
+      const num = `${prefijo}-${anio}-${correlativo}`;
+      const vence = new Date(Date.now() + (45 * 86400000));
+      const diasRest = 45;
       const nuevo = {
         id: Date.now(),
         num,
@@ -836,9 +840,11 @@ export const useArjStore = defineStore('arj', {
         vendedor: this.usuarioNombre,
         fecha: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
         fecha_raw: new Date().toISOString(),
-        vence: new Date(Date.now() + (45 * 86400000)).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
+        vence: vence.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
         total: datos.total || this.totalCarritoUSD,
-        estado: 'activo',
+        estado: 'activa',
+        dias_restantes: diasRest,
+        items_count: (datos.items || this.carrito.items || []).length,
         items: JSON.parse(JSON.stringify(datos.items || this.carrito.items))
       };
       this.presupuestos.unshift(nuevo);
@@ -859,7 +865,7 @@ export const useArjStore = defineStore('arj', {
           this.agregarAlCarrito(prod, it.cant);
         }
       });
-      pre.estado = 'convertido';
+      pre.estado = 'convertida';
       this.cambiarVista('facturacion');
       this.notif(`Cotización ${pre.num} cargada al carrito para emitir factura`, 'success');
     },
