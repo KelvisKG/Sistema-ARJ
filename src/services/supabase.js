@@ -381,3 +381,21 @@ export async function cargarFlujoCajaBD(fechaDesde, fechaHasta) {
     return [];
   }
 }
+
+// Cargar items de múltiples facturas (para reportes)
+export async function cargarItemsVentasMes(facturaIds) {
+  if (!navigator.onLine || !facturaIds || facturaIds.length === 0) return [];
+  try {
+    // Dividir en chunks si son más de 150 IDs para no romper la URL de Supabase
+    let todosLosItems = [];
+    for (let i = 0; i < facturaIds.length; i += 150) {
+      const chunk = facturaIds.slice(i, i + 150);
+      const { data, error } = await supabase.from('factura_items').select('*').in('factura_id', chunk);
+      if (data) todosLosItems.push(...data);
+    }
+    return todosLosItems;
+  } catch (err) {
+    console.error('[ARJ] Error cargando items de reportes:', err);
+    return [];
+  }
+}

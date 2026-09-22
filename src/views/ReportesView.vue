@@ -300,6 +300,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
+import { cargarItemsVentasMes } from '../services/supabase.js';
 import { guardarDatosLocal } from '../services/persistence.js';
 import { fmtUSD, costoLanded, precioPublico } from '../services/pricing.js';
 
@@ -320,8 +321,13 @@ const mesActualLbl = hoy.toLocaleDateString('es-VE', { month: 'long', year: 'num
 // UTILIDADES COMPARTIDAS
 // ==========================================
 const facturasDelMes = computed(() => {
-  const mStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`; // Formato de fecha_raw: YYYY-MM
-  return store.todasFacturas.filter(f => f.estado !== 'anulada' && f.fecha_raw && f.fecha_raw.startsWith(mStr));
+  const year = hoy.getFullYear();
+  const month = hoy.getMonth();
+  return store.todasFacturas.filter(f => {
+    if (f.estado === 'anulada' || !f.fecha_raw) return false;
+    const d = new Date(f.fecha_raw);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
 });
 
 const facturasDeHoy = computed(() => {
@@ -349,14 +355,46 @@ const margenCatalogo = computed(() => {
 const stockCritico = computed(() => store.productos.filter(p => (p.stock_vd > 0 && p.stock_vd <= 5) || (p.stock_dist > 0 && p.stock_dist <= 5)).length);
 const listCriticos = computed(() => store.productos.filter(p => (p.stock_vd > 0 && p.stock_vd <= 5) || (p.stock_dist > 0 && p.stock_dist <= 5)));
 
+const itemsVentasMes = ref([]);
+const cargandoItems = ref(false);
+
+const fetchItemsDelMes = async () => {
+  const ids = facturasDelMes.value.map(f => f.id);
+  if (ids.length > 0 && navigator.onLine && itemsVentasMes.value.length === 0) {
+    cargandoItems.value = true;
+    const items = await cargarItemsVentasMes(ids);
+    itemsVentasMes.value = items;
+    cargandoItems.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchItemsDelMes();
+});
+
+watch(facturasDelMes, (newVal) => {
+  if (newVal.length > 0 && itemsVentasMes.value.length === 0) {
+    fetchItemsDelMes();
+  }
+}, { immediate: true });
+
 const utilidadMes = computed(() => {
   let util = 0;
-  facturasDelMes.value.forEach(f => {
-    (f.items || []).forEach(it => {
-      const prod = store.productos.find(p => p.id === it.id);
-      const costo = prod ? costoLanded(prod, store.productos) : (it.precio * 0.6); // Fallback
-      util += (it.precio - costo) * (it.cant || 1);
-    });
+  itemsVentasMes.value.forEach(it => {
+    let costo = 0;
+    if (parseFloat(it.fob_unitario) > 0 && parseFloat(it.factor_landed) > 0) {
+      costo = parseFloat(it.fob_unitario) * parseFloat(it.factor_landed);
+    } else {
+      const prod = store.productos.find(p => p.id === it.producto_id || p.cod_alt === it.cod_alt);
+      if (prod) {
+        costo = costoLanded(prod, store.productos);
+      } else {
+        const precioUnit = (parseFloat(it.total_linea) / (parseFloat(it.cantidad) || 1)) || parseFloat(it.precio_unitario) || 0;
+        costo = precioUnit * 0.6; // fallback 60% costo
+      }
+    }
+    const precioUnitario = (parseFloat(it.total_linea) / (parseFloat(it.cantidad) || 1)) || parseFloat(it.precio_unitario) || 0;
+    util += (precioUnitario - costo) * (parseFloat(it.cantidad) || 1);
   });
   return util;
 });
@@ -376,21 +414,36 @@ const puntoEquilibrio = computed(() => {
 const origenData = computed(() => {
   let impV = 0, impC = 0;
   let locV = 0, locC = 0;
-  facturasDelMes.value.forEach(f => {
-    (f.items || []).forEach(it => {
-      const prod = store.productos.find(p => p.id === it.id);
-      const costo = prod ? costoLanded(prod, store.productos) : (it.precio * 0.6);
-      const venta = it.precio * (it.cant || 1);
-      const costTotal = costo * (it.cant || 1);
-      // Simular origen basado en FOB
-      if (prod && prod.fob > 0) {
-        impV += venta; impC += costTotal;
+
+  itemsVentasMes.value.forEach(it => {
+    let costo = 0;
+    let esImportado = false;
+    
+    if (parseFloat(it.fob_unitario) > 0) {
+      costo = parseFloat(it.fob_unitario) * parseFloat(it.factor_landed || 1.471);
+      esImportado = true;
+    } else {
+      const prod = store.productos.find(p => p.id === it.producto_id || p.cod_alt === it.cod_alt);
+      if (prod) {
+        costo = costoLanded(prod, store.productos);
+        esImportado = parseFloat(prod.fob) > 0;
       } else {
-        locV += venta; locC += costTotal;
+        const precioUnit = (parseFloat(it.total_linea) / (parseFloat(it.cantidad) || 1)) || parseFloat(it.precio_unitario) || 0;
+        costo = precioUnit * 0.6;
       }
-    });
+    }
+
+    const ventaTotal = parseFloat(it.total_linea) || 0;
+    const costoTotal = costo * (parseFloat(it.cantidad) || 1);
+
+    if (esImportado) {
+      impV += ventaTotal; impC += costoTotal;
+    } else {
+      locV += ventaTotal; locC += costoTotal;
+    }
   });
-  const tV = impV + locV || 1;
+
+  const tV = (impV + locV) || 1;
   return {
     importado: { venta: impV, costo: impC, utilidad: impV - impC, margen: impV > 0 ? ((impV - impC) / impV * 100) : 0, pct: (impV / tV) * 100 },
     local: { venta: locV, costo: locC, utilidad: locV - locC, margen: locV > 0 ? ((locV - locC) / locV * 100) : 0, pct: (locV / tV) * 100 }
@@ -442,9 +495,13 @@ const faltaMetaEmpresa = computed(() => Math.max(0, metaEmpresa.value - ventasMe
 
 const ventasMesAnteriorEmpresa = computed(() => {
   const mAnt = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-  const mAntStr = `${mAnt.getFullYear()}-${String(mAnt.getMonth() + 1).padStart(2, '0')}`;
-  return store.todasFacturas.filter(f => f.estado !== 'anulada' && f.empresa === store.empresa && f.fecha_raw && f.fecha_raw.startsWith(mAntStr))
-    .reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
+  const year = mAnt.getFullYear();
+  const month = mAnt.getMonth();
+  return store.todasFacturas.filter(f => {
+    if (f.estado === 'anulada' || f.empresa !== store.empresa || !f.fecha_raw) return false;
+    const d = new Date(f.fecha_raw);
+    return d.getFullYear() === year && d.getMonth() === month;
+  }).reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
 });
 
 const ventasVendedor = (vend) => facturasDelMes.value.filter(f => f.vendedor === vend || f.vendedor === vend.toLowerCase()).reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
@@ -478,9 +535,13 @@ function eliminarTrabajador(t) {
 // ==========================================
 const ventasMesAnteriorTotal = computed(() => {
   const mAnt = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-  const mAntStr = `${mAnt.getFullYear()}-${String(mAnt.getMonth() + 1).padStart(2, '0')}`;
-  return store.todasFacturas.filter(f => f.estado !== 'anulada' && f.fecha_raw && f.fecha_raw.startsWith(mAntStr))
-    .reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
+  const year = mAnt.getFullYear();
+  const month = mAnt.getMonth();
+  return store.todasFacturas.filter(f => {
+    if (f.estado === 'anulada' || !f.fecha_raw) return false;
+    const d = new Date(f.fecha_raw);
+    return d.getFullYear() === year && d.getMonth() === month;
+  }).reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
 });
 const maxComparativa = computed(() => Math.max(ventasMes.value, ventasMesAnteriorTotal.value) || 1);
 const pctComparativa = (val, max) => (val / max) * 100;
@@ -490,12 +551,11 @@ const pctComparativa = (val, max) => (val / max) * 100;
 // ==========================================
 const topProductosRaw = computed(() => {
   const map = {};
-  facturasDelMes.value.forEach(f => {
-    (f.items || []).forEach(it => {
-      if (!map[it.cod_alt]) map[it.cod_alt] = { cod: it.cod_alt, desc: it.desc, cant: 0, total: 0 };
-      map[it.cod_alt].cant += (it.cant || 1);
-      map[it.cod_alt].total += ((it.cant || 1) * it.precio);
-    });
+  itemsVentasMes.value.forEach(it => {
+    const cod = it.cod_alt || '-';
+    if (!map[cod]) map[cod] = { cod: cod, desc: it.descripcion || it.desc || cod, cant: 0, total: 0 };
+    map[cod].cant += parseFloat(it.cantidad) || 1;
+    map[cod].total += parseFloat(it.total_linea) || 0;
   });
   return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 5);
 });
