@@ -228,13 +228,32 @@ const valorEfectivo = computed(() => {
   return (tot * bcv) / par;
 });
 
+function obtenerClienteData(doc) {
+  if (!doc) return null;
+  const id = doc.cliente_id;
+  let cli = null;
+  if (id) cli = store.clientes.find(c => c.id === id || String(c.id) === String(id));
+  if (!cli && doc.cliente) {
+    cli = store.clientes.find(c => (c.nombre || '').trim().toLowerCase() === (doc.cliente || '').trim().toLowerCase());
+  }
+  if (cli) {
+    return {
+      rif: cli.rif || cli.cedula || '—',
+      direccion: cli.direccion || cli.dir || '—',
+      telefono: cli.telefono || cli.tel || '—'
+    };
+  }
+  return null;
+}
+
 function cerrarModal() {
   store.modalFacturaActivo = false;
   store.facturaReciente = null;
 }
 
 function descargarPDF() {
-  generarFacturaPDF(store.facturaReciente, store.empresa);
+  const clienteData = obtenerClienteData(store.facturaReciente);
+  generarFacturaPDF(store.facturaReciente, store.empresa, store.tasa_bcv, clienteData);
   store.notif('Factura PDF generada y descargada', 'success');
 }
 

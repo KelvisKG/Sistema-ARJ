@@ -39,18 +39,18 @@ const GOLD = [217, 119, 6];
 
 const DATOS_EMPRESAS = {
   directa: {
-    nombre: 'ARJ VENTA DIRECTA',
+    nombre: 'AGRO REPUESTOS Y SERVICIOS JIMENEZ, FP',
     razon: 'Repuestos Agrícolas y Maquinaria Pesada',
-    rif: 'J-12345678-9',
-    direccion: 'Acarigua, Estado Portuguesa, Venezuela',
-    telefono: '+58 255-000-0000'
+    rif: 'RIF V-162930024',
+    direccion: 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31',
+    telefono: '0255-6642208 · 0414-5750174'
   },
   distribuidora: {
     nombre: 'DISTRIBUIDORA ARJ C.A.',
     razon: 'Repuestos Agrícolas y Maquinaria Pesada',
-    rif: 'J-98765432-1',
-    direccion: 'Acarigua, Estado Portuguesa, Venezuela',
-    telefono: '+58 255-000-0001'
+    rif: 'RIF J-98765432-1',
+    direccion: 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31',
+    telefono: '0255-6642208 · 0414-5750174'
   }
 };
 
@@ -124,46 +124,118 @@ function etiquetaValor(doc, label, valor, x, y, labelColor = GRAY, valorColor = 
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 1. PDF DE FACTURA
+// 1. PDF DE FACTURA (Diseño formal idéntico a presupuesto)
 // ═══════════════════════════════════════════════════════════════════
-export function generarFacturaPDF(factura, empresa) {
+export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData) {
   if (!factura) return;
 
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
+  const marginL = 14;
+  const marginR = 14;
+  const contentW = pageWidth - marginL - marginR;
 
-  // Cabecera empresa
-  let y = cabeceraEmpresa(doc, empresa || factura.empresa || 'directa');
+  const empKey = empresa || factura.empresa || 'directa';
+  const emp = DATOS_EMPRESAS[empKey] || DATOS_EMPRESAS.directa;
 
-  // Recuadro de factura (esquina superior derecha)
-  const numWidth = 68;
+  // ── CABECERA EMPRESA (fondo navy) ──
   doc.setFillColor(...NAVY);
-  doc.roundedRect(pageWidth - numWidth - 14, 10, numWidth, 22, 3, 3, 'F');
+  doc.rect(0, 0, pageWidth, 42, 'F');
+
+  // Nombre de la empresa
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(14);
   doc.setTextColor(...WHITE);
-  doc.text('FACTURA', pageWidth - numWidth - 14 + numWidth / 2, 19, { align: 'center' });
-  doc.setFontSize(13);
-  doc.text(`N° ${factura.num}`, pageWidth - numWidth - 14 + numWidth / 2, 28, { align: 'center' });
+  doc.text(emp.nombre, marginL, 16);
 
-  y = separador(doc, y);
-  y += 3;
+  // Datos de contacto
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(200, 210, 225);
+  doc.text(emp.direccion || 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
+  doc.text(`Acarigua — Portuguesa · Teléfonos: ${emp.telefono} · ${emp.rif}`, marginL, 28);
 
-  // Datos del cliente y condiciones (en recuadro gris)
-  doc.setFillColor(...LIGHT_BG);
-  doc.roundedRect(14, y, pageWidth - 28, 24, 2, 2, 'F');
+  // ── BADGE FACTURA (dorado/navy, esquina derecha) ──
+  const badgeW = 60;
+  const badgeH = 28;
+  const badgeX = pageWidth - marginR - badgeW;
+  const badgeY = 7;
+  doc.setFillColor(...GOLD); // Gold
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
 
-  const colIzq = 18;
-  const colDer = pageWidth / 2 + 5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...WHITE);
+  doc.text('FACTURA COMERCIAL', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
 
-  etiquetaValor(doc, 'Cliente:', factura.cliente || 'MOSTRADOR GENERAL', colIzq, y + 5);
-  etiquetaValor(doc, 'Vendedor:', factura.vendedor || '—', colIzq, y + 16);
-  etiquetaValor(doc, 'Fecha:', factura.fecha || new Date().toLocaleDateString('es-VE'), colDer, y + 5);
-  etiquetaValor(doc, 'Condición:', (factura.tipo_pago || 'contado').toUpperCase(), colDer, y + 16);
+  doc.setFontSize(11);
+  doc.text(factura.num || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
 
-  y += 30;
+  doc.setFontSize(7.5);
+  doc.text(factura.fecha || '—', badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
 
-  // Tabla de productos
+  let y = 50;
+
+  // ── BLOQUE CLIENTE + INFORMACIÓN ──
+  const blockH = 38;
+  const halfW = contentW / 2 - 3;
+
+  // Bloque CLIENTE (izquierda)
+  doc.setDrawColor(200, 210, 225);
+  doc.setLineWidth(0.4);
+  doc.rect(marginL, y, halfW, blockH, 'S');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...BLUE); // Blue label
+  doc.text('CLIENTE', marginL + 4, y + 6);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...NAVY);
+  doc.text(factura.cliente || 'CLIENTE GENERAL', marginL + 4, y + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  const cliRif = (clienteData && (clienteData.rif || clienteData.cedula)) ? `RIF: ${clienteData.rif || clienteData.cedula}` : (factura.rif ? `RIF: ${factura.rif}` : 'RIF: —');
+  const cliDir = (clienteData && (clienteData.direccion || clienteData.dir)) ? `Dirección: ${clienteData.direccion || clienteData.dir}` : 'Dirección: —';
+  const cliTel = (clienteData && (clienteData.telefono || clienteData.tel)) ? `Teléfono: ${clienteData.telefono || clienteData.tel}` : 'Teléfono: —';
+  doc.text(cliRif, marginL + 4, y + 20);
+  doc.text(cliDir, marginL + 4, y + 25.5);
+  doc.text(cliTel, marginL + 4, y + 31);
+
+  // Bloque INFORMACIÓN (derecha)
+  const infoX = marginL + halfW + 6;
+  doc.setDrawColor(200, 210, 225);
+  doc.rect(infoX, y, halfW, blockH, 'S');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...BLUE);
+  doc.text('INFORMACIÓN DE VENTA', infoX + 4, y + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  const empresaTxt = (factura.empresa || empKey) === 'distribuidora' ? 'Distribuidora ARJ' : 'Venta Directa';
+
+  doc.text('Vendedor: ', infoX + 4, y + 13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NAVY);
+  doc.text(factura.vendedor || '—', infoX + 24, y + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text(`Fecha de emisión: ${factura.fecha || '—'}`, infoX + 4, y + 20);
+  const condTxt = (factura.tipo_pago || 'contado').toUpperCase();
+  const estTxt = (factura.estado || 'pagada').toUpperCase();
+  doc.text(`Condición: ${condTxt}  ·  Estado: ${estTxt}`, infoX + 4, y + 25.5);
+  doc.text(`Empresa: ${empresaTxt}`, infoX + 4, y + 31);
+
+  y += blockH + 8;
+
+  // ── TABLA DE ITEMS ──
   const listaItems = factura.items || [];
 
   const items = listaItems.map((it, idx) => [
@@ -177,95 +249,111 @@ export function generarFacturaPDF(factura, empresa) {
 
   autoTable(doc, {
     startY: y,
-    head: [['#', 'Código', 'Descripción', 'Cant', 'P. Unit.', 'Total']],
-    body: items,
+    head: [['#', 'Código', 'Descripción', 'Cant.', 'P. Unit USD', 'Total USD']],
+    body: items.length > 0 ? items : [['—', '—', 'Sin items registrados', '0', '$0.00', '$0.00']],
     theme: 'plain',
-    margin: { left: 14, right: 14 },
+    margin: { left: marginL, right: marginR },
     headStyles: {
-      fillColor: TABLE_HEADER_BG,
+      fillColor: TABLE_HEADER_BG, // Navy
       textColor: WHITE,
       fontStyle: 'bold',
-      fontSize: 8.5,
-      cellPadding: 4,
-      halign: 'left'
+      fontSize: 8,
+      cellPadding: 4
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7.5,
       cellPadding: 3.5,
       textColor: [51, 51, 51]
     },
-    alternateRowStyles: {
-      fillColor: TABLE_ALT_ROW
-    },
+    alternateRowStyles: { fillColor: TABLE_ALT_ROW },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center', fontStyle: 'bold', textColor: GRAY },
-      1: { cellWidth: 30, fontStyle: 'bold', textColor: NAVY },
+      1: { cellWidth: 28, fontStyle: 'bold', textColor: NAVY },
       2: { cellWidth: 'auto' },
-      3: { cellWidth: 16, halign: 'center' },
-      4: { cellWidth: 26, halign: 'right' },
-      5: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }
+      3: { cellWidth: 14, halign: 'center' },
+      4: { cellWidth: 24, halign: 'right' },
+      5: { cellWidth: 26, halign: 'right', fontStyle: 'bold' }
     },
     didDrawPage: () => {
-      // Barra superior en cada página
       doc.setFillColor(...NAVY);
       doc.rect(0, 0, pageWidth, 4, 'F');
     }
   });
 
-  y = doc.lastAutoTable.finalY + 8;
+  y = doc.lastAutoTable.finalY + 6;
 
-  // Bloque de totales (alineado a la derecha)
-  const totalBoxW = 85;
-  const totalBoxX = pageWidth - totalBoxW - 14;
+  // ── NOTA FISCAL (izquierda) ──
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7);
+  doc.setTextColor(...BLUE);
+  doc.text('Exento de IVA según Decreto 126, Artículo 63, Numeral 02', marginL, y + 3);
+
+  // ── TOTALES (derecha) ──
+  const totalBoxW = 80;
+  const totalBoxX = pageWidth - marginR - totalBoxW;
+  const subtotal = factura.total || 0;
 
   // Subtotal
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
-  doc.text('Subtotal:', totalBoxX, y);
+  doc.text('Subtotal', totalBoxX, y);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(51, 51, 51);
-  doc.text(fmtUSD(factura.total || 0), pageWidth - 14, y, { align: 'right' });
+  doc.text(fmtUSD(subtotal), pageWidth - marginR, y, { align: 'right' });
 
-  y += 6;
+  y += 5;
+
+  // Descuento
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text('Descuento', totalBoxX, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 51, 51);
+  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
+
+  y += 5;
 
   // IVA
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GRAY);
-  doc.text('IVA (Exento Ley Agrícola):', totalBoxX, y);
+  doc.text('IVA (exento)', totalBoxX, y);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(51, 51, 51);
-  doc.text('$0.00', pageWidth - 14, y, { align: 'right' });
+  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
 
-  y += 2;
-  doc.setDrawColor(200, 200, 200);
-  doc.setLineWidth(0.3);
-  doc.line(totalBoxX, y, pageWidth - 14, y);
-  y += 6;
+  y += 8;
 
-  // TOTAL USD (grande)
-  doc.setFillColor(...NAVY);
-  doc.roundedRect(totalBoxX - 2, y - 5, totalBoxW + 4, 14, 2, 2, 'F');
+  // ── BLOQUE TOTAL USD (dorado) ──
+  const totalBarH = 14;
+  doc.setFillColor(...GOLD);
+  doc.roundedRect(totalBoxX - 4, y - 4, totalBoxW + 8, totalBarH, 2, 2, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setTextColor(...WHITE);
-  doc.text('TOTAL USD:', totalBoxX + 3, y + 4);
-  doc.text(fmtUSD(factura.total || 0), pageWidth - 16, y + 4, { align: 'right' });
+  doc.text('TOTAL USD', totalBoxX, y + 5);
+  doc.setFontSize(13);
+  doc.text(fmtUSD(subtotal), pageWidth - marginR, y + 5, { align: 'right' });
 
-  y += 14;
+  y += totalBarH + 4;
 
-  // Total en Bs
-  const tasa = factura.tasa_bcv || 47.80;
-  const totalBs = ((factura.total || 0) * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // ── COBRAR EN BS / PAGOS (izquierda) ──
+  const tasa = tasa_bcv || factura.tasa_bcv || 47.80;
+  const totalBs = (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(...GRAY);
-  doc.text(`Total en Bs (Tasa BCV ${tasa}):  Bs. ${totalBs}`, totalBoxX, y);
+  doc.text(`Total en Bs: Bs. ${totalBs} (Tasa BCV ${tasa})`, marginL, y);
 
-  // Pie de página
-  piePagina(doc);
+  // Si hay pagos registrados o saldo pendiente
+  if (factura.pagos && factura.pagos.length > 0) {
+    const totalAbonado = factura.pagos.reduce((acc, p) => acc + (parseFloat(p.monto_usd) || 0), 0);
+    const saldo = Math.max(0, subtotal - totalAbonado);
+    doc.text(`Total Abonado: ${fmtUSD(totalAbonado)}  ·  Saldo Pendiente: ${fmtUSD(saldo)}`, marginL, y + 4.5);
+  }
 
-  // Descargar
+  piePagina(doc, 'Factura comercial. Repuestos agrícolas exentos de IVA según Ley de Impuesto al Valor Agregado.');
+
   const filename = `Factura_${factura.num || 'SN'}_${(factura.fecha || '').replace(/\s/g, '_')}.pdf`;
   forceDownload(doc.output('blob'), filename);
 }
@@ -497,33 +585,101 @@ export function generarActaCierrePDF(turno, empresa) {
 
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
+  const marginL = 14;
+  const marginR = 14;
+  const contentW = pageWidth - marginL - marginR;
 
-  let y = cabeceraEmpresa(doc, empresa || 'directa');
+  const empKey = empresa || 'directa';
+  const emp = DATOS_EMPRESAS[empKey] || DATOS_EMPRESAS.directa;
 
-  // Título
-  const numWidth = 72;
-  doc.setFillColor(220, 38, 38);
-  doc.roundedRect(pageWidth - numWidth - 14, 10, numWidth, 22, 3, 3, 'F');
+  // ── CABECERA EMPRESA (fondo navy) ──
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, pageWidth, 42, 'F');
+
+  // Nombre de la empresa
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(14);
   doc.setTextColor(...WHITE);
-  doc.text('ACTA DE CIERRE', pageWidth - numWidth - 14 + numWidth / 2, 19, { align: 'center' });
+  doc.text(emp.nombre, marginL, 16);
+
+  // Datos de contacto
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(200, 210, 225);
+  doc.text(emp.direccion || 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
+  doc.text(`Acarigua — Portuguesa · Teléfonos: ${emp.telefono} · ${emp.rif}`, marginL, 28);
+
+  // ── BADGE ACTA (rojo/navy, esquina derecha) ──
+  const badgeW = 60;
+  const badgeH = 28;
+  const badgeX = pageWidth - marginR - badgeW;
+  const badgeY = 7;
+  doc.setFillColor(220, 38, 38); // Red
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...WHITE);
+  doc.text('ACTA DE CIERRE', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
+
+  doc.setFontSize(10);
+  doc.text('CAJA Y ARQUEO', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
+
+  doc.setFontSize(7.5);
+  doc.text(new Date().toLocaleDateString('es-VE'), badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
+
+  let y = 50;
+
+  // ── BLOQUE CAJERO + INFORMACIÓN ──
+  const blockH = 34;
+  const halfW = contentW / 2 - 3;
+
+  // Bloque CAJERO (izquierda)
+  doc.setDrawColor(200, 210, 225);
+  doc.setLineWidth(0.4);
+  doc.rect(marginL, y, halfW, blockH, 'S');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...BLUE);
+  doc.text('DATOS DEL CAJERO', marginL + 4, y + 6);
+
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('CAJA Y ARQUEO', pageWidth - numWidth - 14 + numWidth / 2, 28, { align: 'center' });
+  doc.setTextColor(...NAVY);
+  doc.text(turno.cajero || 'CAJERO DE TURNO', marginL + 4, y + 13);
 
-  y = separador(doc, y);
-  y += 3;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text(`Apertura: ${turno.fecha_apertura || '—'}`, marginL + 4, y + 20);
+  doc.text(`Cierre: ${turno.fecha_cierre || new Date().toLocaleString('es-VE')}`, marginL + 4, y + 26);
 
-  // Datos del turno
-  doc.setFillColor(...LIGHT_BG);
-  doc.roundedRect(14, y, pageWidth - 28, 24, 2, 2, 'F');
+  // Bloque INFORMACIÓN (derecha)
+  const infoX = marginL + halfW + 6;
+  doc.setDrawColor(200, 210, 225);
+  doc.rect(infoX, y, halfW, blockH, 'S');
 
-  etiquetaValor(doc, 'Cajero:', turno.cajero || '—', 18, y + 5);
-  etiquetaValor(doc, 'Apertura:', turno.fecha_apertura || '—', 18, y + 16);
-  etiquetaValor(doc, 'Cierre:', turno.fecha_cierre || new Date().toLocaleString('es-VE'), pageWidth / 2 + 5, y + 5);
-  etiquetaValor(doc, 'Estado:', 'CERRADO', pageWidth / 2 + 5, y + 16, GRAY, [220, 38, 38]);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...BLUE);
+  doc.text('ESTADO DEL TURNO', infoX + 4, y + 6);
 
-  y += 32;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text('Estado: ', infoX + 4, y + 13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(220, 38, 38);
+  doc.text('CERRADO', infoX + 20, y + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  const empresaTxt = empKey === 'distribuidora' ? 'Distribuidora ARJ' : 'Venta Directa';
+  doc.text(`Empresa: ${empresaTxt}`, infoX + 4, y + 20);
+  doc.text(`Fecha acta: ${new Date().toLocaleString('es-VE')}`, infoX + 4, y + 26);
+
+  y += blockH + 8;
 
   // Tabla resumen caja
   const fondoUSD = turno.inicial_usd || 0;

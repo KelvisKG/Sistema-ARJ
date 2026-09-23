@@ -143,11 +143,30 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
-import { generarFacturaPDF } from '../services/exportService.js';
+import { generarFacturaPDF, generarPresupuestoPDF } from '../services/exportService.js';
+import { cargarDetallesFactura } from '../services/supabase.js';
 
 const store = useArjStore();
 const busqueda = ref('');
 const filtroEstado = ref('');
+
+function obtenerClienteData(doc) {
+  if (!doc) return null;
+  const id = doc.cliente_id;
+  let cli = null;
+  if (id) cli = store.clientes.find(c => c.id === id || String(c.id) === String(id));
+  if (!cli && doc.cliente) {
+    cli = store.clientes.find(c => (c.nombre || '').trim().toLowerCase() === (doc.cliente || '').trim().toLowerCase());
+  }
+  if (cli) {
+    return {
+      rif: cli.rif || cli.cedula || '—',
+      direccion: cli.direccion || cli.dir || '—',
+      telefono: cli.telefono || cli.tel || '—'
+    };
+  }
+  return null;
+}
 
 function verFactura(f) {
   store.facturaReciente = f;
@@ -159,15 +178,19 @@ function iniciarAnulacion(f) {
   store.modalAnularActivo = true;
 }
 
-function descargarFacturaPDF(f) {
+async function descargarFacturaPDF(f) {
+  const clienteData = obtenerClienteData(f);
   if (vistaActual.value === 'cotizaciones') {
-    // Need import for generarPresupuestoPDF
-    import('../services/exportService.js').then(module => {
-      module.generarPresupuestoPDF(f, store.tasa_bcv);
-      store.notif(`PDF de la cotización ${f.num} generado`, 'success');
-    });
+    generarPresupuestoPDF(f, store.tasa_bcv, clienteData);
+    store.notif(`PDF de la cotización ${f.num} generado`, 'success');
   } else {
-    generarFacturaPDF(f, store.empresa);
+    if ((!f.items || f.items.length === 0) && String(f.id).indexOf('FAC-') === -1) {
+      store.notif('Cargando items para el PDF...', 'info');
+      const det = await cargarDetallesFactura(f.id);
+      if (det.items) f.items = det.items;
+      if (det.pagos) f.pagos = det.pagos;
+    }
+    generarFacturaPDF(f, store.empresa, store.tasa_bcv, clienteData);
     store.notif(`PDF de la factura ${f.num} generado`, 'success');
   }
 }
