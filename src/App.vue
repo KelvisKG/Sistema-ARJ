@@ -19,6 +19,7 @@
       <!-- Modales Globales del Sistema -->
       <EmpresaTransitionModal />
       <FacturaModal />
+      <PresupuestoPreviewModal />
       <TraspasoModal />
       <EditProdModal />
       <DtoDivisaModal />
@@ -108,6 +109,7 @@ import NuevoClienteRapidoModal from './components/modals/NuevoClienteRapidoModal
 import EmbarquesModal from './components/modals/EmbarquesModal.vue';
 import ListaPreciosModal from './components/modals/ListaPreciosModal.vue';
 import RecepcionModal from './components/modals/RecepcionModal.vue';
+import PresupuestoPreviewModal from './components/modals/PresupuestoPreviewModal.vue';
 import ToastNotification from './components/common/ToastNotification.vue';
 
 const store = useArjStore();

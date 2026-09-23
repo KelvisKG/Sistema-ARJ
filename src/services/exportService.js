@@ -271,55 +271,113 @@ export function generarFacturaPDF(factura, empresa) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 2. PDF DE PRESUPUESTO / COTIZACIÓN
+// 2. PDF DE PRESUPUESTO / COTIZACIÓN (Diseño formal tipo documento)
 // ═══════════════════════════════════════════════════════════════════
-export function generarPresupuestoPDF(presupuesto, tasa_bcv) {
+export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData) {
   if (!presupuesto) return;
 
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
+  const marginL = 14;
+  const marginR = 14;
+  const contentW = pageWidth - marginL - marginR;
 
-  let y = cabeceraEmpresa(doc, presupuesto.empresa || 'directa');
+  // ── CABECERA EMPRESA (fondo navy) ──
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, pageWidth, 42, 'F');
 
-  // Recuadro de presupuesto
-  const numWidth = 72;
-  doc.setFillColor(...BLUE);
-  doc.roundedRect(pageWidth - numWidth - 14, 10, numWidth, 22, 3, 3, 'F');
+  // Nombre de la empresa
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(14);
   doc.setTextColor(...WHITE);
-  doc.text('PRESUPUESTO', pageWidth - numWidth - 14 + numWidth / 2, 19, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(presupuesto.num || 'SN', pageWidth - numWidth - 14 + numWidth / 2, 28, { align: 'center' });
+  doc.text('AGRO REPUESTOS Y SERVICIOS JIMENEZ, FP', marginL, 16);
 
-  y = separador(doc, y);
-  y += 3;
+  // Datos de contacto
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(200, 210, 225);
+  doc.text('Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
+  doc.text('Acarigua — Portuguesa · Teléfonos: 0255-6642208 · 0414-5750174 · RIF V-162930024', marginL, 28);
 
-  // Datos del cliente
-  doc.setFillColor(...LIGHT_BG);
-  doc.roundedRect(14, y, pageWidth - 28, 24, 2, 2, 'F');
+  // ── BADGE PRESUPUESTO (dorado, esquina derecha) ──
+  const badgeW = 60;
+  const badgeH = 28;
+  const badgeX = pageWidth - marginR - badgeW;
+  const badgeY = 7;
+  doc.setFillColor(217, 119, 6); // Gold
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
 
-  etiquetaValor(doc, 'Cliente:', presupuesto.cliente || 'MOSTRADOR GENERAL', 18, y + 5);
-  etiquetaValor(doc, 'Vendedor:', presupuesto.vendedor || '—', 18, y + 16);
-  etiquetaValor(doc, 'Fecha emisión:', presupuesto.fecha || '—', pageWidth / 2 + 5, y + 5);
-  etiquetaValor(doc, 'Vigencia hasta:', presupuesto.vence || '45 días', pageWidth / 2 + 5, y + 16);
-
-  y += 30;
-
-  // Aviso de vigencia
-  doc.setFillColor(255, 251, 235);
-  doc.roundedRect(14, y, pageWidth - 28, 10, 2, 2, 'F');
-  doc.setDrawColor(...GOLD);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(14, y, pageWidth - 28, 10, 2, 2, 'S');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(...GOLD);
-  doc.text('⚠  Esta cotización tiene una validez comercial de 45 días a partir de su fecha de emisión. Precios sujetos a disponibilidad.', 19, y + 6.5);
+  doc.setTextColor(...WHITE);
+  doc.text('PRESUPUESTO', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
 
-  y += 16;
+  doc.setFontSize(11);
+  doc.text(presupuesto.num || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
 
-  // Tabla de items
+  doc.setFontSize(7.5);
+  doc.text(presupuesto.fecha || '—', badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
+
+  let y = 50;
+
+  // ── BLOQUE CLIENTE + INFORMACIÓN ──
+  const blockH = 38;
+  const halfW = contentW / 2 - 3;
+
+  // Bloque CLIENTE (izquierda)
+  doc.setDrawColor(200, 210, 225);
+  doc.setLineWidth(0.4);
+  doc.rect(marginL, y, halfW, blockH, 'S');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(37, 99, 235); // Blue label
+  doc.text('CLIENTE', marginL + 4, y + 6);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...NAVY);
+  doc.text(presupuesto.cliente || 'CLIENTE GENERAL', marginL + 4, y + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  const cliRif = (clienteData && clienteData.rif) ? `RIF: ${clienteData.rif}` : 'RIF: —';
+  const cliDir = (clienteData && clienteData.direccion) ? `Dirección: ${clienteData.direccion}` : 'Dirección: —';
+  const cliTel = (clienteData && clienteData.telefono) ? `Teléfono: ${clienteData.telefono}` : 'Teléfono: —';
+  doc.text(cliRif, marginL + 4, y + 20);
+  doc.text(cliDir, marginL + 4, y + 25.5);
+  doc.text(cliTel, marginL + 4, y + 31);
+
+  // Bloque INFORMACIÓN (derecha)
+  const infoX = marginL + halfW + 6;
+  doc.setDrawColor(200, 210, 225);
+  doc.rect(infoX, y, halfW, blockH, 'S');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(37, 99, 235);
+  doc.text('INFORMACIÓN', infoX + 4, y + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  const empresaTxt = presupuesto.empresa === 'distribuidora' ? 'Distribuidora' : 'Venta Directa';
+
+  doc.text(`Vendedor: `, infoX + 4, y + 13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NAVY);
+  doc.text(presupuesto.vendedor || '—', infoX + 24, y + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text(`Fecha de emisión: ${presupuesto.fecha || '—'}`, infoX + 4, y + 20);
+  doc.text(`Válida hasta: ${presupuesto.vence || '45 días'}`, infoX + 4, y + 25.5);
+  doc.text(`Empresa: ${empresaTxt}`, infoX + 4, y + 31);
+
+  y += blockH + 8;
+
+  // ── TABLA DE ITEMS ──
   const listaItemsPres = presupuesto.items || [];
 
   const items = listaItemsPres.map((it, idx) => [
@@ -333,54 +391,97 @@ export function generarPresupuestoPDF(presupuesto, tasa_bcv) {
 
   autoTable(doc, {
     startY: y,
-    head: [['#', 'Código', 'Descripción', 'Cant', 'P. Unit.', 'Total']],
+    head: [['#', 'Código', 'Descripción', 'Cant.', 'P. Unit USD', 'Total USD']],
     body: items,
     theme: 'plain',
-    margin: { left: 14, right: 14 },
+    margin: { left: marginL, right: marginR },
     headStyles: {
-      fillColor: BLUE,
+      fillColor: TABLE_HEADER_BG, // Navy
       textColor: WHITE,
       fontStyle: 'bold',
-      fontSize: 8.5,
+      fontSize: 8,
       cellPadding: 4
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7.5,
       cellPadding: 3.5,
       textColor: [51, 51, 51]
     },
     alternateRowStyles: { fillColor: TABLE_ALT_ROW },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center', fontStyle: 'bold', textColor: GRAY },
-      1: { cellWidth: 30, fontStyle: 'bold', textColor: NAVY },
+      1: { cellWidth: 28, fontStyle: 'bold', textColor: NAVY },
       2: { cellWidth: 'auto' },
-      3: { cellWidth: 16, halign: 'center' },
-      4: { cellWidth: 26, halign: 'right' },
-      5: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }
+      3: { cellWidth: 14, halign: 'center' },
+      4: { cellWidth: 24, halign: 'right' },
+      5: { cellWidth: 26, halign: 'right', fontStyle: 'bold' }
     }
   });
 
-  y = doc.lastAutoTable.finalY + 8;
+  y = doc.lastAutoTable.finalY + 6;
 
-  // Totales
-  const totalBoxW = 85;
-  const totalBoxX = pageWidth - totalBoxW - 14;
+  // ── NOTA FISCAL (izquierda) ──
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7);
+  doc.setTextColor(37, 99, 235);
+  doc.text('Exento de IVA según Decreto 126, Artículo 63, Numeral 02', marginL, y + 3);
 
-  doc.setFillColor(...BLUE);
-  doc.roundedRect(totalBoxX - 2, y - 2, totalBoxW + 4, 14, 2, 2, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(...WHITE);
-  doc.text('TOTAL COTIZACIÓN:', totalBoxX + 3, y + 7);
-  doc.text(fmtUSD(presupuesto.total || 0), pageWidth - 16, y + 7, { align: 'right' });
+  // ── TOTALES (derecha) ──
+  const totalBoxW = 80;
+  const totalBoxX = pageWidth - marginR - totalBoxW;
+  const subtotal = presupuesto.total || 0;
 
-  y += 18;
-  const tasa = tasa_bcv || 47.80;
-  const totalBs = ((presupuesto.total || 0) * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Subtotal
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
-  doc.text(`Equivalente en Bs (Tasa BCV ${tasa}):  Bs. ${totalBs}`, totalBoxX, y);
+  doc.text('Subtotal', totalBoxX, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 51, 51);
+  doc.text(fmtUSD(subtotal), pageWidth - marginR, y, { align: 'right' });
+
+  y += 5;
+
+  // Descuento
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text('Descuento', totalBoxX, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 51, 51);
+  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
+
+  y += 5;
+
+  // IVA
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text('IVA (exento)', totalBoxX, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 51, 51);
+  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
+
+  y += 8;
+
+  // ── BLOQUE TOTAL USD (dorado) ──
+  const totalBarH = 14;
+  doc.setFillColor(217, 119, 6);
+  doc.roundedRect(totalBoxX - 4, y - 4, totalBoxW + 8, totalBarH, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...WHITE);
+  doc.text('TOTAL USD', totalBoxX, y + 5);
+  doc.setFontSize(13);
+  doc.text(fmtUSD(subtotal), pageWidth - marginR, y + 5, { align: 'right' });
+
+  y += totalBarH + 4;
+
+  // ── COBRAR EN BS (izquierda, debajo de nota fiscal) ──
+  const tasa = tasa_bcv || 47.80;
+  const totalBs = (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text(`Cobrar en Bs.: Bs. ${totalBs} (a tasa de hoy)`, marginL, y);
 
   piePagina(doc, 'Cotización comercial sin valor fiscal. Precios exentos de IVA (sector agropecuario). Validez: 45 días calendario.');
 

@@ -85,12 +85,12 @@
               </span>
             </td>
             <td class="center" style="white-space:nowrap">
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:11px" title="Ver / imprimir" @click="descargarPDF(pre)"><i class="ti ti-eye"></i></button>
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:11px" title="Ver presupuesto" @click="abrirPreview(pre)"><i class="ti ti-eye"></i></button>
               <button
                 v-if="pre.estado === 'activa' || pre.estado === 'por_vencer'"
                 class="btn btn-sm" style="padding:2px 6px;font-size:11px;background:var(--green);color:#FFF;border:none"
                 title="Convertir a factura"
-                @click="store.convertirPresupuestoEnVenta(pre.id)"
+                @click="convertirAFactura(pre)"
               ><i class="ti ti-file-invoice"></i></button>
               <button
                 v-if="pre.estado !== 'convertida' && pre.estado !== 'rechazada'"
@@ -184,7 +184,6 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD, precioPublico } from '../services/pricing.js';
-import { generarPresupuestoPDF } from '../services/exportService.js';
 
 const store = useArjStore();
 const verRechazados = ref(false);
@@ -306,8 +305,14 @@ function marcarRechazado(pre) {
   store.notif(`Presupuesto ${pre.num} archivado`, 'info');
 }
 
-function descargarPDF(pre) {
-  generarPresupuestoPDF(pre, store.tasa_bcv);
-  store.notif(`PDF de cotización ${pre.num} generado`, 'success');
+function abrirPreview(pre) {
+  store.presupuestoSeleccionado = pre;
+  store.modalPresupuestoActivo = true;
+}
+
+function convertirAFactura(pre) {
+  if (confirm(`¿Convertir el presupuesto ${pre.num} en factura?\n\nLos datos se cargarán automáticamente en el módulo de facturación.`)) {
+    store.convertirPresupuestoEnVenta(pre.id);
+  }
 }
 </script>

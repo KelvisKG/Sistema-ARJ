@@ -112,7 +112,9 @@ export const useArjStore = defineStore('arj', {
     modalFavoritosActivo: false,
     modalListaPreciosActivo: false,
     modalAbonoActivo: false,
-    facturaParaAbono: null
+    facturaParaAbono: null,
+    modalPresupuestoActivo: false,
+    presupuestoSeleccionado: null
   }),
 
   getters: {
@@ -487,6 +489,8 @@ export const useArjStore = defineStore('arj', {
       this.modalFavoritosActivo = false;
       this.modalListaPreciosActivo = false;
       this.modalAbonoActivo = false;
+      this.modalPresupuestoActivo = false;
+      this.presupuestoSeleccionado = null;
       this.modoCajaActivo = false;
     },
 
