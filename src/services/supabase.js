@@ -174,10 +174,22 @@ export async function cargarDatosCompletos() {
       const { data: cots, error: eCot } = await supabase.from('cotizaciones').select('*').order('fecha', { ascending: false }).limit(50);
       if (!eCot && cots) {
         const cotIds = cots.map(c => c.id).filter(Boolean);
-        const itemCount = {};
+        const itemsPorCot = {};
         if (cotIds.length > 0) {
-          const { data: cits } = await supabase.from('cotizacion_items').select('cotizacion_id').in('cotizacion_id', cotIds);
-          if (cits) cits.forEach(ci => { itemCount[ci.cotizacion_id] = (itemCount[ci.cotizacion_id] || 0) + 1; });
+          const { data: cits } = await supabase.from('cotizacion_items').select('*').in('cotizacion_id', cotIds);
+          if (cits) {
+            cits.forEach(ci => {
+              if (!itemsPorCot[ci.cotizacion_id]) itemsPorCot[ci.cotizacion_id] = [];
+              itemsPorCot[ci.cotizacion_id].push({
+                id: ci.producto_id || ci.id,
+                cod_alt: ci.cod_alt || '',
+                desc: ci.descripcion || '',
+                cant: ci.cantidad || 0,
+                precio: parseFloat(ci.precio_unitario) || 0,
+                fob: parseFloat(ci.fob) || 0
+              });
+            });
+          }
         }
 
         resultado.presupuestos = cots.map(c => {
@@ -188,12 +200,14 @@ export async function cargarDatosCompletos() {
           if (est === 'activa' && diasRest <= 5) est = 'por_vencer';
           if (est === 'activa' && diasRest < 0) est = 'vencida';
 
+          const items = itemsPorCot[c.id] || [];
           return {
             id: c.id, num: c.numero, empresa: c.empresa, cliente: c.cliente_nombre,
+            cliente_id: c.cliente_id || null,
             fecha: new Date(c.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
             vence: vence.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
             total: parseFloat(c.subtotal_usd) || 0, estado: est, dias_restantes: diasRest,
-            items_count: itemCount[c.id] || 0, vendedor: c.vendedor
+            items_count: items.length, items: items, vendedor: c.vendedor
           };
         });
       }

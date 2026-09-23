@@ -47,7 +47,7 @@
             <div style="font-size:11.5px;color:var(--dgray);line-height:1.7">
               RIF: {{ clienteInfo.rif || '—' }}<br>
               Dirección: {{ clienteInfo.direccion || '—' }}<br>
-              Teléfono: {{ clienteInfo.telefono || '—' }}
+              Teléfono: {{ clienteInfo.tel || '—' }}
             </div>
           </div>
           <!-- INFORMACIÓN -->
@@ -141,8 +141,15 @@ const store = useArjStore();
 const pre = computed(() => store.presupuestoSeleccionado || {});
 
 const clienteInfo = computed(() => {
-  if (!pre.value || !pre.value.cliente_id) return {};
-  const cli = store.clientes.find(c => c.id === pre.value.cliente_id);
+  if (!pre.value) return {};
+  // Buscar por ID primero, si no, por nombre
+  let cli = null;
+  if (pre.value.cliente_id) {
+    cli = store.clientes.find(c => c.id === pre.value.cliente_id);
+  }
+  if (!cli && pre.value.cliente) {
+    cli = store.clientes.find(c => c.nombre === pre.value.cliente);
+  }
   return cli || {};
 });
 
@@ -158,7 +165,14 @@ function cerrarModal() {
 }
 
 function imprimirPDF() {
-  generarPresupuestoPDF(pre.value, store.tasa_bcv, clienteInfo.value);
+  const cli = clienteInfo.value;
+  // Pasar datos del cliente con campos normalizados para el PDF
+  const clienteData = {
+    rif: cli.rif || '',
+    direccion: cli.direccion || '',
+    telefono: cli.tel || ''
+  };
+  generarPresupuestoPDF(pre.value, store.tasa_bcv, clienteData);
   store.notif(`PDF de cotización ${pre.value.num} generado`, 'success');
 }
 </script>
