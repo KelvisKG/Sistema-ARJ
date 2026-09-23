@@ -7,6 +7,14 @@
         <p>Acceso seguro · Repuestos Agrícolas</p>
       </div>
 
+      <div v-if="store.sesionExpirada" class="login-inactividad-banner">
+        <i class="ti ti-clock-pause"></i>
+        <div>
+          <strong>Sesión cerrada por inactividad</strong>
+          <p>Por su seguridad, su sesión fue cerrada automáticamente. Ingrese sus credenciales para continuar.</p>
+        </div>
+      </div>
+
       <div v-if="errorVisible" class="login-error" style="display:block">
         <i class="ti ti-info-circle"></i> {{ errorMessage }}
       </div>
@@ -111,6 +119,7 @@ function toggleMode() {
 async function handleLogin() {
   errors.value = {};
   errorVisible.value = false;
+  store.sesionExpirada = false;
 
   if (!isNonEmpty(email.value)) {
     errors.value.email = 'El correo electrónico es requerido';

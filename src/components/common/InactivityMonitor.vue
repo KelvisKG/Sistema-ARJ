@@ -23,17 +23,26 @@ import { useArjStore } from '../../stores/useArjStore.js';
 const store = useArjStore();
 const INACTIVIDAD_LIMITE = 5 * 60 * 1000; // 5 minutos
 const TIEMPO_ADVERTENCIA = 15 * 1000; // 15 segundos antes del límite
+const THROTTLE_TIMESTAMP = 30 * 1000; // Actualizar timestamp cada 30 segundos máximo
 const mostrarModal = ref(false);
 const tiempoRestante = ref(15);
 
 let timerInactividad = null;
 let timerAdvertencia = null;
+let ultimoTimestamp = 0; // Para throttle de escritura a localStorage
 
 const resetearInactividad = () => {
   if (mostrarModal.value) return; // No resetear si ya está mostrando el modal
   
   clearTimeout(timerInactividad);
   clearInterval(timerAdvertencia);
+  
+  // Actualizar timestamp en localStorage (con throttle de 30s para no saturar)
+  const ahora = Date.now();
+  if (ahora - ultimoTimestamp > THROTTLE_TIMESTAMP) {
+    ultimoTimestamp = ahora;
+    store.actualizarTimestampSesion();
+  }
   
   // Iniciar temporizador principal (4 minutos y 45 segundos para advertencia)
   timerInactividad = setTimeout(mostrarAdvertencia, INACTIVIDAD_LIMITE - TIEMPO_ADVERTENCIA);
@@ -54,10 +63,20 @@ const mostrarAdvertencia = () => {
 
 const mantenerSesion = () => {
   mostrarModal.value = false;
+  // Forzar actualización de timestamp al mantener sesión
+  ultimoTimestamp = 0;
   resetearInactividad();
 };
 
 const expulsarUsuario = () => {
+  // Limpiar timers y listeners ANTES del logout para evitar re-triggers
+  clearTimeout(timerInactividad);
+  clearInterval(timerAdvertencia);
+  window.removeEventListener('mousemove', resetearInactividad);
+  window.removeEventListener('keydown', resetearInactividad);
+  window.removeEventListener('click', resetearInactividad);
+  window.removeEventListener('scroll', resetearInactividad);
+  
   mostrarModal.value = false;
   store.logout(true); // true = por inactividad
 };
@@ -69,6 +88,8 @@ onMounted(() => {
   window.addEventListener('click', resetearInactividad);
   window.addEventListener('scroll', resetearInactividad);
   
+  // Forzar primer timestamp al montar
+  store.actualizarTimestampSesion();
   resetearInactividad();
 });
 
@@ -82,3 +103,4 @@ onUnmounted(() => {
   clearInterval(timerAdvertencia);
 });
 </script>
+

@@ -25,7 +25,7 @@ export const useArjStore = defineStore('arj', {
     usuarioNombre: 'JJ (Gerente General)',
     usuarioEmail: 'josehjimenezcas@gmail.com',
 
-    inactividadExpulsado: false, // Flag to show modal in login screen
+    sesionExpirada: false, // Flag to show inactivity banner in login screen
 
     // Empresa Activa: 'directa' (Venta Directa) | 'distribuidora' (Distribuidora)
     empresa: 'directa',
@@ -189,12 +189,29 @@ export const useArjStore = defineStore('arj', {
 
   actions: {
     // Restauración síncrona de sesión para evitar parpadeos
+    // Valida que la sesión no haya expirado por inactividad (5 minutos)
     restaurarSesion() {
       const sesionGuardada = localStorage.getItem('arj_sesion');
       if (sesionGuardada) {
         try {
           const dataSesion = JSON.parse(sesionGuardada);
           if (dataSesion && dataSesion.autenticado) {
+            // Verificar si la sesión expiró por tiempo de inactividad
+            const SESION_MAX_INACTIVIDAD = 5 * 60 * 1000; // 5 minutos
+            const ultimaActividad = dataSesion.timestamp || 0;
+            const tiempoTranscurrido = Date.now() - ultimaActividad;
+
+            if (tiempoTranscurrido > SESION_MAX_INACTIVIDAD) {
+              // Sesión expirada — limpiar y mostrar aviso
+              this.sesionExpirada = true;
+              const theme = localStorage.getItem('arj_tema');
+              const tasasLocales = localStorage.getItem('ARJ_TASAS');
+              localStorage.clear();
+              if (theme) localStorage.setItem('arj_tema', theme);
+              if (tasasLocales) localStorage.setItem('ARJ_TASAS', tasasLocales);
+              return;
+            }
+
             this.autenticado = true;
             this.rol = dataSesion.rol;
             this.usuarioNombre = dataSesion.usuarioNombre;
@@ -401,12 +418,14 @@ export const useArjStore = defineStore('arj', {
       this.rol = rol;
       this.usuarioNombre = nombre || (rol === 'gerente' ? 'JJ (Gerente General)' : 'HUMBERTO ARJ (Ventas)');
       this.autenticado = true;
+      this.sesionExpirada = false;
 
-      // Persistir sesión
+      // Persistir sesión con timestamp de última actividad
       localStorage.setItem('arj_sesion', JSON.stringify({
         autenticado: true,
         rol: this.rol,
-        usuarioNombre: this.usuarioNombre
+        usuarioNombre: this.usuarioNombre,
+        timestamp: Date.now()
       }));
 
       this.logBitacora('sesion', `Usuario ${this.usuarioNombre} ingresó como ${rol.toUpperCase()}`);
@@ -417,7 +436,6 @@ export const useArjStore = defineStore('arj', {
       if (this.autenticado) {
         this.logBitacora('sesion', `Usuario ${this.usuarioNombre} cerró sesión${porInactividad ? ' por inactividad' : ''}`);
       }
-      this.autenticado = false;
 
       // 1. Limpiar sesión en Supabase para evitar autologin fantasma
       import('../services/supabase.js').then(({ supabase }) => {
@@ -428,16 +446,61 @@ export const useArjStore = defineStore('arj', {
       const theme = localStorage.getItem('arj_tema');
       const tasasLocales = localStorage.getItem('ARJ_TASAS');
       localStorage.clear();
-      
       if (theme) localStorage.setItem('arj_tema', theme);
       if (tasasLocales) localStorage.setItem('ARJ_TASAS', tasasLocales);
 
+      // 3. Reset completo del estado en memoria (sin recargar la página)
+      this.autenticado = false;
+      this.sesionExpirada = porInactividad;
+      this.rol = 'gerente';
+      this.usuarioNombre = '';
+      this.vistaActiva = 'facturacion';
+      this.productos = [];
+      this.clientes = [];
+      this.facturasCobrar = [];
+      this.todasFacturas = [];
+      this.presupuestos = [];
+      this.apartados = [];
+      this.notasCredito = [];
+      this.movimientos = [];
+      this.movimientosDinero = [];
+      this.embarques = [];
+      this.turnos = [];
+      this.turnoActual = null;
+      this.bitacora = [];
+      this.ventasRecientes = [];
+      this.favoritos = [];
+      this.supabaseConectado = false;
+      this.cargando = false;
       this.limpiarCarrito();
 
-      // 3. Forzar una recarga total de la página para destruir cualquier estado residual en memoria
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      // Cerrar todos los modales abiertos
+      this.modalFacturaActivo = false;
+      this.modalTraspasoActivo = false;
+      this.modalRecepcionActivo = false;
+      this.modalEmbarquesActivo = false;
+      this.modalEditProdActivo = false;
+      this.modalDtoDivisaActivo = false;
+      this.modalDtoManualActivo = false;
+      this.modalAnularActivo = false;
+      this.modalNuevoClienteActivo = false;
+      this.modalFavoritosActivo = false;
+      this.modalListaPreciosActivo = false;
+      this.modalAbonoActivo = false;
+      this.modoCajaActivo = false;
+    },
+
+    // Actualizar timestamp de última actividad en la sesión guardada
+    // Llamado por InactivityMonitor con throttle para no saturar localStorage
+    actualizarTimestampSesion() {
+      const sesionGuardada = localStorage.getItem('arj_sesion');
+      if (sesionGuardada) {
+        try {
+          const dataSesion = JSON.parse(sesionGuardada);
+          dataSesion.timestamp = Date.now();
+          localStorage.setItem('arj_sesion', JSON.stringify(dataSesion));
+        } catch (e) { }
+      }
     },
 
     async registrarUsuario(email, password, nombre, empresa) {

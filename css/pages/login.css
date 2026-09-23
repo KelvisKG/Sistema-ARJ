@@ -137,6 +137,53 @@
       display: flex;
     }
 
+    .login-inactividad-banner {
+      background: linear-gradient(135deg, #FFF7ED, #FFEDD5);
+      color: #92400E;
+      border: 1px solid #FED7AA;
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      line-height: 1.5;
+      animation: bannerSlideIn 0.4s ease-out;
+    }
+
+    .login-inactividad-banner i {
+      font-size: 24px;
+      color: #D97706;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .login-inactividad-banner strong {
+      display: block;
+      font-size: 14px;
+      color: #78350F;
+      margin-bottom: 4px;
+    }
+
+    .login-inactividad-banner p {
+      margin: 0;
+      font-size: 12.5px;
+      color: #92400E;
+      line-height: 1.45;
+    }
+
+    @keyframes bannerSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     .login-hint {
       margin-top: 18px;
       padding-top: 14px;
