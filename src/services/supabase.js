@@ -102,7 +102,8 @@ export async function cargarDatosCompletos() {
           saldo_dist: parseFloat(c.saldo_dist) || 0,
           tel: c.telefono || '',
           empresa: c.empresa || 'ambas',
-          origen: c.origen || 'mostrador',
+          origen: c.origen || '',
+          como_consiguio: c.origen || '',
           origen_detalle: c.origen_detalle || '',
           direccion: c.direccion || '',
           notas: c.notas || '',
@@ -276,6 +277,43 @@ export async function guardarClienteEnSupabase(cliente) {
   } catch (err) {
     encolarAccion('CLIENTE', cliente);
     return { ok: true, data: cliente };
+  }
+}
+
+// Actualizar cliente existente (Offline-first via Sync Queue)
+export async function actualizarClienteEnSupabase(clienteId, datosCliente) {
+  try {
+    if (navigator.onLine && clienteId) {
+      const payload = {
+        nombre: datosCliente.nombre,
+        rif: datosCliente.rif,
+        telefono: datosCliente.tel,
+        direccion: datosCliente.direccion,
+        nivel: datosCliente.nivel,
+        tipo_pago: datosCliente.tipo,
+        origen: datosCliente.origen || datosCliente.como_consiguio || '',
+        origen_detalle: datosCliente.origen_detalle || '',
+        notas: datosCliente.notas || ''
+      };
+      const { data, error } = await supabase.from('clientes').update(payload).eq('id', clienteId).select();
+      if (!error) {
+        if (datosCliente.contacto_principal) {
+          const cp = datosCliente.contacto_principal;
+          await supabase.from('contactos_cliente').update({
+            nombre: cp.nombre,
+            cargo: cp.cargo,
+            telefono: cp.tel || datosCliente.tel
+          }).eq('cliente_id', clienteId).eq('es_principal', true);
+        }
+        return { ok: true, data: data ? data[0] : null };
+      }
+    }
+    encolarAccion('ACTUALIZAR_CLIENTE', { id: clienteId, ...datosCliente });
+    return { ok: true };
+  } catch (err) {
+    console.warn('[ARJ] Error actualizando cliente en Supabase:', err);
+    encolarAccion('ACTUALIZAR_CLIENTE', { id: clienteId, ...datosCliente });
+    return { ok: true };
   }
 }
 
