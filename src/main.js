@@ -3,8 +3,12 @@
 // =====================================================================
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
+import { inject } from '@vercel/analytics';
 import App from './App.vue';
 import { guardarDatosLocal } from './services/persistence.js';
+
+// Inicializar Vercel Analytics
+inject();
 
 // Importar Estilos Base y Sistema de Diseño ARJ
 import '../css/variables.css';
