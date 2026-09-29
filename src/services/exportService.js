@@ -138,46 +138,50 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
   const empKey = empresa || factura.empresa || 'directa';
   const emp = DATOS_EMPRESAS[empKey] || DATOS_EMPRESAS.directa;
 
-  // ── CABECERA EMPRESA (Texto Simple) ──
+  // ── CABECERA EMPRESA (fondo navy) ──
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, pageWidth, 42, 'F');
+
   // Nombre de la empresa
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.setTextColor(100, 100, 100);
+  doc.setTextColor(...WHITE);
   doc.text(emp.nombre, marginL, 16);
 
   // Datos de contacto
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  doc.setTextColor(150, 150, 150);
-  doc.text(emp.direccion || 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 21);
-  doc.text(`Acarigua — Portuguesa · Teléfonos: ${emp.telefono} · ${emp.rif}`, marginL, 25);
+  doc.setTextColor(200, 210, 225);
+  doc.text(emp.direccion || 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
+  doc.text(`Acarigua — Portuguesa · Teléfonos: ${emp.telefono} · ${emp.rif}`, marginL, 28);
 
-  // ── BADGE FACTURA (esquina derecha) ──
+  // ── BADGE FACTURA (dorado/navy, esquina derecha) ──
   const badgeW = 60;
+  const badgeH = 28;
   const badgeX = pageWidth - marginR - badgeW;
   const badgeY = 7;
+  doc.setFillColor(...GOLD); // Gold
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  doc.text('FACTURA', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
+  doc.setTextColor(...WHITE);
+  doc.text('FACTURA COMERCIAL', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
 
   doc.setFontSize(11);
-  doc.setTextColor(100, 100, 100);
-  doc.text(factura.num || 'SN', badgeX + badgeW / 2, badgeY + 14, { align: 'center' });
+  doc.text(factura.num || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
 
   doc.setFontSize(7.5);
-  doc.setTextColor(150, 150, 150);
-  doc.text(factura.fecha || '—', badgeX + badgeW / 2, badgeY + 19, { align: 'center' });
+  doc.text(factura.fecha || '—', badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
 
-  let y = 40;
+  let y = 50;
 
   // ── BLOQUE CLIENTE + INFORMACIÓN ──
   const blockH = 38;
   const halfW = contentW / 2 - 3;
 
-  // Bloque CLIENTE (izquierda sin borde)
-  doc.setDrawColor(255, 255, 255);
+  // Bloque CLIENTE (izquierda)
+  doc.setDrawColor(200, 210, 225);
   doc.setLineWidth(0.4);
   doc.rect(marginL, y, halfW, blockH, 'S');
 
@@ -201,9 +205,9 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
   doc.text(cliDir, marginL + 4, y + 25.5);
   doc.text(cliTel, marginL + 4, y + 31);
 
-  // Bloque INFORMACIÓN (derecha sin borde)
+  // Bloque INFORMACIÓN (derecha)
   const infoX = marginL + halfW + 6;
-  doc.setDrawColor(255, 255, 255);
+  doc.setDrawColor(200, 210, 225);
   doc.rect(infoX, y, halfW, blockH, 'S');
 
   doc.setFont('helvetica', 'normal');
@@ -250,20 +254,18 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
     theme: 'plain',
     margin: { left: marginL, right: marginR },
     headStyles: {
-      fillColor: [255, 255, 255],
-      textColor: [100, 100, 100],
+      fillColor: TABLE_HEADER_BG, // Navy
+      textColor: WHITE,
       fontStyle: 'bold',
       fontSize: 8,
-      cellPadding: 4,
-      lineWidth: 0.1,
-      lineColor: [200, 200, 200]
+      cellPadding: 4
     },
     bodyStyles: {
       fontSize: 7.5,
       cellPadding: 3.5,
       textColor: [51, 51, 51]
     },
-    alternateRowStyles: { fillColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: TABLE_ALT_ROW },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center', fontStyle: 'bold', textColor: GRAY },
       1: { cellWidth: 28, fontStyle: 'bold', textColor: NAVY },
@@ -271,6 +273,10 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
       3: { cellWidth: 14, halign: 'center' },
       4: { cellWidth: 24, halign: 'right' },
       5: { cellWidth: 26, halign: 'right', fontStyle: 'bold' }
+    },
+    didDrawPage: () => {
+      doc.setFillColor(...NAVY);
+      doc.rect(0, 0, pageWidth, 4, 'F');
     }
   });
 
@@ -318,24 +324,26 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
 
   y += 8;
 
-  // ── BLOQUE TOTAL USD (texto simple) ──
+  // ── BLOQUE TOTAL USD (dorado) ──
+  const totalBarH = 14;
+  doc.setFillColor(...GOLD);
+  doc.roundedRect(totalBoxX - 4, y - 4, totalBoxW + 8, totalBarH, 2, 2, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.setTextColor(150, 150, 150);
+  doc.setTextColor(...WHITE);
   doc.text('TOTAL USD', totalBoxX, y + 5);
   doc.setFontSize(13);
-  doc.setTextColor(100, 100, 100);
   doc.text(fmtUSD(subtotal), pageWidth - marginR, y + 5, { align: 'right' });
 
-  y += 14 + 4;
+  y += totalBarH + 4;
 
   // ── COBRAR EN BS / PAGOS (izquierda) ──
   const tasa = tasa_bcv || factura.tasa_bcv || 47.80;
   const totalBs = (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(...NAVY);
-  doc.text(`Cobrar en Bs.: Bs. ${totalBs}`, marginL, y);
+  doc.setTextColor(...GRAY);
+  doc.text(`Total en Bs: Bs. ${totalBs} (Tasa BCV ${tasa})`, marginL, y);
 
   // Si hay pagos registrados o saldo pendiente
   if (factura.pagos && factura.pagos.length > 0) {
@@ -368,46 +376,50 @@ export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData, action
   const marginR = 14;
   const contentW = pageWidth - marginL - marginR;
 
-  // ── CABECERA EMPRESA (Texto Simple) ──
+  // ── CABECERA EMPRESA (fondo navy) ──
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, pageWidth, 42, 'F');
+
   // Nombre de la empresa
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.setTextColor(100, 100, 100);
+  doc.setTextColor(...WHITE);
   doc.text('AGRO REPUESTOS Y SERVICIOS JIMENEZ, FP', marginL, 16);
 
   // Datos de contacto
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 21);
-  doc.text('Acarigua — Portuguesa · Teléfonos: 0255-6642208 · 0414-5750174 · RIF V-162930024', marginL, 25);
+  doc.setTextColor(200, 210, 225);
+  doc.text('Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
+  doc.text('Acarigua — Portuguesa · Teléfonos: 0255-6642208 · 0414-5750174 · RIF V-162930024', marginL, 28);
 
-  // ── BADGE PRESUPUESTO (esquina derecha) ──
+  // ── BADGE PRESUPUESTO (dorado, esquina derecha) ──
   const badgeW = 60;
+  const badgeH = 28;
   const badgeX = pageWidth - marginR - badgeW;
   const badgeY = 7;
+  doc.setFillColor(217, 119, 6); // Gold
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
+  doc.setTextColor(...WHITE);
   doc.text('PRESUPUESTO', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
 
   doc.setFontSize(11);
-  doc.setTextColor(100, 100, 100);
-  doc.text(presupuesto.num || 'SN', badgeX + badgeW / 2, badgeY + 14, { align: 'center' });
+  doc.text(presupuesto.num || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
 
   doc.setFontSize(7.5);
-  doc.setTextColor(150, 150, 150);
-  doc.text(presupuesto.fecha || '—', badgeX + badgeW / 2, badgeY + 19, { align: 'center' });
+  doc.text(presupuesto.fecha || '—', badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
 
-  let y = 40;
+  let y = 50;
 
   // ── BLOQUE CLIENTE + INFORMACIÓN ──
   const blockH = 38;
   const halfW = contentW / 2 - 3;
 
   // Bloque CLIENTE (izquierda)
-  doc.setDrawColor(255, 255, 255);
+  doc.setDrawColor(200, 210, 225);
   doc.setLineWidth(0.4);
   doc.rect(marginL, y, halfW, blockH, 'S');
 
@@ -478,20 +490,18 @@ export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData, action
     theme: 'plain',
     margin: { left: marginL, right: marginR },
     headStyles: {
-      fillColor: [255, 255, 255],
-      textColor: [100, 100, 100],
+      fillColor: TABLE_HEADER_BG, // Navy
+      textColor: WHITE,
       fontStyle: 'bold',
       fontSize: 8,
-      cellPadding: 4,
-      lineWidth: 0.1,
-      lineColor: [200, 200, 200]
+      cellPadding: 4
     },
     bodyStyles: {
       fontSize: 7.5,
       cellPadding: 3.5,
       textColor: [51, 51, 51]
     },
-    alternateRowStyles: { fillColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: TABLE_ALT_ROW },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center', fontStyle: 'bold', textColor: GRAY },
       1: { cellWidth: 28, fontStyle: 'bold', textColor: NAVY },
@@ -546,24 +556,26 @@ export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData, action
 
   y += 8;
 
-  // ── BLOQUE TOTAL USD (texto simple) ──
+  // ── BLOQUE TOTAL USD (dorado) ──
+  const totalBarH = 14;
+  doc.setFillColor(217, 119, 6);
+  doc.roundedRect(totalBoxX - 4, y - 4, totalBoxW + 8, totalBarH, 2, 2, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.setTextColor(150, 150, 150);
+  doc.setTextColor(...WHITE);
   doc.text('TOTAL USD', totalBoxX, y + 5);
   doc.setFontSize(13);
-  doc.setTextColor(100, 100, 100);
   doc.text(fmtUSD(subtotal), pageWidth - marginR, y + 5, { align: 'right' });
 
-  y += 14 + 4;
+  y += totalBarH + 4;
 
   // ── COBRAR EN BS (izquierda, debajo de nota fiscal) ──
   const tasa = tasa_bcv || 47.80;
   const totalBs = (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(...NAVY);
-  doc.text(`Cobrar en Bs.: Bs. ${totalBs}`, marginL, y);
+  doc.setTextColor(...GRAY);
+  doc.text(`Cobrar en Bs.: Bs. ${totalBs} (a tasa de hoy)`, marginL, y);
 
   piePagina(doc, 'Cotización comercial sin valor fiscal. Precios exentos de IVA (sector agropecuario). Validez: 45 días calendario.');
 
