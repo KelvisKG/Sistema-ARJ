@@ -21,7 +21,7 @@
         <button
           v-if="store.rol === 'gerente'"
           class="btn btn-secondary"
-          @click="store.notif('Módulo de Notas de Entrega en desarrollo', 'info')"
+          @click="store.modalNotasActivo = true"
         >
           <i class="ti ti-file-description"></i> Notas de Entrega
         </button>

@@ -894,3 +894,197 @@ export function exportarLibroVentasExcel(facturas, empresaSel, mesSel, anoSel) {
   const filename = `Libro_Ventas_${empresaSel}_${anoSel}_${mesSel}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// NOTA DE ENTREGA (Traspasos / Despachos Internos)
+// ═══════════════════════════════════════════════════════════════════
+export function generarNotaEntregaPDF(nota, usuario, action = 'download') {
+  if (!nota) return;
+
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const marginL = 14;
+  const marginR = 14;
+  const contentW = pageWidth - marginL - marginR;
+
+  // ── CABECERA EMPRESA (fondo navy) ──
+  doc.setFillColor(...[21, 37, 63]); // NAVY
+  doc.rect(0, 0, pageWidth, 42, 'F');
+
+  // Nombre de la empresa origen (Distribuidora)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text('DISTRIBUIDORA ARJ C.A.', marginL, 16);
+
+  // Datos de contacto
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(200, 210, 225);
+  doc.text('Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
+  doc.text('Acarigua — Portuguesa · Teléfonos: 0255-6642208 · 0414-5750174', marginL, 28);
+
+  // ── BADGE NOTA (dorado/navy, esquina derecha) ──
+  const badgeW = 60;
+  const badgeH = 28;
+  const badgeX = pageWidth - marginR - badgeW;
+  const badgeY = 7;
+  doc.setFillColor(...[217, 119, 6]); // GOLD
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.text('NOTA DE ENTREGA', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
+
+  doc.setFontSize(11);
+  doc.text(nota.numero || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
+
+  const fStr = nota.fecha instanceof Date ? nota.fecha.toLocaleDateString('es-VE') : (nota.fecha || '—');
+  doc.setFontSize(7.5);
+  doc.text(fStr, badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
+
+  let y = 50;
+
+  // ── BLOQUE CLIENTE + INFORMACIÓN ──
+  const blockH = 38;
+  const halfW = contentW / 2 - 3;
+
+  // Bloque DESTINO (izquierda)
+  doc.setDrawColor(200, 210, 225);
+  doc.setLineWidth(0.4);
+  doc.rect(marginL, y, halfW, blockH, 'S');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(37, 99, 235); // BLUE
+  doc.text('DESTINO / RECEPCIÓN', marginL + 4, y + 6);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...[21, 37, 63]); // NAVY
+  doc.text('VENTA DIRECTA - ARJ', marginL + 4, y + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(107, 114, 128); // GRAY
+  doc.text('Despacho interno desde Distribuidora', marginL + 4, y + 20);
+  doc.text('Dirección: Mostrador Acarigua', marginL + 4, y + 25.5);
+  doc.text('Recibe: ______________________', marginL + 4, y + 31);
+
+  // Bloque INFORMACIÓN (derecha)
+  const infoX = marginL + halfW + 6;
+  doc.setDrawColor(200, 210, 225);
+  doc.rect(infoX, y, halfW, blockH, 'S');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(37, 99, 235); // BLUE
+  doc.text('INFORMACIÓN DE DESPACHO', infoX + 4, y + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(107, 114, 128); // GRAY
+
+  doc.text('Vendedor/Autoriza: ', infoX + 4, y + 13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...[21, 37, 63]); // NAVY
+  doc.text(usuario || 'Sistema', infoX + 28, y + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128); // GRAY
+  doc.text(`Fecha de emisión: ${fStr}`, infoX + 4, y + 20);
+  doc.text(`Embarque: ${nota.embarque || '—'}`, infoX + 4, y + 25.5);
+  doc.text(`Referencia: ${nota.ref || '—'}`, infoX + 4, y + 31);
+
+  y += blockH + 8;
+
+  // ── TABLA DE ITEMS ──
+  const listaItems = nota.items || [];
+
+  const itemsArray = listaItems.map((it, idx) => [
+    idx + 1,
+    it.cod_alt || '—',
+    (it.descripcion || 'Producto') + (it.marca ? ' · ' + it.marca : ''),
+    it.cantidad || 1,
+    fmtUSD(it.costo_unitario || 0),
+    fmtUSD((it.cantidad || 1) * (it.costo_unitario || 0))
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Cód. Alt', 'Descripción y Marca', 'Unid.', 'Costo U.', 'Total']],
+    body: itemsArray,
+    theme: 'grid',
+    headStyles: { fillColor: [21, 37, 63], textColor: 255, fontSize: 8, fontStyle: 'bold', halign: 'center' },
+    bodyStyles: { fontSize: 7.5, textColor: [50, 50, 50], cellPadding: 3 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 8 },
+      1: { halign: 'left', cellWidth: 25, fontStyle: 'bold' },
+      2: { halign: 'left', cellWidth: 'auto' },
+      3: { halign: 'right', cellWidth: 15 },
+      4: { halign: 'right', cellWidth: 20 },
+      5: { halign: 'right', cellWidth: 22, fontStyle: 'bold' }
+    },
+    margin: { left: marginL, right: marginR },
+    didDrawPage: (data) => {
+      piePagina(doc, 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.');
+    }
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ── TOTALES ──
+  if (y > doc.internal.pageSize.getHeight() - 40) {
+    doc.addPage();
+    y = 20;
+    piePagina(doc, 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.');
+  }
+
+  const wTotal = 70;
+  const xTotal = pageWidth - marginR - wTotal;
+  
+  doc.setDrawColor(200, 210, 225);
+  doc.rect(xTotal, y, wTotal, 14, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(107, 114, 128); // GRAY
+  doc.text('TOTAL COSTO USD:', xTotal + 5, y + 9);
+  
+  doc.setFontSize(12);
+  doc.setTextColor(16, 185, 129); // GREEN
+  doc.text(fmtUSD(nota.totalCosto || 0), xTotal + wTotal - 5, y + 9, { align: 'right' });
+
+  // ── FIRMAS ──
+  y += 30;
+  if (y > doc.internal.pageSize.getHeight() - 30) {
+    doc.addPage();
+    y = 30;
+    piePagina(doc, 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.');
+  }
+
+  doc.setDrawColor(150, 150, 150);
+  doc.setLineWidth(0.3);
+  doc.line(marginL + 20, y, marginL + 70, y);
+  doc.line(pageWidth - marginR - 70, y, pageWidth - marginR - 20, y);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(107, 114, 128);
+  doc.text('Firma Autorizada / Despacha', marginL + 45, y + 5, { align: 'center' });
+  doc.text('Firma Recibe Conforme', pageWidth - marginR - 45, y + 5, { align: 'center' });
+
+  // FIN GENERACIÓN
+  const dateStr = nota.fecha instanceof Date ? nota.fecha.toISOString().split('T')[0] : (nota.fecha || '').replace(/\s/g, '_');
+  const filename = `Nota_Entrega_${nota.numero || 'SN'}_${dateStr}.pdf`;
+
+  if (action === 'print') {
+    doc.autoPrint();
+    const url = URL.createObjectURL(doc.output('blob'));
+    window.open(url, '_blank');
+  } else {
+    forceDownload(doc.output('blob'), filename);
+  }
+}

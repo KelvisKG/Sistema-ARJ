@@ -100,6 +100,7 @@ export const useArjStore = defineStore('arj', {
     modalFacturaActivo: false,
     facturaReciente: null,
     modalTraspasoActivo: false,
+    modalNotasActivo: false,
     modalRecepcionActivo: false,
     modalEmbarquesActivo: false,
     modalEditProdActivo: false,

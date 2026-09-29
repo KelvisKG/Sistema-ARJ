@@ -20,6 +20,7 @@
       <FacturaModal />
       <PresupuestoPreviewModal />
       <TraspasoModal />
+      <NotasEntregaModal />
       <EditProdModal />
       <DtoDivisaModal />
       <DtoManualModal />
@@ -98,6 +99,7 @@ import ConfigView from './views/ConfigView.vue';
 import EmpresaTransitionModal from './components/modals/EmpresaTransitionModal.vue';
 import FacturaModal from './components/modals/FacturaModal.vue';
 import TraspasoModal from './components/modals/TraspasoModal.vue';
+import NotasEntregaModal from './components/modals/NotasEntregaModal.vue';
 import EditProdModal from './components/modals/EditProdModal.vue';
 import DtoDivisaModal from './components/modals/DtoDivisaModal.vue';
 import DtoManualModal from './components/modals/DtoManualModal.vue';
