@@ -9,6 +9,7 @@ import {
   precioConTier,
   precioBaseItem,
   costoLanded,
+  sinFob,
   totalEnDivisas,
   bcvAVerde,
   verdeABcv,
@@ -142,16 +143,17 @@ export const useArjStore = defineStore('arj', {
     },
 
     subtotalCarrito: (state) => {
-      return state.carrito.items.reduce((acc, it) => acc + (it.cant * it.precio), 0);
+      return state.carrito.items.reduce((acc, it) => acc + (it.cant * (it.precio_base || it.precio)), 0);
     },
 
     descuentoMontoCarrito: (state) => {
-      if (state.carrito.descuento_manual <= 0) return 0;
-      return state.subtotalCarrito * (state.carrito.descuento_manual / 100);
+      const dto = state.carrito.descuento_manual || 0;
+      if (dto <= 0) return 0;
+      return state.subtotalCarrito * (dto / 100);
     },
 
     totalCarritoUSD: (state) => {
-      return Math.max(0, state.subtotalCarrito - state.descuentoMontoCarrito);
+      return Math.max(0, state.carrito.items.reduce((acc, it) => acc + (it.cant * it.precio), 0));
     },
 
     totalCarritoBs: (state) => {
@@ -578,24 +580,25 @@ export const useArjStore = defineStore('arj', {
 
     // Manejo de Carrito
     agregarAlCarrito(prod, cant = 1) {
-      const stockDisponible = this.empresa === 'directa' ? prod.stock_vd : prod.stock_dist;
-      const idx = this.carrito.items.findIndex(it => it.id === prod.id);
+      const stockDisponible = this.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0);
+      const stockOtra = this.empresa === 'directa' ? (prod.stock_dist || 0) : (prod.stock_vd || 0);
+      const otraEmp = this.empresa === 'directa' ? 'Distribuidora' : 'Venta Directa';
+      const idx = this.carrito.items.findIndex(it => it.id === prod.id || it.cod_alt === prod.cod_alt);
 
       if (idx !== -1) {
         const item = this.carrito.items[idx];
-        if (item.cant + cant > stockDisponible) {
-          this.notif(`Stock insuficiente en ${this.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'} (${stockDisponible} disp.)`, 'warning');
-          return;
-        }
         item.cant += cant;
-        this.notif(`Incrementado '${prod.desc}' a ${item.cant} unidades`, 'info');
-      } else {
-        if (cant > stockDisponible) {
-          this.notif(`Stock insuficiente (${stockDisponible} disp.)`, 'warning');
-          return;
+        if (item.cant > stockDisponible) {
+          this.notif(`Aviso: '${prod.desc}' supera stock disponible (${stockDisponible}). Se registrará como préstamo inter-empresarial.`, 'warning');
+        } else {
+          this.notif(`Incrementado '${prod.desc}' a ${item.cant} unidades`, 'info');
         }
+      } else {
         const tierKey = this.carrito.tier || 'Publico';
-        const precio = precioConTier(prod.fob, tierKey, prod);
+        const dto = (this.empresa === 'directa' && this.carrito.descuento_manual > 0) ? this.carrito.descuento_manual : 0;
+        const base = precioConTier(prod.fob, tierKey, prod);
+        const precio = dto > 0 ? Math.round(base * (1 - dto / 100) * 100) / 100 : base;
+
         this.carrito.items.push({
           id: prod.id,
           cod_alt: prod.cod_alt,
@@ -603,16 +606,23 @@ export const useArjStore = defineStore('arj', {
           desc: prod.desc,
           marca: prod.marca,
           fob: prod.fob,
+          stock_vd: prod.stock_vd,
+          stock_dist: prod.stock_dist,
           cant: cant,
           precio: precio,
-          precio_base: precio,
+          precio_base: base,
           precio_fijo: false,
           modo_verde: false,
           precio_verde: bcvAVerde(precio, this),
           factor_landed: prod.factor_landed,
           origen: prod.origen
         });
-        this.notif(`Agregado '${prod.desc}' al carrito`, 'success');
+
+        if (cant > stockDisponible) {
+          this.notif(`Aviso: '${prod.desc}' supera stock local (${stockDisponible} disp., ${otraEmp} tiene ${stockOtra}). Préstamo inter-empresarial.`, 'warning');
+        } else {
+          this.notif(`Agregado '${prod.desc}' al carrito`, 'success');
+        }
       }
     },
 
@@ -626,15 +636,13 @@ export const useArjStore = defineStore('arj', {
     actualizarCantCarrito(index, cant) {
       if (index >= 0 && index < this.carrito.items.length) {
         const item = this.carrito.items[index];
-        const prod = this.productos.find(p => p.id === item.id);
-        const stockDisponible = prod ? (this.empresa === 'directa' ? prod.stock_vd : prod.stock_dist) : 999;
+        const prod = this.productos.find(p => p.id === item.id || p.cod_alt === item.cod_alt);
+        const stockDisponible = prod ? (this.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0)) : 0;
         const nuevaCant = Math.max(1, parseInt(cant) || 1);
 
+        item.cant = nuevaCant;
         if (nuevaCant > stockDisponible) {
-          this.notif(`Stock máximo disponible: ${stockDisponible}`, 'warning');
-          item.cant = stockDisponible;
-        } else {
-          item.cant = nuevaCant;
+          this.notif(`Aviso: cantidad (${nuevaCant}) supera stock local (${stockDisponible}). Se registrará como préstamo inter-empresarial.`, 'warning');
         }
       }
     },
@@ -763,9 +771,54 @@ export const useArjStore = defineStore('arj', {
 
     // Emisión de Factura Formal
     async emitirFactura() {
+      // 1. Validar que el carrito no esté vacío
       if (this.carrito.items.length === 0) {
-        this.notif('El carrito está vacío', 'warning');
+        this.notif('El carrito está vacío. Agrega productos antes de facturar.', 'warning');
         return { ok: false, error: 'Carrito vacío' };
+      }
+
+      // 2. Validar cliente
+      if (!this.carrito.cliente_id && (!this.carrito.cliente_nombre || !this.carrito.cliente_nombre.trim())) {
+        this.notif('Selecciona un cliente antes de emitir la factura', 'error');
+        return { ok: false, error: 'Sin cliente seleccionado' };
+      }
+
+      // 3. Validar tasas cambiarias
+      if (!this.tasa_bcv || this.tasa_bcv <= 0 || !this.tasa_par || this.tasa_par <= 0) {
+        this.notif('Las tasas de cambio (BCV y Paralelo) deben estar configuradas para emitir la factura', 'error');
+        return { ok: false, error: 'Tasas no configuradas' };
+      }
+
+      // 4. Bloqueo estricto v13.17: Producto sin costo FOB no se factura
+      const sinCosto = this.carrito.items.filter(sinFob);
+      if (sinCosto.length > 0) {
+        this.notif(`Emisión bloqueada: ${sinCosto.length} producto(s) no tienen costo FOB cargado`, 'error');
+        return { ok: false, error: 'Productos sin FOB', sinCosto };
+      }
+
+      // 5. Red de seguridad v13.3: Ningún renglón sin descripción
+      const sinDesc = this.carrito.items.filter(it => !it.desc || !String(it.desc).trim());
+      if (sinDesc.length > 0) {
+        this.notif(`Hay ${sinDesc.length} renglón(es) sin descripción. Corrige el producto antes de facturar.`, 'error');
+        return { ok: false, error: 'Productos sin descripción' };
+      }
+
+      // 6. Descuento manual solo permitido a gerente
+      if (this.carrito.descuento_manual > 0 && this.rol !== 'gerente') {
+        this.notif('Solo el gerente puede aplicar descuentos manuales', 'error');
+        return { ok: false, error: 'Descuento no autorizado' };
+      }
+
+      // 7. Validación de facturas de contado
+      if (this.carrito.tipo_pago === 'contado') {
+        if (this.totalCarritoUSD > 0 && this.carrito.pagos.length === 0) {
+          this.notif('Debe registrar al menos una forma de pago para facturas de contado', 'warning');
+          return { ok: false, error: 'Falta registrar pago' };
+        }
+        if (this.faltaPorPagarUSD > 0.05) {
+          this.notif(`Los pagos no cubren el total. Faltan ${fmtUSD(this.faltaPorPagarUSD)}`, 'error');
+          return { ok: false, error: 'Pago incompleto' };
+        }
       }
 
       const prefijo = this.empresa === 'directa' ? 'VD' : 'DIST';
@@ -773,6 +826,11 @@ export const useArjStore = defineStore('arj', {
       const numFactura = `${prefijo}-2026-${correlativo}`;
       const totalUSD = this.totalCarritoUSD;
       const totalBs = this.totalCarritoBs;
+
+      const esContado = this.carrito.tipo_pago === 'contado';
+      const abonoCalculado = esContado ? totalUSD : Math.min(totalUSD, Math.round(this.totalPagadoCarritoUSD * 100) / 100);
+      const saldoPendiente = esContado ? 0 : Math.max(0, Math.round((totalUSD - abonoCalculado) * 100) / 100);
+      const estadoFactura = (esContado || saldoPendiente <= 0.01) ? 'pagada' : (abonoCalculado > 0 ? 'parcial' : 'pendiente');
 
       const nuevaFactura = {
         id: `FAC-${numFactura}`,
@@ -785,9 +843,9 @@ export const useArjStore = defineStore('arj', {
         fecha_raw: new Date().toISOString(),
         vence: new Date(Date.now() + (this.carrito.dias_credito * 86400000)).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
         total: totalUSD,
-        abonado: this.carrito.tipo_pago === 'contado' ? totalUSD : parseFloat(this.carrito.anticipo) || 0,
-        saldo_pendiente: this.carrito.tipo_pago === 'contado' ? 0 : Math.max(0, totalUSD - (parseFloat(this.carrito.anticipo) || 0)),
-        estado: this.carrito.tipo_pago === 'contado' ? 'pagada' : ((parseFloat(this.carrito.anticipo) || 0) > 0 ? 'parcial' : 'pendiente'),
+        abonado: abonoCalculado,
+        saldo_pendiente: saldoPendiente,
+        estado: estadoFactura,
         dias: this.carrito.dias_credito,
         tipo_pago: this.carrito.tipo_pago,
         tasa_par: this.tasa_par,
@@ -799,14 +857,14 @@ export const useArjStore = defineStore('arj', {
         items: JSON.parse(JSON.stringify(this.carrito.items))
       };
 
-      // Descontar inventario local
+      // Descontar inventario local (permite números negativos para préstamos inter-empresariales)
       this.carrito.items.forEach(it => {
-        const prod = this.productos.find(p => p.id === it.id);
+        const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
         if (prod) {
           if (this.empresa === 'directa') {
-            prod.stock_vd = Math.max(0, prod.stock_vd - it.cant);
+            prod.stock_vd = (prod.stock_vd || 0) - it.cant;
           } else {
-            prod.stock_dist = Math.max(0, prod.stock_dist - it.cant);
+            prod.stock_dist = (prod.stock_dist || 0) - it.cant;
           }
           // Kardex
           this.movimientos.unshift({
@@ -822,6 +880,18 @@ export const useArjStore = defineStore('arj', {
           });
         }
       });
+
+      // Actualizar saldo del cliente si es crédito
+      if (!esContado && this.carrito.cliente_id && saldoPendiente > 0) {
+        const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
+        if (cli) {
+          if (this.empresa === 'directa') {
+            cli.saldo_vd = Math.round(((cli.saldo_vd || 0) + saldoPendiente) * 100) / 100;
+          } else {
+            cli.saldo_dist = Math.round(((cli.saldo_dist || 0) + saldoPendiente) * 100) / 100;
+          }
+        }
+      }
 
       this.todasFacturas.unshift(nuevaFactura);
       if (nuevaFactura.estado !== 'pagada') {
@@ -876,12 +946,24 @@ export const useArjStore = defineStore('arj', {
           const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
           if (prod) {
             if (fac.empresa === 'directa') {
-              prod.stock_vd += it.cant;
+              prod.stock_vd = (prod.stock_vd || 0) + it.cant;
             } else {
-              prod.stock_dist += it.cant;
+              prod.stock_dist = (prod.stock_dist || 0) + it.cant;
             }
           }
         });
+      }
+
+      // Revertir saldo del cliente si tenía saldo pendiente
+      if (fac.tipo_pago === 'credito' && fac.cliente_id && fac.saldo_pendiente > 0) {
+        const cli = this.clientes.find(c => c.id === fac.cliente_id);
+        if (cli) {
+          if (fac.empresa === 'directa') {
+            cli.saldo_vd = Math.max(0, Math.round(((cli.saldo_vd || 0) - fac.saldo_pendiente) * 100) / 100);
+          } else {
+            cli.saldo_dist = Math.max(0, Math.round(((cli.saldo_dist || 0) - fac.saldo_pendiente) * 100) / 100);
+          }
+        }
       }
 
       // Remover de facturas por cobrar
@@ -952,6 +1034,19 @@ export const useArjStore = defineStore('arj', {
       }
       fac.abonado = Math.min(fac.total, (fac.abonado || 0) + abono);
       fac.saldo_pendiente = Math.max(0, fac.total - fac.abonado);
+
+      // Descontar del saldo del cliente
+      if (fac.cliente_id) {
+        const cli = this.clientes.find(c => c.id === fac.cliente_id);
+        if (cli) {
+          if (fac.empresa === 'directa') {
+            cli.saldo_vd = Math.max(0, Math.round(((cli.saldo_vd || 0) - abono) * 100) / 100);
+          } else {
+            cli.saldo_dist = Math.max(0, Math.round(((cli.saldo_dist || 0) - abono) * 100) / 100);
+          }
+        }
+      }
+
       if (fac.saldo_pendiente <= 0.01) {
         fac.estado = 'pagada';
         this.facturasCobrar = this.facturasCobrar.filter(f => f.id !== fac.id);

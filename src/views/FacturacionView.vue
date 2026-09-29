@@ -359,66 +359,96 @@
                   No has agregado productos. Usa el buscador de arriba ↑
                 </td>
               </tr>
-              <tr v-for="(it, idx) in store.carrito.items" :key="it.id">
-                <td>
-                  <strong style="color:var(--navy)">{{ it.cod_alt }}</strong>
-                  <div style="font-size:10px;color:var(--dgray)">{{ it.marca }}</div>
-                </td>
-                <td>{{ it.desc }}</td>
-                <td class="num">
-                  <span class="badge badge-info">{{ stockDe(it) }}</span>
-                </td>
-                <td class="num">
-                  <input
-                    type="number"
-                    min="1"
-                    :max="stockDe(it)"
-                    :value="it.cant"
-                    class="val-input"
-                    style="width:55px;padding:4px 2px;text-align:center;font-weight:700"
-                    @change="store.actualizarCantCarrito(idx, $event.target.value)"
-                  >
-                </td>
-                <td class="num">
-                  <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
-                    <span v-if="!it.modo_verde" style="font-weight:700">{{ fmtUSD(it.precio) }}</span>
+              <template v-for="(it, idx) in store.carrito.items" :key="it.id || it.cod_alt">
+                <tr>
+                  <td>
+                    <strong style="color:var(--navy)">{{ it.cod_alt }}</strong>
+                    <div style="font-size:10px;color:var(--dgray)">{{ it.marca }}</div>
+                  </td>
+                  <td>{{ it.desc }}</td>
+                  <td class="num">
+                    <span :class="['badge', stockDe(it) <= 0 ? 'badge-danger' : (it.cant > stockDe(it) ? 'badge-warning' : 'badge-info')]">
+                      {{ stockDe(it) }}
+                    </span>
+                  </td>
+                  <td class="num">
                     <input
-                      v-else
                       type="number"
-                      step="0.5"
-                      :value="it.precio_verde"
+                      min="1"
+                      :value="it.cant"
                       class="val-input"
-                      style="width:75px;padding:3px 6px;font-size:12px;border-color:var(--green);text-align:right;font-weight:700;color:var(--green)"
-                      @change="store.cambiarPrecioVerdeItem(idx, $event.target.value)"
+                      :style="{ width: '55px', padding: '4px 2px', textAlign: 'center', fontWeight: '700', borderColor: it.cant > stockDe(it) ? 'var(--gold)' : '' }"
+                      @change="store.actualizarCantCarrito(idx, $event.target.value)"
                     >
+                  </td>
+                  <td class="num">
+                    <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+                      <span v-if="!it.modo_verde" style="font-weight:700">{{ fmtUSD(it.precio) }}</span>
+                      <input
+                        v-else
+                        type="number"
+                        step="0.5"
+                        :value="it.precio_verde"
+                        class="val-input"
+                        style="width:75px;padding:3px 6px;font-size:12px;border-color:var(--green);text-align:right;font-weight:700;color:var(--green)"
+                        @change="store.cambiarPrecioVerdeItem(idx, $event.target.value)"
+                      >
+                      <button
+                        v-if="store.rol === 'gerente'"
+                        :class="['btn-sm', it.modo_verde ? 'btn-green' : 'btn-secondary']"
+                        style="padding:2px 5px;font-size:10px"
+                        :title="it.modo_verde ? 'Modo Efectivo Verde activo' : 'Cambiar a modo efectivo'"
+                        @click="store.toggleModoVerdeItem(idx)"
+                      >
+                        $
+                      </button>
+                    </div>
+                  </td>
+                  <td v-if="store.rol === 'gerente'" class="num" style="font-size:11.5px;color:var(--dgray)">
+                    {{ margenItem(it) }}%
+                  </td>
+                  <td class="num" style="font-weight:700;color:var(--navy)">
+                    {{ fmtUSD(it.cant * it.precio) }}
+                  </td>
+                  <td style="text-align:center">
                     <button
-                      v-if="store.rol === 'gerente'"
-                      :class="['btn-sm', it.modo_verde ? 'btn-green' : 'btn-secondary']"
-                      style="padding:2px 5px;font-size:10px"
-                      :title="it.modo_verde ? 'Modo Efectivo Verde activo' : 'Cambiar a modo efectivo'"
-                      @click="store.toggleModoVerdeItem(idx)"
+                      class="btn btn-danger btn-sm"
+                      style="padding:3px 7px"
+                      title="Eliminar ítem"
+                      @click="store.removerDelCarrito(idx)"
                     >
-                      $
+                      <i class="ti ti-trash"></i>
                     </button>
-                  </div>
-                </td>
-                <td v-if="store.rol === 'gerente'" class="num" style="font-size:11.5px;color:var(--dgray)">
-                  {{ margenItem(it) }}%
-                </td>
-                <td class="num" style="font-weight:700;color:var(--navy)">
-                  {{ fmtUSD(it.cant * it.precio) }}
-                </td>
-                <td style="text-align:center">
-                  <button
-                    class="btn btn-danger btn-sm"
-                    style="padding:3px 7px"
-                    title="Eliminar ítem"
-                    @click="store.removerDelCarrito(idx)"
-                  >
-                    <i class="ti ti-trash"></i>
-                  </button>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+                <!-- ALERTA PRODUCTO SIN FOB (v13.17) -->
+                <tr v-if="sinFob(it)">
+                  <td colspan="8" style="padding:0">
+                    <div style="margin:0;background:#FDECEA;border-left:3px solid var(--red);padding:6px 12px;font-size:11px;color:#8B1A10;display:flex;gap:6px;align-items:center">
+                      <i class="ti ti-alert-octagon" style="font-size:14px"></i>
+                      <div><strong>{{ it.cod_alt }} no tiene costo cargado (FOB en 0).</strong> No se podrá emitir la factura hasta corregir el FOB en Inventario.</div>
+                    </div>
+                  </td>
+                </tr>
+                <!-- ALERTA STOCK INSUFICIENTE / PRÉSTAMO (v13.1) -->
+                <tr v-if="it.cant > stockDe(it)">
+                  <td colspan="8" style="padding:0">
+                    <div style="margin:0;background:#FFF8E1;border-left:3px solid var(--gold);padding:6px 12px;font-size:11px;color:#854F0B;display:flex;gap:6px;align-items:center">
+                      <i class="ti ti-alert-triangle" style="font-size:14px"></i>
+                      <div><strong>Stock insuficiente para {{ it.desc }}.</strong> Disponible local: {{ stockDe(it) }}. Se registrará como préstamo inter-empresarial.</div>
+                    </div>
+                  </td>
+                </tr>
+                <!-- ALERTA MARGEN BAJO (GERENTE) -->
+                <tr v-if="store.rol === 'gerente' && !sinFob(it) && margenItem(it) < 30">
+                  <td colspan="8" style="padding:0">
+                    <div style="margin:0;background:#FFF3E0;border-left:3px solid #E65100;padding:6px 12px;font-size:11px;color:#BF360C;display:flex;gap:6px;align-items:center">
+                      <i class="ti ti-trending-down" style="font-size:14px"></i>
+                      <div><strong>Margen de {{ margenItem(it) }}% en {{ it.cod_alt }}</strong> — por debajo del mínimo de 30%.</div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -587,7 +617,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBs, precioConTier, costoLanded } from '../services/pricing.js';
+import { fmtUSD, fmtBs, precioConTier, costoLanded, sinFob } from '../services/pricing.js';
 
 const store = useArjStore();
 const tabBusqueda = ref('normal');
@@ -748,14 +778,78 @@ function agregarPago() {
   mostrarFormPago.value = false;
 }
 
-function confirmarEmitir() {
-  if (store.carrito.items.length === 0) return;
-  if (store.carrito.tipo_pago === 'contado' && store.carrito.pagos.length === 0 && store.totalCarritoUSD > 0) {
-    store.notif('Debe agregar al menos una forma de pago para facturas de contado', 'warning');
+async function confirmarEmitir() {
+  // 1. Validar que el carrito no esté vacío
+  if (store.carrito.items.length === 0) {
+    store.notif('El carrito está vacío. Agrega productos antes de facturar.', 'warning');
     return;
   }
+
+  // 2. Validación de cliente
+  if (!store.carrito.cliente_id && (!store.carrito.cliente_nombre || !store.carrito.cliente_nombre.trim())) {
+    store.notif('Selecciona un cliente antes de emitir la factura', 'error');
+    return;
+  }
+
+  // 3. Validación de tasas cambiarias
+  if (!store.tasa_bcv || store.tasa_bcv <= 0 || !store.tasa_par || store.tasa_par <= 0) {
+    store.notif('Las tasas de cambio (BCV y Paralelo) deben estar configuradas para emitir la factura', 'error');
+    return;
+  }
+
+  // 4. Bloqueo estricto v13.17: FOB <= 0
+  const sinCosto = store.carrito.items.filter(sinFob);
+  if (sinCosto.length > 0) {
+    const lista = sinCosto.map(it => '• ' + (it.cod_alt || it.cod) + ' — ' + (it.desc || 'sin descripción')).join('\n');
+    alert('No se puede emitir: ' + sinCosto.length + (sinCosto.length === 1 ? ' producto no tiene' : ' productos no tienen') + ' costo cargado (FOB en 0).\n\n' + lista + '\n\nSin FOB el margen es falso y el precio público sale en cero. Corrige el FOB en Inventario y vuelve a intentar.\n\nSi no lo necesitas en esta factura, quítalo del carrito.');
+    store.notif('Emisión bloqueada: ' + sinCosto.length + ' producto(s) sin FOB', 'error');
+    return;
+  }
+
+  // 5. Red de seguridad v13.3: Ningún renglón sin descripción
+  const sinDesc = store.carrito.items.filter(it => !it.desc || !String(it.desc).trim());
+  if (sinDesc.length > 0) {
+    store.notif('Hay ' + sinDesc.length + ' renglón(es) sin descripción (' + sinDesc.map(i => i.cod_alt || i.cod).join(', ') + '). Corrige el producto en Inventario antes de facturar.', 'error');
+    return;
+  }
+
+  // 6. Descuento manual solo permitido a gerente
+  if (store.carrito.descuento_manual > 0 && store.rol !== 'gerente') {
+    store.notif('Solo el gerente puede aplicar descuentos manuales', 'error');
+    return;
+  }
+
+  // 7. Validación de pagos para ventas de Contado
+  if (store.carrito.tipo_pago === 'contado') {
+    if (store.totalCarritoUSD > 0 && store.carrito.pagos.length === 0) {
+      store.notif('Debe registrar al menos una forma de pago para facturas de contado', 'warning');
+      return;
+    }
+    if (store.faltaPorPagarUSD > 0.05) {
+      store.notif('Los pagos no cubren el total. Faltan ' + fmtUSD(store.faltaPorPagarUSD), 'error');
+      return;
+    }
+  }
+
+  // 8. Alerta de préstamo inter-empresarial / Stock insuficiente
+  const negativos = store.carrito.items.filter(it => {
+    const s = stockDe(it);
+    return it.cant > s;
+  });
+  if (negativos.length > 0) {
+    const detalleNegativos = negativos.map(it => `• ${it.cod_alt} (Solicitado: ${it.cant}, Disponible: ${stockDe(it)})`).join('\n');
+    const continuar = confirm(`⚠ AVISO DE STOCK (PRÉSTAMO INTER-EMPRESARIAL):\n${negativos.length} producto(s) superan el stock disponible en ${store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'}:\n\n${detalleNegativos}\n\n¿Desea continuar y emitir la factura?`);
+    if (!continuar) return;
+  }
+
+  // 9. Recordatorio de factura fiscal si fue solicitada
+  if (store.carrito.pidio_fiscal) {
+    alert('RECORDATORIO:\nEl cliente pidió factura fiscal. Recuerde registrarla también en el sistema fiscal homologado / impresora fiscal.');
+  }
+
+  // 10. Confirmación final
   if (confirm('¿Está seguro de que desea emitir e imprimir esta factura?')) {
-    store.emitirFactura();
+    await store.emitirFactura();
   }
 }
 </script>
