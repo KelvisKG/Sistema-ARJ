@@ -547,9 +547,31 @@
 
           <div class="saldo-row" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
             <span>Falta por pagar:</span>
-            <span style="font-weight:800;font-size:15px" :style="{ color: store.faltaPorPagarUSD > 0 ? 'var(--red)' : 'var(--green)' }">
+            <span style="font-weight:800;font-size:15px" :style="{ color: store.faltaPorPagarUSD > 0.05 ? 'var(--red)' : 'var(--green)' }">
               {{ fmtUSD(store.faltaPorPagarUSD) }}
             </span>
+          </div>
+
+          <!-- AVISO EN VIVO: VALIDACIÓN DE CONTADO -->
+          <div
+            v-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05 && store.totalCarritoUSD > 0"
+            style="margin-top:10px;background:#FDECEA;border:1px solid #F5C2C7;border-left:4px solid var(--red);color:#842029;padding:9px 12px;border-radius:6px;font-size:12px;line-height:1.45"
+          >
+            <div style="display:flex;align-items:center;gap:6px;font-weight:700;margin-bottom:2px">
+              <i class="ti ti-alert-circle" style="font-size:16px;color:var(--red)"></i>
+              <span>Validación de Contado:</span>
+            </div>
+            <div>
+              Faltan <strong style="color:var(--red)">{{ fmtUSD(store.faltaPorPagarUSD) }}</strong>. Debe registrar el pago completo para poder emitir la factura.
+            </div>
+          </div>
+
+          <div
+            v-else-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD <= 0.05 && store.totalCarritoUSD > 0 && store.carrito.pagos.length > 0"
+            style="margin-top:10px;background:#E8F5E9;border:1px solid #C8E6C9;border-left:4px solid var(--green);color:#1B5E20;padding:8px 12px;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:8px"
+          >
+            <i class="ti ti-circle-check" style="font-size:16px;color:var(--green)"></i>
+            <span><strong>Pago completo:</strong> Factura de contado lista para emitir.</span>
           </div>
         </div>
 
@@ -608,6 +630,12 @@
           >
             <i class="ti ti-printer"></i> Emitir e Imprimir
           </button>
+        </div>
+        <div
+          v-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05 && store.totalCarritoUSD > 0"
+          style="margin-top:6px;font-size:11.5px;color:var(--red);text-align:right;font-weight:600"
+        >
+          <i class="ti ti-lock"></i> Bloqueado: Falta pagar {{ fmtUSD(store.faltaPorPagarUSD) }}
         </div>
       </div>
     </div>
@@ -785,19 +813,29 @@ async function confirmarEmitir() {
     return;
   }
 
-  // 2. Validación de cliente
+  // 2. Validación estricta de pagos para ventas de Contado (Prioritaria)
+  if (store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05) {
+    const total = store.totalCarritoUSD;
+    const pagado = store.totalPagadoCarritoUSD;
+    const falta = store.faltaPorPagarUSD;
+    alert(`BLOQUEO DE EMISIÓN — VENTA DE CONTADO:\n\nLa factura es a CONTADO pero los pagos no cubren el total de la venta.\n\n• Total de la venta: ${fmtUSD(total)}\n• Total pagado: ${fmtUSD(pagado)}\n• FALTA POR PAGAR: ${fmtUSD(falta)}\n\nEn facturas de contado es obligatorio saldar el monto completo antes de emitir.`);
+    store.notif(`Emisión bloqueada: Faltan ${fmtUSD(falta)} por pagar`, 'error');
+    return;
+  }
+
+  // 3. Validación de cliente
   if (!store.carrito.cliente_id && (!store.carrito.cliente_nombre || !store.carrito.cliente_nombre.trim())) {
     store.notif('Selecciona un cliente antes de emitir la factura', 'error');
     return;
   }
 
-  // 3. Validación de tasas cambiarias
+  // 4. Validación de tasas cambiarias
   if (!store.tasa_bcv || store.tasa_bcv <= 0 || !store.tasa_par || store.tasa_par <= 0) {
     store.notif('Las tasas de cambio (BCV y Paralelo) deben estar configuradas para emitir la factura', 'error');
     return;
   }
 
-  // 4. Bloqueo estricto v13.17: FOB <= 0
+  // 5. Bloqueo estricto v13.17: FOB <= 0
   const sinCosto = store.carrito.items.filter(sinFob);
   if (sinCosto.length > 0) {
     const lista = sinCosto.map(it => '• ' + (it.cod_alt || it.cod) + ' — ' + (it.desc || 'sin descripción')).join('\n');
@@ -806,29 +844,17 @@ async function confirmarEmitir() {
     return;
   }
 
-  // 5. Red de seguridad v13.3: Ningún renglón sin descripción
+  // 6. Red de seguridad v13.3: Ningún renglón sin descripción
   const sinDesc = store.carrito.items.filter(it => !it.desc || !String(it.desc).trim());
   if (sinDesc.length > 0) {
     store.notif('Hay ' + sinDesc.length + ' renglón(es) sin descripción (' + sinDesc.map(i => i.cod_alt || i.cod).join(', ') + '). Corrige el producto en Inventario antes de facturar.', 'error');
     return;
   }
 
-  // 6. Descuento manual solo permitido a gerente
+  // 7. Descuento manual solo permitido a gerente
   if (store.carrito.descuento_manual > 0 && store.rol !== 'gerente') {
     store.notif('Solo el gerente puede aplicar descuentos manuales', 'error');
     return;
-  }
-
-  // 7. Validación de pagos para ventas de Contado
-  if (store.carrito.tipo_pago === 'contado') {
-    if (store.totalCarritoUSD > 0 && store.carrito.pagos.length === 0) {
-      store.notif('Debe registrar al menos una forma de pago para facturas de contado', 'warning');
-      return;
-    }
-    if (store.faltaPorPagarUSD > 0.05) {
-      store.notif('Los pagos no cubren el total. Faltan ' + fmtUSD(store.faltaPorPagarUSD), 'error');
-      return;
-    }
   }
 
   // 8. Alerta de préstamo inter-empresarial / Stock insuficiente

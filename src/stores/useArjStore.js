@@ -742,48 +742,42 @@ export const useArjStore = defineStore('arj', {
         return { ok: false, error: 'Carrito vacío' };
       }
 
-      // 2. Validar cliente
+      // 2. Validación de facturas de contado (Prioritaria)
+      if (this.carrito.tipo_pago === 'contado' && this.faltaPorPagarUSD > 0.05) {
+        this.notif(`Emisión bloqueada: Los pagos no cubren el total. Faltan ${fmtUSD(this.faltaPorPagarUSD)}`, 'error');
+        return { ok: false, error: 'Pago incompleto', faltaPorPagar: this.faltaPorPagarUSD };
+      }
+
+      // 3. Validar cliente
       if (!this.carrito.cliente_id && (!this.carrito.cliente_nombre || !this.carrito.cliente_nombre.trim())) {
         this.notif('Selecciona un cliente antes de emitir la factura', 'error');
         return { ok: false, error: 'Sin cliente seleccionado' };
       }
 
-      // 3. Validar tasas cambiarias
+      // 4. Validar tasas cambiarias
       if (!this.tasa_bcv || this.tasa_bcv <= 0 || !this.tasa_par || this.tasa_par <= 0) {
         this.notif('Las tasas de cambio (BCV y Paralelo) deben estar configuradas para emitir la factura', 'error');
         return { ok: false, error: 'Tasas no configuradas' };
       }
 
-      // 4. Bloqueo estricto v13.17: Producto sin costo FOB no se factura
+      // 5. Bloqueo estricto v13.17: Producto sin costo FOB no se factura
       const sinCosto = this.carrito.items.filter(sinFob);
       if (sinCosto.length > 0) {
         this.notif(`Emisión bloqueada: ${sinCosto.length} producto(s) no tienen costo FOB cargado`, 'error');
         return { ok: false, error: 'Productos sin FOB', sinCosto };
       }
 
-      // 5. Red de seguridad v13.3: Ningún renglón sin descripción
+      // 6. Red de seguridad v13.3: Ningún renglón sin descripción
       const sinDesc = this.carrito.items.filter(it => !it.desc || !String(it.desc).trim());
       if (sinDesc.length > 0) {
         this.notif(`Hay ${sinDesc.length} renglón(es) sin descripción. Corrige el producto antes de facturar.`, 'error');
         return { ok: false, error: 'Productos sin descripción' };
       }
 
-      // 6. Descuento manual solo permitido a gerente
+      // 7. Descuento manual solo permitido a gerente
       if (this.carrito.descuento_manual > 0 && this.rol !== 'gerente') {
         this.notif('Solo el gerente puede aplicar descuentos manuales', 'error');
         return { ok: false, error: 'Descuento no autorizado' };
-      }
-
-      // 7. Validación de facturas de contado
-      if (this.carrito.tipo_pago === 'contado') {
-        if (this.totalCarritoUSD > 0 && this.carrito.pagos.length === 0) {
-          this.notif('Debe registrar al menos una forma de pago para facturas de contado', 'warning');
-          return { ok: false, error: 'Falta registrar pago' };
-        }
-        if (this.faltaPorPagarUSD > 0.05) {
-          this.notif(`Los pagos no cubren el total. Faltan ${fmtUSD(this.faltaPorPagarUSD)}`, 'error');
-          return { ok: false, error: 'Pago incompleto' };
-        }
       }
 
       const prefijo = this.empresa === 'directa' ? 'VD' : 'DIST';
