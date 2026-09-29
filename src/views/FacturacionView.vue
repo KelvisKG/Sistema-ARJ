@@ -31,7 +31,6 @@
           <div class="card-tit"><i class="ti ti-user"></i> Datos del cliente</div>
           <div class="field-row">
             <label>Cliente:</label>
-            <div style="display:flex;gap:8px;flex:1">
             <div style="display:flex;gap:8px;flex:1;position:relative">
               <input
                 type="text"
