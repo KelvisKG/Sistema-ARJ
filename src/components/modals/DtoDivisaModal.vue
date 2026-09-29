@@ -4,9 +4,9 @@
       <div class="modal-icon" style="background:#E8F5E9;color:var(--green)">
         <i class="ti ti-currency-dollar"></i>
       </div>
-      <h2>Descuento por Pago en Efectivo Verde</h2>
+      <h2>Descuento por Pago en Divisas</h2>
       <p class="modal-sub">
-        Los precios de ARJ están fijados en <strong>$ BCV</strong>. Un billete verde vale más que un dólar oficial, por lo que saldar la factura requiere menos efectivo físico.
+        Los precios de ARJ están fijados en <strong>$ BCV</strong>. Una divisa física vale más que un dólar oficial, por lo que saldar la factura requiere menos efectivo físico.
       </p>
 
       <div style="background:var(--bg);border:1px solid var(--border);padding:12px 14px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text)">
@@ -48,7 +48,7 @@
       <!-- SIMULACIÓN EN VIVO -->
       <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.5;margin-bottom:16px;color:var(--text)">
         <div>
-          Factura de <strong style="color:var(--primary)">{{ fmtUSD(store.totalCarritoUSD) }}</strong> BCV &rarr; cobras <strong style="color:var(--green)">{{ fmtUSD(montoACobrarVerde) }}</strong> en billetes verdes.
+          Factura de <strong style="color:var(--primary)">{{ fmtUSD(store.totalCarritoUSD) }}</strong> BCV &rarr; cobras <strong style="color:var(--green)">{{ fmtUSD(montoACobrarVerde) }}</strong> en divisas en efectivo.
         </div>
         <div v-if="puntosRegalados > 0.001" style="color:var(--red);margin-top:6px">
           <i class="ti ti-alert-triangle"></i> Regalas <strong>{{ puntosRegalados.toFixed(1) }} puntos</strong> por encima de la brecha. Se registra como descuento de margen.

@@ -5,7 +5,6 @@
 
     <!-- Sistema Principal -->
     <div v-else :class="['app-wrapper', `empresa-${store.empresa}`]" style="transition: background-color 0.5s ease, color 0.5s ease;">
-      <InactivityMonitor />
       <!-- Header y Barra de Navegación -->
       <HeaderNav />
 
@@ -80,7 +79,6 @@ import { supabase } from './services/supabase.js';
 
 // Vistas (13 Vistas)
 import LoginScreen from './components/common/LoginScreen.vue';
-import InactivityMonitor from './components/common/InactivityMonitor.vue';
 import HeaderNav from './components/common/HeaderNav.vue';
 import FacturacionView from './views/FacturacionView.vue';
 import PresupuestosView from './views/PresupuestosView.vue';

@@ -32,18 +32,41 @@
           <div class="field-row">
             <label>Cliente:</label>
             <div style="display:flex;gap:8px;flex:1">
-              <select
-                id="cliente-select"
+            <div style="display:flex;gap:8px;flex:1;position:relative">
+              <input
+                type="text"
+                v-model="busquedaCliente"
                 class="val-input"
-                :value="store.carrito.cliente_id || ''"
-                @change="onClienteChange"
                 style="flex:1"
+                placeholder="Buscar por nombre o RIF..."
+                @input="mostrarClientes = true"
+                @focus="mostrarClientes = true"
               >
-                <option value="">-- Selecciona un cliente (o mostrador) --</option>
-                <option v-for="c in store.clientes" :key="c.id" :value="c.id">
-                  {{ c.nombre }} ({{ c.rif || 'Sin RIF' }})
-                </option>
-              </select>
+              <div
+                v-if="mostrarClientes && clientesFiltrados.length > 0"
+                class="search-results show"
+                style="display:block;max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:40px;background:var(--card-bg);box-shadow:var(--shadow-lg);z-index:100;position:absolute;width:calc(100% - 46px)"
+              >
+                <div
+                  class="search-result-item"
+                  style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer"
+                  @click="seleccionarCliente(null)"
+                >
+                  <strong style="color:var(--text)">-- Cliente General / Mostrador --</strong>
+                </div>
+                <div
+                  v-for="c in clientesFiltrados"
+                  :key="c.id"
+                  class="search-result-item"
+                  style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between"
+                  @click="seleccionarCliente(c)"
+                >
+                  <div>
+                    <strong style="color:var(--navy)">{{ c.nombre }}</strong>
+                    <div style="font-size:11px;color:var(--dgray);margin-top:2px">RIF: {{ c.rif || 'Sin RIF' }}</div>
+                  </div>
+                </div>
+              </div>
               <button
                 class="btn btn-primary btn-sm"
                 title="Nuevo cliente rápido"
@@ -107,10 +130,16 @@
             </div>
           </div>
 
-          <div v-if="clienteSeleccionado" style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dgray);margin-top:5px">
-            <i class="ti ti-phone"></i> {{ clienteSeleccionado.tel || 'Sin teléfono' }}
-            · <i class="ti ti-map-pin"></i> {{ clienteSeleccionado.direccion || 'Sin dirección' }}
-            · Saldo pendiente: <strong style="color:var(--red)">{{ fmtUSD(store.empresa === 'directa' ? clienteSeleccionado.saldo_vd : clienteSeleccionado.saldo_dist) }}</strong>
+          <div v-if="clienteSeleccionado" style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dgray);margin-top:5px;background:var(--lblue);padding:8px 12px;border-radius:6px">
+            <div style="flex:1">
+              <strong>Seleccionado:</strong> {{ clienteSeleccionado.nombre }}
+              · <i class="ti ti-phone"></i> {{ clienteSeleccionado.tel || 'Sin teléfono' }}
+              · <i class="ti ti-map-pin"></i> {{ clienteSeleccionado.direccion || 'Sin dirección' }}
+            </div>
+            <div>
+              Saldo pendiente: <strong style="color:var(--red)">{{ fmtUSD(store.empresa === 'directa' ? clienteSeleccionado.saldo_vd : clienteSeleccionado.saldo_dist) }}</strong>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px" @click="seleccionarCliente(null)"><i class="ti ti-x"></i></button>
           </div>
         </div>
 
@@ -319,7 +348,7 @@
                 <th style="width:30%">Descripción</th>
                 <th class="num" style="width:9%">Stock</th>
                 <th class="num" style="width:11%">Cantidad</th>
-                <th class="num" style="width:14%">Precio USD</th>
+                <th class="num" style="width:14%">Dólar BCV</th>
                 <th v-if="store.rol === 'gerente'" class="num" style="width:10%">Margen %</th>
                 <th class="num" style="width:12%">Total USD</th>
                 <th style="width:4%"></th>
@@ -410,7 +439,7 @@
 
           <div class="total-row big">
             <span>
-              Si paga en USD
+              Cobro en Divisas
               <span
                 v-if="store.rol === 'gerente'"
                 class="badge badge-info"
@@ -425,12 +454,12 @@
           </div>
 
           <div class="total-row big" style="background:#FDF6E3;margin:4px -14px;padding:8px 14px;border-radius:4px">
-            <span style="color:#5D4037">Efectivo Verde</span>
+            <span style="color:#5D4037">Efectivo Divisas</span>
             <span style="color:#5D4037;font-weight:800">{{ fmtUSD(store.totalCarritoEfectivoVerde) }}</span>
           </div>
 
           <div class="total-row small" style="border:none;padding-bottom:0">
-            <span>Cobrar en Bs (BCV {{ store.tasa_bcv }})</span>
+            <span>Cobrar en Dólar BCV ({{ store.tasa_bcv }})</span>
             <span id="t-bs" style="font-weight:700;color:#FFF">{{ fmtBs(store.totalCarritoUSD, store.tasa_bcv) }}</span>
           </div>
           <div class="total-row small" style="border:none;padding-bottom:0;color:var(--lgold)">
@@ -459,18 +488,21 @@
 
           <div v-if="mostrarFormPago" style="margin-top:10px;background:var(--card-bg);padding:12px;border-radius:8px;border:1px solid var(--border)">
             <select v-model="nuevoMetodo" class="val-input" style="width:100%;margin-bottom:8px">
-              <option value="Dólares Efectivo ($ Verde)">Dólares Efectivo ($ Verde)</option>
+              <option value="Divisas Efectivo">Divisas Efectivo</option>
               <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
               <option value="Transferencia Bancaria">Transferencia Bancaria</option>
               <option value="Zelle USD">Zelle USD</option>
             </select>
             <div style="display:flex;gap:8px;margin-bottom:8px">
               <div style="flex:1">
-                <input v-model.number="nuevoMontoUSD" type="number" placeholder="Monto USD" class="val-input" style="width:100%"
+                <input v-model.number="nuevoMontoIngresado" type="number" :placeholder="esPagoBs ? 'Monto Bs' : 'Monto USD'" class="val-input" style="width:100%"
                   :class="{ 'is-invalid': errorsPago.monto }" @input="errorsPago.monto = null">
                 <span v-if="errorsPago.monto" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsPago.monto }}</span>
               </div>
               <input v-model="nuevaRef" type="text" placeholder="Ref/Comprobante" class="val-input" style="flex:1">
+            </div>
+            <div v-if="esPagoBs && nuevoMontoIngresado > 0" style="margin-bottom:8px;font-size:11.5px;color:var(--dgray);text-align:right">
+              Equivale a: <strong style="color:var(--navy)">{{ fmtUSD(nuevoMontoIngresado / store.tasa_bcv) }}</strong>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:8px">
               <button class="btn btn-secondary btn-sm" @click="mostrarFormPago = false">Cancelar</button>
@@ -543,7 +575,7 @@
             class="btn btn-green"
             id="btn-emitir"
             :disabled="store.carrito.items.length === 0"
-            @click="store.emitirFactura"
+            @click="confirmarEmitir"
           >
             <i class="ti ti-printer"></i> Emitir e Imprimir
           </button>
@@ -568,10 +600,14 @@ const textoImportar = ref('');
 const mostrarResultados = ref(false);
 
 const mostrarFormPago = ref(false);
-const nuevoMetodo = ref('Dólares Efectivo ($ Verde)');
-const nuevoMontoUSD = ref(0);
+const nuevoMetodo = ref('Divisas Efectivo');
+const nuevoMontoIngresado = ref(0);
 const nuevaRef = ref('');
 const errorsPago = ref({});
+
+const esPagoBs = computed(() => {
+  return nuevoMetodo.value === 'Pago Móvil (Bs)' || nuevoMetodo.value === 'Transferencia Bancaria';
+});
 
 const fechaHoy = computed(() => {
   return new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -585,6 +621,17 @@ const clienteSeleccionado = computed(() => {
 const brechaCambiaria = computed(() => {
   if (store.tasa_bcv <= 0) return '0.00';
   return (((store.tasa_par - store.tasa_bcv) / store.tasa_bcv) * 100).toFixed(2);
+});
+
+const busquedaCliente = ref('');
+const mostrarClientes = ref(false);
+
+const clientesFiltrados = computed(() => {
+  const query = busquedaCliente.value.trim().toLowerCase();
+  if (!query) return store.clientes.slice(0, 50);
+  return store.clientes.filter(c => {
+    return (c.nombre || '').toLowerCase().includes(query) || (c.rif || '').toLowerCase().includes(query);
+  }).slice(0, 50);
 });
 
 const productosFiltrados = computed(() => {
@@ -623,10 +670,14 @@ function margenItem(it) {
   return Math.round(((it.precio - costo) / it.precio) * 100);
 }
 
-function onClienteChange(e) {
-  const id = e.target.value ? parseInt(e.target.value) || e.target.value : null;
-  const cli = store.clientes.find(c => c.id == id);
-  store.seleccionarCliente(cli || null);
+function seleccionarCliente(cli) {
+  store.seleccionarCliente(cli);
+  if (cli) {
+    busquedaCliente.value = cli.nombre;
+  } else {
+    busquedaCliente.value = '';
+  }
+  mostrarClientes.value = false;
 }
 
 function seleccionarProducto(p) {
@@ -673,7 +724,7 @@ function procesarImportacion() {
 }
 
 function abrirFormPago() {
-  nuevoMontoUSD.value = store.faltaPorPagarUSD > 0 ? store.faltaPorPagarUSD : store.totalCarritoUSD;
+  nuevoMontoIngresado.value = store.faltaPorPagarUSD > 0 ? store.faltaPorPagarUSD : store.totalCarritoUSD;
   errorsPago.value = {};
   mostrarFormPago.value = true;
 }
@@ -681,13 +732,31 @@ function abrirFormPago() {
 function agregarPago() {
   errorsPago.value = {};
 
-  if (!nuevoMontoUSD.value || nuevoMontoUSD.value <= 0) {
+  if (!nuevoMontoIngresado.value || nuevoMontoIngresado.value <= 0) {
     errorsPago.value.monto = 'Ingresa un monto mayor a 0';
     return;
   }
 
-  store.agregarPagoCarrito(nuevoMetodo.value, nuevoMontoUSD.value, nuevaRef.value);
+  let montoFinalUSD = nuevoMontoIngresado.value;
+  let montoOpcionalBs = null;
+  if (esPagoBs.value) {
+    montoFinalUSD = nuevoMontoIngresado.value / store.tasa_bcv;
+    montoOpcionalBs = nuevoMontoIngresado.value;
+  }
+
+  store.agregarPagoCarrito(nuevoMetodo.value, montoFinalUSD, nuevaRef.value, montoOpcionalBs);
   nuevaRef.value = '';
   mostrarFormPago.value = false;
+}
+
+function confirmarEmitir() {
+  if (store.carrito.items.length === 0) return;
+  if (store.carrito.tipo_pago === 'contado' && store.carrito.pagos.length === 0 && store.totalCarritoUSD > 0) {
+    store.notif('Debe agregar al menos una forma de pago para facturas de contado', 'warning');
+    return;
+  }
+  if (confirm('¿Está seguro de que desea emitir e imprimir esta factura?')) {
+    store.emitirFactura();
+  }
 }
 </script>

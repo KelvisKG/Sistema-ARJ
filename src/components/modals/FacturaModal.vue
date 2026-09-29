@@ -163,7 +163,7 @@
 
           <!-- BOTONES DE ACCION -->
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn btn-secondary" style="width:100%;justify-content:center;background:#FFF;border:1px solid var(--navy);color:var(--navy)" @click="descargarPDF">
+            <button class="btn btn-secondary" style="width:100%;justify-content:center;background:#FFF;border:1px solid var(--navy);color:var(--navy)" @click="imprimirPDF">
               <i class="ti ti-printer"></i> Reimprimir
             </button>
             <button class="btn btn-secondary" style="width:100%;justify-content:center;background:#FFF;border:1px solid var(--red);color:var(--red)" @click="anularFactura" v-if="store.facturaReciente.estado !== 'anulada'">
@@ -251,10 +251,10 @@ function cerrarModal() {
   store.facturaReciente = null;
 }
 
-function descargarPDF() {
+function imprimirPDF() {
   const clienteData = obtenerClienteData(store.facturaReciente);
-  generarFacturaPDF(store.facturaReciente, store.empresa, store.tasa_bcv, clienteData);
-  store.notif('Factura PDF generada y descargada', 'success');
+  generarFacturaPDF(store.facturaReciente, store.empresa, store.tasa_bcv, clienteData, 'print');
+  store.notif('Factura PDF abierta para imprimir', 'success');
 }
 
 function anularFactura() {
