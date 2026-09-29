@@ -26,8 +26,6 @@ export const useArjStore = defineStore('arj', {
     usuarioNombre: 'JJ (Gerente General)',
     usuarioEmail: 'josehjimenezcas@gmail.com',
 
-    sesionExpirada: false, // Flag to show inactivity banner in login screen
-
     // Empresa Activa: 'directa' (Venta Directa) | 'distribuidora' (Distribuidora)
     empresa: 'directa',
     empresaDestino: '',
@@ -194,29 +192,12 @@ export const useArjStore = defineStore('arj', {
 
   actions: {
     // Restauración síncrona de sesión para evitar parpadeos
-    // Valida que la sesión no haya expirado por inactividad (5 minutos)
     restaurarSesion() {
       const sesionGuardada = localStorage.getItem('arj_sesion');
       if (sesionGuardada) {
         try {
           const dataSesion = JSON.parse(sesionGuardada);
           if (dataSesion && dataSesion.autenticado) {
-            // Verificar si la sesión expiró por tiempo de inactividad
-            const SESION_MAX_INACTIVIDAD = 5 * 60 * 1000; // 5 minutos
-            const ultimaActividad = dataSesion.timestamp || 0;
-            const tiempoTranscurrido = Date.now() - ultimaActividad;
-
-            if (tiempoTranscurrido > SESION_MAX_INACTIVIDAD) {
-              // Sesión expirada — limpiar y mostrar aviso
-              this.sesionExpirada = true;
-              const theme = localStorage.getItem('arj_tema');
-              const tasasLocales = localStorage.getItem('ARJ_TASAS');
-              localStorage.clear();
-              if (theme) localStorage.setItem('arj_tema', theme);
-              if (tasasLocales) localStorage.setItem('ARJ_TASAS', tasasLocales);
-              return;
-            }
-
             this.autenticado = true;
             this.rol = dataSesion.rol;
             this.usuarioNombre = dataSesion.usuarioNombre;
@@ -423,23 +404,21 @@ export const useArjStore = defineStore('arj', {
       this.rol = rol;
       this.usuarioNombre = nombre || (rol === 'gerente' ? 'JJ (Gerente General)' : 'HUMBERTO ARJ (Ventas)');
       this.autenticado = true;
-      this.sesionExpirada = false;
 
-      // Persistir sesión con timestamp de última actividad
+      // Persistir sesión
       localStorage.setItem('arj_sesion', JSON.stringify({
         autenticado: true,
         rol: this.rol,
-        usuarioNombre: this.usuarioNombre,
-        timestamp: Date.now()
+        usuarioNombre: this.usuarioNombre
       }));
 
       this.logBitacora('sesion', `Usuario ${this.usuarioNombre} ingresó como ${rol.toUpperCase()}`);
       this.notif(`Bienvenido ${this.usuarioNombre}`, 'success');
     },
 
-    logout(porInactividad = false) {
+    logout() {
       if (this.autenticado) {
-        this.logBitacora('sesion', `Usuario ${this.usuarioNombre} cerró sesión${porInactividad ? ' por inactividad' : ''}`);
+        this.logBitacora('sesion', `Usuario ${this.usuarioNombre} cerró sesión`);
       }
 
       // 1. Limpiar sesión en Supabase para evitar autologin fantasma
@@ -456,7 +435,6 @@ export const useArjStore = defineStore('arj', {
 
       // 3. Reset completo del estado en memoria (sin recargar la página)
       this.autenticado = false;
-      this.sesionExpirada = porInactividad;
       this.rol = 'gerente';
       this.usuarioNombre = '';
       this.vistaActiva = 'facturacion';
@@ -495,19 +473,6 @@ export const useArjStore = defineStore('arj', {
       this.modalPresupuestoActivo = false;
       this.presupuestoSeleccionado = null;
       this.modoCajaActivo = false;
-    },
-
-    // Actualizar timestamp de última actividad en la sesión guardada
-    // Llamado por InactivityMonitor con throttle para no saturar localStorage
-    actualizarTimestampSesion() {
-      const sesionGuardada = localStorage.getItem('arj_sesion');
-      if (sesionGuardada) {
-        try {
-          const dataSesion = JSON.parse(sesionGuardada);
-          dataSesion.timestamp = Date.now();
-          localStorage.setItem('arj_sesion', JSON.stringify(dataSesion));
-        } catch (e) { }
-      }
     },
 
     async registrarUsuario(email, password, nombre, empresa) {
