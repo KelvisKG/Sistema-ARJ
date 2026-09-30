@@ -456,49 +456,97 @@ export async function anularFacturaEnSupabase(facturaId, motivo, usuario, empres
     return { ok: false, error: 'Sin conexión a internet. La anulación no fue persistida.' };
   }
   try {
-    // 1. Marcar factura como anulada
-    const { error: errFac } = await supabase
+    const motivoCompleto = usuario ? `${motivo} (Por: ${usuario})` : motivo;
+    const payloadBase = {
+      estado:           'anulada',
+      motivo_anulacion: motivoCompleto,
+      fecha_anulacion:  new Date().toISOString()
+    };
+
+    // Filtro flexible: si facturaId es numérico o UUID busca por id, sino por numero
+    const esUUIDoNumero = typeof facturaId === 'number' || (typeof facturaId === 'string' && !facturaId.startsWith('FAC-') && !facturaId.startsWith('VD-') && !facturaId.startsWith('DIST-'));
+    const columnaFiltro = esUUIDoNumero ? 'id' : 'numero';
+
+    // 1. Marcar factura como anulada (probando primero con anulado_por si la columna existe)
+    let { error: errFac } = await supabase
       .from('facturas')
       .update({
-        estado:           'anulada',
-        motivo_anulacion: motivo,
-        anulado_por:      usuario,
-        fecha_anulacion:  new Date().toISOString()
+        ...payloadBase,
+        anulado_por: usuario
       })
-      .eq('id', facturaId);
+      .eq(columnaFiltro, facturaId);
+
+    // Si la BD no tiene la columna 'anulado_por', reintentar con payloadBase estándar
+    if (errFac && (errFac.message?.includes('anulado_por') || errFac.code === 'PGRST204')) {
+      const reintento = await supabase
+        .from('facturas')
+        .update(payloadBase)
+        .eq(columnaFiltro, facturaId);
+      errFac = reintento.error;
+    }
 
     if (errFac) {
       console.error('[ARJ] Error anulando factura en BD:', errFac);
       return { ok: false, error: `Error al anular la factura: ${errFac.message}` };
     }
 
-    // 2. Leer los items de factura_items para devolver el stock
+    // 2. Obtener el ID real de la factura para buscar los factura_items
+    let idReal = facturaId;
+    if (!esUUIDoNumero) {
+      const { data: facData } = await supabase
+        .from('facturas')
+        .select('id')
+        .eq('numero', facturaId)
+        .maybeSingle();
+      if (facData) idReal = facData.id;
+    }
+
+    // 3. Leer los items de factura_items para devolver el stock
     const { data: items, error: errItems } = await supabase
       .from('factura_items')
-      .select('producto_id, cantidad')
-      .eq('factura_id', facturaId);
+      .select('producto_id, cod_alt, cantidad')
+      .eq('factura_id', idReal);
 
     if (!errItems && items && items.length > 0) {
       const stockField = empresa === 'directa' ? 'stock_vd' : 'stock_dist';
 
       for (const it of items) {
-        if (!it.producto_id) continue;
         try {
-          const { data: prod, error: errProd } = await supabase
-            .from('productos')
-            .select(stockField)
-            .eq('id', it.producto_id)
-            .single();
+          let prodId = it.producto_id;
+          let stockActual = null;
 
-          if (!errProd && prod) {
-            const stockRestituido = (prod[stockField] || 0) + (it.cantidad || 0);
+          if (prodId) {
+            const { data: prod } = await supabase
+              .from('productos')
+              .select(`id, ${stockField}`)
+              .eq('id', prodId)
+              .maybeSingle();
+            if (prod) {
+              stockActual = prod[stockField] || 0;
+            }
+          }
+          // Fallback por cod_alt si no se encontró por ID
+          if (stockActual === null && it.cod_alt) {
+            const { data: prod } = await supabase
+              .from('productos')
+              .select(`id, ${stockField}`)
+              .eq('cod_alt', it.cod_alt)
+              .maybeSingle();
+            if (prod) {
+              prodId = prod.id;
+              stockActual = prod[stockField] || 0;
+            }
+          }
+
+          if (prodId && stockActual !== null) {
+            const stockRestituido = stockActual + (it.cantidad || 0);
             await supabase
               .from('productos')
               .update({ [stockField]: stockRestituido })
-              .eq('id', it.producto_id);
+              .eq('id', prodId);
           }
         } catch (eStock) {
-          console.warn(`[ARJ] Error restituyendo stock de producto ${it.producto_id} al anular:`, eStock);
+          console.warn(`[ARJ] Error restituyendo stock de producto ${it.cod_alt || it.producto_id} al anular:`, eStock);
         }
       }
     }
