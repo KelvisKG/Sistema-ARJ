@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="arjGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="108" fill="url(#arjGrad)"/>
+  
+  <!-- Outer glowing ring / gear border -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#accentGrad)" stroke-width="6" stroke-dasharray="16 12"/>
+
+  <!-- Stylized Tractor / Gear Silhouette -->
+  <!-- Gear teeth -->
+  <g fill="rgba(255,255,255,0.15)">
+    <rect x="240" y="56" width="32" height="24" rx="6"/>
+    <rect x="240" y="432" width="32" height="24" rx="6"/>
+    <rect x="56" y="240" width="24" height="32" rx="6"/>
+    <rect x="432" y="240" width="24" height="32" rx="6"/>
+  </g>
+
+  <!-- Central Emblem: Tractor Silhouette -->
+  <g transform="translate(100, 120)">
+    <!-- Cabin and Hood -->
+    <path d="M 60,160 L 120,60 L 200,60 L 200,100 L 260,110 L 260,180 L 200,180 Z" fill="url(#goldGrad)" opacity="0.95"/>
+    <!-- Exhaust pipe -->
+    <rect x="235" y="60" width="10" height="50" rx="3" fill="#ffffff" opacity="0.8"/>
+    <!-- Rear Big Wheel -->
+    <circle cx="90" cy="180" r="56" fill="#0f172a" stroke="url(#accentGrad)" stroke-width="12"/>
+    <circle cx="90" cy="180" r="24" fill="#ffffff" opacity="0.9"/>
+    <!-- Front Small Wheel -->
+    <circle cx="240" cy="195" r="38" fill="#0f172a" stroke="url(#accentGrad)" stroke-width="10"/>
+    <circle cx="240" cy="195" r="16" fill="#ffffff" opacity="0.9"/>
+  </g>
+
+  <!-- Typography "ARJ" Badge -->
+  <rect x="136" y="360" width="240" height="64" rx="20" fill="url(#accentGrad)" stroke="#ffffff" stroke-width="3"/>
+  <text x="256" y="405" font-family="'Inter', -apple-system, sans-serif" font-size="34" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">ARJ SISTEMA</text>
+</svg>

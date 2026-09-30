@@ -46,3 +46,16 @@ pinia.use(({ store }) => {
 });
 
 app.mount('#app');
+
+// Registro del Service Worker para funcionamiento Offline y PWA instalable
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        console.log('[ARJ PWA] Service Worker activo y registrado con éxito. Ámbito:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[ARJ PWA] Error al registrar Service Worker:', err);
+      });
+  });
+}

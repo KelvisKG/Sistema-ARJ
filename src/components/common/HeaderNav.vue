@@ -26,6 +26,17 @@
         </div>
 
         <button
+          v-if="puedeInstalarPWA"
+          class="bell-btn"
+          @click="instalarPWA"
+          title="Instalar Sistema ARJ en Windows (App de escritorio)"
+          style="background:rgba(16,185,129,0.15);color:var(--green);border-color:rgba(16,185,129,0.3)"
+          id="btn-install-pwa"
+        >
+          <i class="ti ti-download"></i>
+        </button>
+
+        <button
           class="bell-btn"
           @click="toggleModoOscuro"
           :title="modoOscuro ? 'Modo claro' : 'Modo oscuro'"
@@ -219,6 +230,8 @@ const notifsAbiertas = ref(false);
 const mostrarModalEmpresa = ref(false);
 const modoOscuro = ref(false);
 const menuAbierto = ref(false);
+const deferredPrompt = ref(null);
+const puedeInstalarPWA = ref(false);
 
 const nombreEmpresaActual = computed(() => {
   return store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora ARJ';
@@ -245,6 +258,19 @@ onMounted(() => {
     document.body.classList.remove('dark');
   }
 
+  // Capturar evento de instalación PWA en el navegador (Chrome / Edge)
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt.value = e;
+    puedeInstalarPWA.value = true;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    puedeInstalarPWA.value = false;
+    deferredPrompt.value = null;
+    store.notif('¡Sistema ARJ instalado como aplicación en Windows!', 'success');
+  });
+
   // Listener para salir rápido con Escape si no hay modales abiertos
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -259,6 +285,17 @@ onMounted(() => {
     }
   });
 });
+
+async function instalarPWA() {
+  if (deferredPrompt.value) {
+    deferredPrompt.value.prompt();
+    const { outcome } = await deferredPrompt.value.userChoice;
+    if (outcome === 'accepted') {
+      puedeInstalarPWA.value = false;
+    }
+    deferredPrompt.value = null;
+  }
+}
 
 function pedirConfirmacionCambio() {
   mostrarModalEmpresa.value = true;
