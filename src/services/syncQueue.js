@@ -4,12 +4,21 @@
 import { supabase } from './supabase.js';
 
 const ARJ_SYNC_QUEUE_KEY = 'ARJ_SYNC_QUEUE';
+const SYNC_SCHEMA_VERSION = 2; // Incrementar cuando cambie el esquema de payloads
 
-// Estructura de la cola: [{ id, tipo, payload, fecha, reintentos }]
+// Estructura de la cola: [{ id, tipo, payload, fecha, reintentos, schema_version }]
 export function obtenerColaSincronizacion() {
   try {
     const raw = localStorage.getItem(ARJ_SYNC_QUEUE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const cola = JSON.parse(raw);
+    if (!Array.isArray(cola)) return [];
+    // Descartar entradas con versión de esquema antigua o que contengan FACTURA
+    const colaValida = cola.filter(t => t && t.schema_version === SYNC_SCHEMA_VERSION && t.tipo !== 'FACTURA');
+    if (colaValida.length !== cola.length) {
+      guardarColaSincronizacion(colaValida);
+    }
+    return colaValida;
   } catch (e) {
     return [];
   }
@@ -21,13 +30,20 @@ export function guardarColaSincronizacion(cola) {
 
 // Encola una acción para ser ejecutada después
 export function encolarAccion(tipo, payload) {
+  // GUARDIA: Las facturas NO se encolan — requieren persistencia atómica confirmada en BD.
+  if (tipo === 'FACTURA') {
+    console.error('[ARJ Sync] ERROR: Las facturas no deben encolarse. Use guardarFacturaEnSupabase directamente.');
+    return;
+  }
+
   const cola = obtenerColaSincronizacion();
   cola.push({
     id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
     tipo,
     payload,
     fecha: new Date().toISOString(),
-    reintentos: 0
+    reintentos: 0,
+    schema_version: SYNC_SCHEMA_VERSION
   });
   guardarColaSincronizacion(cola);
   console.log(`[ARJ Sync] Acción encolada (${tipo}). Total en cola: ${cola.length}`);
@@ -38,10 +54,10 @@ export function encolarAccion(tipo, payload) {
 
 let _procesando = false;
 
-// Procesa todas las tareas pendientes en la cola
+// Procesa todas las tareas pendientes en la cola (bitácora, clientes)
 export async function procesarColaSincronizacion() {
   if (_procesando) return;
-  if (!navigator.onLine) return; // Si sabemos que no hay internet, no intentamos
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   
   const cola = obtenerColaSincronizacion();
   if (cola.length === 0) return;
@@ -55,12 +71,7 @@ export async function procesarColaSincronizacion() {
     try {
       let exito = false;
       
-      if (tarea.tipo === 'FACTURA') {
-        const { error } = await supabase.from('facturas').insert([tarea.payload]);
-        exito = !error;
-        if (error) console.error('[ARJ Sync] Error factura:', error.message);
-      } 
-      else if (tarea.tipo === 'CLIENTE') {
+      if (tarea.tipo === 'CLIENTE') {
         const { error } = await supabase.from('clientes').insert([tarea.payload]);
         exito = !error;
         if (error) console.error('[ARJ Sync] Error cliente:', error.message);

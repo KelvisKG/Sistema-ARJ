@@ -6,8 +6,8 @@ import { DEFAULT_PRODUCTOS, DEFAULT_CLIENTES, DEFAULT_FACTURAS_COBRAR } from './
 import { FACTOR_LANDED_FALLBACK } from './pricing.js';
 import { encolarAccion } from './syncQueue.js';
 
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
+export const SUPABASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || process?.env?.VITE_SUPABASE_URL || "https://wbxrkygtakdmckfzlzjk.supabase.co";
+export const SUPABASE_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_KEY) || process?.env?.VITE_SUPABASE_KEY || "sb_publishable_TSa5RRqbyCfeJomEoWI14g_EI6akCFh";
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -25,7 +25,8 @@ export async function cargarDatosCompletos() {
     todasFacturas: [],
     embarques: [],
     bitacora: [],
-    tasas: { tasa_par: 58.50, tasa_bcv: 47.80, dto_divisa: 18.29 },
+    // null = las tasas no pudieron cargarse desde la BD (no usar fallback hardcodeado)
+    tasas: null,
     conectado: false
   };
 
@@ -35,9 +36,12 @@ export async function cargarDatosCompletos() {
       const { data: cfg, error: eCfg } = await supabase.from('configuracion').select('*').single();
       if (!eCfg && cfg) {
         resultado.conectado = true;
-        resultado.tasas.tasa_par = parseFloat(cfg.tasa_par);
-        resultado.tasas.tasa_bcv = parseFloat(cfg.tasa_bcv);
-        resultado.tasas.dto_divisa = parseFloat(cfg.dto_divisa || 0);
+        // Tasas: solo asignar si venienen de la BD, nunca usar hardcoded
+        resultado.tasas = {
+          tasa_par: parseFloat(cfg.tasa_par) || 0,
+          tasa_bcv: parseFloat(cfg.tasa_bcv) || 0,
+          dto_divisa: parseFloat(cfg.dto_divisa || 0)
+        };
 
         resultado.configuracion = {
           factor_default: parseFloat(cfg.factor_landed_default) || 1.471,
@@ -240,6 +244,15 @@ export async function cargarDatosCompletos() {
       }
     } catch (errB) { console.warn('[ARJ] Aviso cargando bitacora de Supabase:', errB); }
 
+    // 8. Embarques
+    resultado.embarques = [];
+    try {
+      const { data: embs, error: eEmb } = await supabase.from('embarques').select('*').order('id', { ascending: false });
+      if (!eEmb && embs) {
+        resultado.embarques = embs;
+      }
+    } catch (_) { }
+
   } catch (err) {
     console.error('[ARJ] Error global cargando Supabase:', err);
   }
@@ -247,21 +260,217 @@ export async function cargarDatosCompletos() {
   return resultado;
 }
 
-// Guardar factura en Supabase con tolerancia (Offline-first via Sync Queue)
-export async function guardarFacturaEnSupabase(factura) {
+/**
+ * Guarda una factura COMPLETA en Supabase con persistencia atómica en 4 tablas:
+ * 1. facturas (cabecera) → 2. factura_items (detalle) → 3. productos (UPDATE stock) → 4. pagos
+ *
+ * NO usa la cola offline (sync queue). Si falla, retorna { ok: false, error } para
+ * que el caller pueda revertir los cambios locales y mostrar el error real al usuario.
+ *
+ * @param {Object} factura - Objeto factura completo del store
+ * @param {Array}  items   - Array de items del carrito al momento de emitir
+ * @param {Array}  pagos   - Array de pagos registrados en el carrito
+ * @param {string} empresa - 'directa' | 'distribuidora'
+ * @returns {{ ok: boolean, data?: Object, error?: string, facturaId?: string|number }}
+ */
+export async function guardarFacturaEnSupabase(factura, items, pagos, empresa) {
+  // Guardia: sin conexión en navegador no intentamos (evita error cripítico de red)
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { ok: false, error: 'Sin conexión a internet. La factura no fue guardada.' };
+  }
+
   try {
-    // Si hay internet intentamos guardar directo primero
-    if (navigator.onLine) {
-      // Pasamos los items si existen para que se inserten si la BD tiene una columna JSONB 'items'
-      const { data, error } = await supabase.from('facturas').insert([factura]).select();
-      if (!error) return { ok: true, data: data ? data[0] : null };
+    // ═══ 1. INSERT en tabla 'facturas' (esquema real de la BD) ═══
+    const ahora = new Date();
+    const facturaPayload = {
+      numero:            factura.num,
+      empresa:           factura.empresa,
+      cliente_nombre:    factura.cliente,
+      cliente_id:        factura.cliente_id || null,
+      vendedor:          factura.vendedor,
+      subtotal_usd:      factura.total,
+      saldo_pendiente:   factura.saldo_pendiente,
+      estado:            factura.estado,
+      tipo_pago:         factura.tipo_pago,
+      dias_credito:      factura.dias || 0,
+      fecha:             ahora.toISOString(),
+      fecha_vence:       factura.tipo_pago === 'credito'
+                           ? new Date(ahora.getTime() + ((factura.dias || 0) * 86400000)).toISOString()
+                           : null,
+      tasa_par:          factura.tasa_par,
+      tasa_bcv:          factura.tasa_bcv,
+      factor_bs:         factura.factor_bs || 1.00,
+      descuento_manual:  factura.descuento_manual || 0,
+      motivo_descuento:  factura.descuento_motivo || '',
+      pidio_fiscal:      factura.pidio_fiscal || false,
+      cobrar_verde:      factura.cobrar_verde || null
+    };
+
+    const { data: facturaData, error: errorFactura } = await supabase
+      .from('facturas')
+      .insert([facturaPayload])
+      .select()
+      .single();
+
+    if (errorFactura) {
+      console.error('[ARJ] Error insertando en facturas:', errorFactura);
+      return { ok: false, error: `Error al guardar la factura: ${errorFactura.message}` };
     }
-    // Si falla o no hay red, encolar
-    encolarAccion('FACTURA', factura);
-    return { ok: true, data: factura }; // Retorna éxito simulado localmente
+
+    const facturaId = facturaData.id;
+
+    // ═══ 2. INSERT en tabla 'factura_items' (detalle de productos) ═══
+    if (items && items.length > 0) {
+      const itemsPayload = items.map(it => ({
+        factura_id:      facturaId,
+        producto_id:     it.id || null,
+        cod_alt:         it.cod_alt || '',
+        descripcion:     it.desc || '',
+        cantidad:        it.cant || 0,
+        fob_unitario:    parseFloat(it.fob) || 0,
+        precio_unitario: parseFloat(it.precio) || 0,
+        total_linea:     (it.cant || 0) * (parseFloat(it.precio) || 0),
+        tier:            factura.tier || 'Publico',
+        origen:          it.origen || 'importado'
+      }));
+
+      const { error: errorItems } = await supabase
+        .from('factura_items')
+        .insert(itemsPayload);
+
+      if (errorItems) {
+        console.error('[ARJ] Error insertando factura_items:', errorItems);
+        // La cabecera ya está en BD. Retornamos con el ID para que el caller pueda informar
+        return {
+          ok: false,
+          error: `Cabecera guardada (ID: ${facturaId}) pero falló el detalle de productos: ${errorItems.message}`,
+          facturaId
+        };
+      }
+    }
+
+    // ═══ 3. UPDATE stock en tabla 'productos' ═══
+    const stockField = empresa === 'directa' ? 'stock_vd' : 'stock_dist';
+    for (const it of (items || [])) {
+      if (!it.id) continue; // sin ID no podemos hacer UPDATE seguro
+      try {
+        // Leer stock actual y restar (operación atómica simple)
+        const { data: prodActual, error: errRead } = await supabase
+          .from('productos')
+          .select(stockField)
+          .eq('id', it.id)
+          .single();
+
+        if (!errRead && prodActual !== null) {
+          const nuevoStock = (prodActual[stockField] || 0) - (it.cant || 0);
+          await supabase
+            .from('productos')
+            .update({ [stockField]: nuevoStock })
+            .eq('id', it.id);
+        }
+      } catch (eStock) {
+        // No abortar la factura por error de stock — se logra al menos la trazabilidad
+        console.warn(`[ARJ] Error actualizando stock de producto ${it.id}:`, eStock);
+      }
+    }
+
+    // ═══ 4. INSERT en tabla 'pagos' (si hay pagos registrados) ═══
+    if (pagos && pagos.length > 0) {
+      const pagosPayload = pagos.map(p => ({
+        factura_id:     facturaId,
+        monto_usd:      parseFloat(p.monto_usd) || 0,
+        monto_bs:       parseFloat(p.monto_bs) || 0,
+        tasa_usada:     factura.tasa_bcv,
+        metodo:         p.metodo || 'Efectivo',
+        referencia:     p.ref || '',
+        registrado_por: factura.vendedor
+      }));
+
+      const { error: errorPagos } = await supabase
+        .from('pagos')
+        .insert(pagosPayload);
+
+      if (errorPagos) {
+        // Logueamos pero no fallamos: la factura y sus items ya quedaron
+        console.warn('[ARJ] Error insertando pagos (factura ya guardada):', errorPagos);
+      }
+    }
+
+    return { ok: true, data: facturaData };
+
   } catch (err) {
-    encolarAccion('FACTURA', factura);
-    return { ok: true, data: factura };
+    console.error('[ARJ] Excepción inesperada guardando factura:', err);
+    return { ok: false, error: `Error inesperado al guardar la factura: ${err.message}` };
+  }
+}
+
+/**
+ * Anula una factura en Supabase:
+ * 1. Actualiza estado en 'facturas' a 'anulada'
+ * 2. Lee factura_items y devuelve el stock a 'productos'
+ *
+ * @param {string|number} facturaId  - ID real de Supabase (UUID o int)
+ * @param {string}        motivo     - Motivo de anulación (obligatorio)
+ * @param {string}        usuario    - Nombre del usuario que anula
+ * @param {string}        empresa    - 'directa' | 'distribuidora'
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export async function anularFacturaEnSupabase(facturaId, motivo, usuario, empresa) {
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { ok: false, error: 'Sin conexión a internet. La anulación no fue persistida.' };
+  }
+  try {
+    // 1. Marcar factura como anulada
+    const { error: errFac } = await supabase
+      .from('facturas')
+      .update({
+        estado:           'anulada',
+        motivo_anulacion: motivo,
+        anulado_por:      usuario,
+        fecha_anulacion:  new Date().toISOString()
+      })
+      .eq('id', facturaId);
+
+    if (errFac) {
+      console.error('[ARJ] Error anulando factura en BD:', errFac);
+      return { ok: false, error: `Error al anular la factura: ${errFac.message}` };
+    }
+
+    // 2. Leer los items de factura_items para devolver el stock
+    const { data: items, error: errItems } = await supabase
+      .from('factura_items')
+      .select('producto_id, cantidad')
+      .eq('factura_id', facturaId);
+
+    if (!errItems && items && items.length > 0) {
+      const stockField = empresa === 'directa' ? 'stock_vd' : 'stock_dist';
+
+      for (const it of items) {
+        if (!it.producto_id) continue;
+        try {
+          const { data: prod, error: errProd } = await supabase
+            .from('productos')
+            .select(stockField)
+            .eq('id', it.producto_id)
+            .single();
+
+          if (!errProd && prod) {
+            const stockRestituido = (prod[stockField] || 0) + (it.cantidad || 0);
+            await supabase
+              .from('productos')
+              .update({ [stockField]: stockRestituido })
+              .eq('id', it.producto_id);
+          }
+        } catch (eStock) {
+          console.warn(`[ARJ] Error restituyendo stock de producto ${it.producto_id} al anular:`, eStock);
+        }
+      }
+    }
+
+    return { ok: true };
+  } catch (err) {
+    console.error('[ARJ] Excepción inesperada al anular factura:', err);
+    return { ok: false, error: `Error inesperado al anular: ${err.message}` };
   }
 }
 

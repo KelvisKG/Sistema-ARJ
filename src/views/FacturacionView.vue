@@ -875,7 +875,14 @@ async function confirmarEmitir() {
 
   // 10. Confirmación final
   if (confirm('¿Está seguro de que desea emitir e imprimir esta factura?')) {
-    await store.emitirFactura();
+    const resultado = await store.emitirFactura();
+    // Si el store retornó error, no hacer nada más (el store ya mostró la notif)
+    if (resultado && !resultado.ok) {
+      // El error ya fue notificado por el store; si hay info adicional, alertar
+      if (resultado.error && resultado.error.includes('base de datos')) {
+        alert(`⚠ La factura no pudo guardarse en la base de datos.\n\nError: ${resultado.error}\n\nEl carrito ha sido restaurado. Verifique la conexión e intente de nuevo.`);
+      }
+    }
   }
 }
 </script>

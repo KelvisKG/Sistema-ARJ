@@ -27,3 +27,7 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Local database dumps and scratch files
+Base de datos ARJ/
+scratch/

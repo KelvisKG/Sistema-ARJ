@@ -189,8 +189,12 @@ const cargandoDetalles = ref(false);
 
 watch(() => store.facturaReciente, async (f) => {
   if (f && store.modalFacturaActivo) {
-    // Si no tiene items/pagos o están vacíos, y el ID no es uno local (los locales empiezan con FAC-)
-    if ((!f.items || f.items.length === 0) && String(f.id).indexOf('FAC-') === -1) {
+    // Solo hacer lazy-load si NO tiene items en memoria.
+    // Las facturas recién emitidas tienen items en memoria (del carrito).
+    // Las facturas abiertas desde historial/cobrar pueden no tenerlos.
+    const tieneItemsEnMemoria = f.items && Array.isArray(f.items) && f.items.length > 0;
+    const esFacturaLocal = String(f.id).startsWith('FAC-'); // ID temporal antes de Supabase
+    if (!tieneItemsEnMemoria && !esFacturaLocal) {
       cargandoDetalles.value = true;
       const det = await cargarDetallesFactura(f.id);
       if (det.items) f.items = det.items;
@@ -257,12 +261,22 @@ function imprimirPDF() {
   store.notif('Factura PDF abierta para imprimir', 'success');
 }
 
-function anularFactura() {
-  if (confirm(`¿Estás seguro de que deseas ANULAR la factura ${store.facturaReciente.num}?`)) {
-    store.facturaReciente.estado = 'anulada';
-    store.notif('Factura anulada correctamente', 'success');
-    guardarDatosLocal(store.$state);
-    cerrarModal();
+async function anularFactura() {
+  const numFac = store.facturaReciente?.num;
+  if (!numFac) return;
+  if (confirm(`¿Estás seguro de que deseas ANULAR la factura ${numFac}?\n\nEsta acción revertirá el stock y no puede deshacerse.`)) {
+    const motivo = prompt('Indica el motivo de la anulación (obligatorio):');
+    if (!motivo || motivo.trim().length < 5) {
+      store.notif('El motivo es obligatorio (mín. 5 caracteres)', 'error');
+      return;
+    }
+    // Llamar al store (que ahora persiste en BD y revierte inventario)
+    const ok = await store.anularFactura(numFac, motivo.trim());
+    if (ok) {
+      guardarDatosLocal(store.$state);
+      cerrarModal();
+    }
+    // Si no ok, store ya mostró el error vía notif
   }
 }
 </script>

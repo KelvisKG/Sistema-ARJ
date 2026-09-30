@@ -8,17 +8,19 @@ export const RESGUARDO_BS = 1.00;
 export const FACTOR_LANDED_FALLBACK = 1.471;
 export const CORTE_MODELO_BCV = new Date('2026-08-01T00:00:00Z').getTime();
 
+// Factores de precio por tier — alineados con la tabla 'clientes.nivel' en Supabase
+// Publico = precio lista completo, T1 = Aliado -5%, T2 = Aliado -10%, T3 = Mayorista -20%
 export const PRECIOS_TIER = {
-  taller: 1.00,
-  repuestero: 0.90,
-  distribuidor: 0.80
+  Publico: 1.00,
+  T1: 0.95,
+  T2: 0.90,
+  T3: 0.80
 };
 
+// Redondeo al centavo exacto — política confirmada por gerencia (sin redondeo hacia arriba)
 export function redondeoBonito(n) {
   if (n <= 0) return 0;
-  if (n < 5) return Math.ceil(n * 2) / 2; // de 0.50 en 0.50
-  if (n < 20) return Math.ceil(n);        // enteros
-  return Math.ceil(n / 5) * 5;           // multiplos de 5
+  return Math.round(n * 100) / 100;
 }
 
 export function sinFob(it) {
@@ -138,9 +140,14 @@ export function costoSinDivisas(p, embarques = [], catalogoProductos = []) {
   return f == null ? null : (parseFloat(p && p.fob) || 0) * f;
 }
 
-export function precioConTier(fob, t = 'taller', producto = null) {
+export function precioConTier(fob, t = 'Publico', producto = null) {
   const base = (producto && producto.precio_manual) ? producto.precio_manual : precioPublico(fob);
-  const factor = PRECIOS_TIER[t] || 1.00;
+  const factor = PRECIOS_TIER[t];
+  if (factor === undefined) {
+    // Tier desconocido: usar Publico como fallback seguro y loguear advertencia
+    console.warn(`[ARJ Pricing] Tier desconocido: "${t}". Tiers válidos: ${Object.keys(PRECIOS_TIER).join(', ')}. Usando Publico.`);
+    return Math.round(base * PRECIOS_TIER.Publico * 100) / 100;
+  }
   return Math.round(base * factor * 100) / 100;
 }
 

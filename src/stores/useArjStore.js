@@ -3,7 +3,7 @@
 // 100% fiel a toda la arquitectura y funcionalidades del Sistema ARJ
 // =====================================================================
 import { defineStore } from 'pinia';
-import { cargarDatosCompletos, guardarFacturaEnSupabase, guardarBitacoraEnSupabase } from '../services/supabase.js';
+import { cargarDatosCompletos, guardarFacturaEnSupabase, anularFacturaEnSupabase, guardarBitacoraEnSupabase } from '../services/supabase.js';
 import { cargarDatosLocal } from '../services/persistence.js';
 import {
   precioConTier,
@@ -250,10 +250,15 @@ export const useArjStore = defineStore('arj', {
             this.bitacora = datos.bitacora;
           }
 
+          if (datos.embarques && datos.embarques.length > 0) {
+            this.embarques = datos.embarques;
+          }
+
           // Priorizar SIEMPRE las tasas de la base de datos (Supabase) sobre las locales
-          if (datos.tasas) {
-             this.tasa_bcv = datos.tasas.tasa_bcv || this.tasa_bcv;
-             this.tasa_par = datos.tasas.tasa_par || this.tasa_par;
+          // datos.tasas puede ser null si la tabla configuracion falló — en ese caso no sobreescribir
+          if (datos.tasas && datos.tasas.tasa_bcv > 0 && datos.tasas.tasa_par > 0) {
+             this.tasa_bcv = datos.tasas.tasa_bcv;
+             this.tasa_par = datos.tasas.tasa_par;
              this.dto_divisa = datos.tasas.dto_divisa || this.dto_divisa;
              this.guardarTasasLocales();
           }
@@ -359,9 +364,8 @@ export const useArjStore = defineStore('arj', {
           try {
             await supabase.from('configuracion').update({
               tasa_bcv: this.tasa_bcv,
-              tasa_par: this.tasa_par,
-              dto_divisa: this.dto_divisa
-            }).eq('id', 1);
+              tasa_par: this.tasa_par
+            }).neq('id', 0);
           } catch (e) {
             console.warn('[ARJ] Error actualizando tasas en BD:', e);
           }
@@ -760,6 +764,12 @@ export const useArjStore = defineStore('arj', {
         return { ok: false, error: 'Tasas no configuradas' };
       }
 
+      // 4b. Tasas deben haber sido confirmadas hoy (no usar valores en memoria sin verificar)
+      if (!this.tasasConfirmadasHoy) {
+        this.notif('Debe confirmar las tasas de cambio hoy antes de emitir facturas', 'error');
+        return { ok: false, error: 'Tasas no confirmadas hoy' };
+      }
+
       // 5. Bloqueo estricto v13.17: Producto sin costo FOB no se factura
       const sinCosto = this.carrito.items.filter(sinFob);
       if (sinCosto.length > 0) {
@@ -780,9 +790,13 @@ export const useArjStore = defineStore('arj', {
         return { ok: false, error: 'Descuento no autorizado' };
       }
 
+      // 8. Calcular correlativo con año dinámico y filtrado por empresa
       const prefijo = this.empresa === 'directa' ? 'VD' : 'DIST';
-      const correlativo = String(this.todasFacturas.length + 1).padStart(5, '0');
-      const numFactura = `${prefijo}-2026-${correlativo}`;
+      const anio = new Date().getFullYear();
+      const facturasEmpresa = this.todasFacturas.filter(f => f.empresa === this.empresa);
+      const correlativo = String(facturasEmpresa.length + 1).padStart(5, '0');
+      const numFactura = `${prefijo}-${anio}-${correlativo}`;
+
       const totalUSD = this.totalCarritoUSD;
       const totalBs = this.totalCarritoBs;
 
@@ -791,10 +805,14 @@ export const useArjStore = defineStore('arj', {
       const saldoPendiente = esContado ? 0 : Math.max(0, Math.round((totalUSD - abonoCalculado) * 100) / 100);
       const estadoFactura = (esContado || saldoPendiente <= 0.01) ? 'pagada' : (abonoCalculado > 0 ? 'parcial' : 'pendiente');
 
+      // Calcular cobrar_verde (efectivo en divisas para el cobrador)
+      const cobrarVerde = totalEnDivisas(totalUSD, this);
+
       const nuevaFactura = {
-        id: `FAC-${numFactura}`,
+        id: `FAC-${numFactura}`, // ID local temporal, se reemplaza con el UUID de BD tras el insert
         num: numFactura,
         empresa: this.empresa,
+        tier: this.carrito.tier || 'Publico',
         cliente: this.carrito.cliente_nombre || 'CLIENTE MOSTRADOR',
         cliente_id: this.carrito.cliente_id,
         vendedor: this.usuarioNombre,
@@ -811,12 +829,14 @@ export const useArjStore = defineStore('arj', {
         tasa_bcv: this.tasa_bcv,
         factor_bs: 1.00,
         descuento_manual: this.carrito.descuento_manual,
+        descuento_motivo: this.carrito.descuento_motivo || '',
         pidio_fiscal: this.carrito.pidio_fiscal,
+        cobrar_verde: cobrarVerde,
         pagos: JSON.parse(JSON.stringify(this.carrito.pagos)),
         items: JSON.parse(JSON.stringify(this.carrito.items))
       };
 
-      // Descontar inventario local (permite números negativos para préstamos inter-empresariales)
+      // Descontar inventario local (reflejo inmediato en UI mientras la BD confirma)
       this.carrito.items.forEach(it => {
         const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
         if (prod) {
@@ -825,7 +845,7 @@ export const useArjStore = defineStore('arj', {
           } else {
             prod.stock_dist = (prod.stock_dist || 0) - it.cant;
           }
-          // Kardex
+          // Kardex local
           this.movimientos.unshift({
             id: Date.now() + Math.random(),
             fecha: new Date().toLocaleTimeString('es-VE') + ' ' + new Date().toLocaleDateString('es-VE'),
@@ -840,7 +860,7 @@ export const useArjStore = defineStore('arj', {
         }
       });
 
-      // Actualizar saldo del cliente si es crédito
+      // Actualizar saldo del cliente si es crédito (local)
       if (!esContado && this.carrito.cliente_id && saldoPendiente > 0) {
         const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
         if (cli) {
@@ -852,6 +872,7 @@ export const useArjStore = defineStore('arj', {
         }
       }
 
+      // Agregar a los arrays locales (antes del await para que la UI responda)
       this.todasFacturas.unshift(nuevaFactura);
       if (nuevaFactura.estado !== 'pagada') {
         this.facturasCobrar.unshift(nuevaFactura);
@@ -859,21 +880,41 @@ export const useArjStore = defineStore('arj', {
 
       this.logBitacora('venta', `Factura ${numFactura} emitida a ${nuevaFactura.cliente} por ${fmtUSD(totalUSD)}`);
 
+      // Persistir en Supabase (4 tablas en orden)
       if (this.supabaseConectado) {
-        guardarFacturaEnSupabase({
-          num: nuevaFactura.num,
-          empresa: nuevaFactura.empresa,
-          cliente: nuevaFactura.cliente,
-          cliente_id: nuevaFactura.cliente_id,
-          vendedor: nuevaFactura.vendedor,
-          total: nuevaFactura.total,
-          abonado: nuevaFactura.abonado,
-          estado: nuevaFactura.estado,
-          tipo_pago: nuevaFactura.tipo_pago,
-          tasa_par: nuevaFactura.tasa_par,
-          tasa_bcv: nuevaFactura.tasa_bcv,
-          items: nuevaFactura.items
-        });
+        const resultado = await guardarFacturaEnSupabase(
+          nuevaFactura,
+          nuevaFactura.items,
+          nuevaFactura.pagos,
+          this.empresa
+        );
+
+        if (!resultado.ok) {
+          // REVERTIR todo lo aplicado localmente
+          this._revertirFacturaLocal(nuevaFactura);
+          this.notif(`❌ Error al guardar factura en la base de datos: ${resultado.error}`, 'error');
+          this.logBitacora('error', `Factura ${numFactura} falló al persistir: ${resultado.error}`, true);
+          return { ok: false, error: resultado.error };
+        }
+
+        // Actualizar el ID local con el UUID real de la BD
+        if (resultado.data && resultado.data.id) {
+          const fLocal = this.todasFacturas.find(f => f.num === numFactura);
+          if (fLocal) fLocal.id = resultado.data.id;
+          const fCobrar = this.facturasCobrar.find(f => f.num === numFactura);
+          if (fCobrar) fCobrar.id = resultado.data.id;
+          nuevaFactura.id = resultado.data.id;
+        }
+
+        // Persistir saldo actualizado del cliente en Supabase si fue a crédito
+        if (!esContado && this.carrito.cliente_id && saldoPendiente > 0) {
+          const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
+          if (cli) {
+            const campoSaldo = this.empresa === 'directa' ? 'saldo_vd' : 'saldo_dist';
+            const { supabase } = await import('../services/supabase.js');
+            await supabase.from('clientes').update({ [campoSaldo]: cli[campoSaldo] }).eq('id', this.carrito.cliente_id);
+          }
+        }
       }
 
       this.facturaReciente = nuevaFactura;
@@ -883,8 +924,40 @@ export const useArjStore = defineStore('arj', {
       return { ok: true, factura: nuevaFactura };
     },
 
-    // Anulación de Factura con reversión de inventario
-    anularFactura(facturaId, motivo) {
+    // Método auxiliar: revierte cambios locales si la persistencia en BD falló
+    _revertirFacturaLocal(factura) {
+      // Revertir stock local
+      if (factura.items) {
+        factura.items.forEach(it => {
+          const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
+          if (prod) {
+            if (factura.empresa === 'directa') {
+              prod.stock_vd = (prod.stock_vd || 0) + it.cant;
+            } else {
+              prod.stock_dist = (prod.stock_dist || 0) + it.cant;
+            }
+          }
+        });
+      }
+      // Revertir saldo del cliente (si era crédito)
+      if (factura.tipo_pago !== 'contado' && factura.cliente_id && factura.saldo_pendiente > 0) {
+        const cli = this.clientes.find(c => c.id === factura.cliente_id);
+        if (cli) {
+          if (factura.empresa === 'directa') {
+            cli.saldo_vd = Math.max(0, Math.round(((cli.saldo_vd || 0) - factura.saldo_pendiente) * 100) / 100);
+          } else {
+            cli.saldo_dist = Math.max(0, Math.round(((cli.saldo_dist || 0) - factura.saldo_pendiente) * 100) / 100);
+          }
+        }
+      }
+      // Quitar de los arrays locales
+      this.todasFacturas = this.todasFacturas.filter(f => f.num !== factura.num);
+      this.facturasCobrar = this.facturasCobrar.filter(f => f.num !== factura.num);
+      // Quitar del kardex local
+      this.movimientos = this.movimientos.filter(m => !m.motivo?.includes(factura.num));
+    },
+    // Anulación de Factura con reversión de inventario y persistencia en BD
+    async anularFactura(facturaId, motivo) {
       if (this.rol !== 'gerente') {
         this.notif('Solo el gerente puede anular facturas', 'error');
         return false;
@@ -894,12 +967,24 @@ export const useArjStore = defineStore('arj', {
         this.notif('Factura no encontrada', 'error');
         return false;
       }
+
+      // Persistir en BD PRIMERO si está conectado
+      // Solo enviamos a BD si el ID no es el temporal local (que empieza con 'FAC-')
+      if (this.supabaseConectado && fac.id && !String(fac.id).startsWith('FAC-')) {
+        const res = await anularFacturaEnSupabase(fac.id, motivo, this.usuarioNombre, fac.empresa);
+        if (!res.ok) {
+          this.notif(`❌ Error al anular en la base de datos: ${res.error}`, 'error');
+          return false;
+        }
+      }
+
+      // Aplicar localmente
       fac.estado = 'anulada';
       fac.anulada_por = this.usuarioNombre;
       fac.anulada_fecha = new Date().toLocaleTimeString('es-VE') + ' ' + new Date().toLocaleDateString('es-VE');
       fac.anulada_motivo = motivo || 'Anulación por gerencia';
 
-      // Revertir inventario
+      // Revertir inventario local
       if (fac.items && fac.items.length > 0) {
         fac.items.forEach(it => {
           const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
@@ -917,10 +1002,15 @@ export const useArjStore = defineStore('arj', {
       if (fac.tipo_pago === 'credito' && fac.cliente_id && fac.saldo_pendiente > 0) {
         const cli = this.clientes.find(c => c.id === fac.cliente_id);
         if (cli) {
+          const campoSaldo = fac.empresa === 'directa' ? 'saldo_vd' : 'saldo_dist';
           if (fac.empresa === 'directa') {
             cli.saldo_vd = Math.max(0, Math.round(((cli.saldo_vd || 0) - fac.saldo_pendiente) * 100) / 100);
           } else {
             cli.saldo_dist = Math.max(0, Math.round(((cli.saldo_dist || 0) - fac.saldo_pendiente) * 100) / 100);
+          }
+          if (this.supabaseConectado) {
+            const { supabase } = await import('../services/supabase.js');
+            await supabase.from('clientes').update({ [campoSaldo]: cli[campoSaldo] }).eq('id', fac.cliente_id);
           }
         }
       }
@@ -931,6 +1021,7 @@ export const useArjStore = defineStore('arj', {
       this.notif(`Factura ${fac.num} anulada y existencias devueltas al inventario`, 'warning');
       return true;
     },
+
 
     // Presupuestos
     guardarPresupuesto(datos) {
@@ -979,8 +1070,8 @@ export const useArjStore = defineStore('arj', {
       this.notif(`Cotización ${pre.num} cargada al carrito para emitir factura`, 'success');
     },
 
-    // Cobros y Abonos
-    registrarCobro(facturaId, montoUSD, metodo = 'dolar_efectivo') {
+    // Cobros y Abonos con persistencia en Supabase (tabla pagos + facturas + clientes)
+    async registrarCobro(facturaId, montoUSD, metodo = 'dolar_efectivo', ref = '') {
       const fac = this.facturasCobrar.find(f => f.id === facturaId || f.num === facturaId);
       if (!fac) {
         this.notif('Factura no encontrada', 'error');
@@ -991,10 +1082,63 @@ export const useArjStore = defineStore('arj', {
         this.notif('Monto de abono inválido', 'warning');
         return false;
       }
-      fac.abonado = Math.min(fac.total, (fac.abonado || 0) + abono);
-      fac.saldo_pendiente = Math.max(0, fac.total - fac.abonado);
 
-      // Descontar del saldo del cliente
+      const nuevoAbonado = Math.min(fac.total, (fac.abonado || 0) + abono);
+      const nuevoSaldoPendiente = Math.max(0, Math.round((fac.total - nuevoAbonado) * 100) / 100);
+      const nuevoEstado = nuevoSaldoPendiente <= 0.01 ? 'pagada' : 'parcial';
+
+      // Persistir en Supabase si está conectado
+      if (this.supabaseConectado && fac.id && !String(fac.id).startsWith('FAC-')) {
+        try {
+          const { supabase } = await import('../services/supabase.js');
+
+          // 1. Insertar fila en tabla 'pagos'
+          const pagoPayload = {
+            factura_id: fac.id,
+            monto_usd: abono,
+            monto_bs: Math.round(abono * this.tasa_bcv * 100) / 100,
+            tasa_usada: this.tasa_bcv,
+            metodo: metodo,
+            referencia: ref || '',
+            registrado_por: this.usuarioNombre
+          };
+          const { error: errPago } = await supabase.from('pagos').insert([pagoPayload]);
+          if (errPago) {
+            console.warn('[ARJ] Advertencia insertando pago:', errPago);
+          }
+
+          // 2. Actualizar saldo en tabla 'facturas'
+          const { error: errFac } = await supabase.from('facturas').update({
+            saldo_pendiente: nuevoSaldoPendiente,
+            estado: nuevoEstado
+          }).eq('id', fac.id);
+          if (errFac) {
+            this.notif(`Error actualizando saldo en BD: ${errFac.message}`, 'error');
+            return false;
+          }
+
+          // 3. Actualizar saldo deudor en tabla 'clientes'
+          if (fac.cliente_id) {
+            const cli = this.clientes.find(c => c.id === fac.cliente_id);
+            if (cli) {
+              const campoSaldo = fac.empresa === 'directa' ? 'saldo_vd' : 'saldo_dist';
+              const nuevoSaldoCli = Math.max(0, Math.round(((cli[campoSaldo] || 0) - abono) * 100) / 100);
+              await supabase.from('clientes').update({ [campoSaldo]: nuevoSaldoCli }).eq('id', fac.cliente_id);
+            }
+          }
+        } catch (err) {
+          console.error('[ARJ] Error persistiendo cobro en Supabase:', err);
+          this.notif(`Error al registrar cobro: ${err.message}`, 'error');
+          return false;
+        }
+      }
+
+      // Aplicar cambios en el estado local
+      fac.abonado = nuevoAbonado;
+      fac.saldo_pendiente = nuevoSaldoPendiente;
+      fac.estado = nuevoEstado;
+
+      // Descontar del saldo local del cliente
       if (fac.cliente_id) {
         const cli = this.clientes.find(c => c.id === fac.cliente_id);
         if (cli) {
@@ -1006,12 +1150,10 @@ export const useArjStore = defineStore('arj', {
         }
       }
 
-      if (fac.saldo_pendiente <= 0.01) {
-        fac.estado = 'pagada';
+      if (nuevoEstado === 'pagada') {
         this.facturasCobrar = this.facturasCobrar.filter(f => f.id !== fac.id);
         this.notif(`Factura ${fac.num} cancelada en su totalidad`, 'success');
       } else {
-        fac.estado = 'parcial';
         this.notif(`Abono de ${fmtUSD(abono)} registrado para factura ${fac.num}`, 'success');
       }
       this.logBitacora('cobro', `Abono de ${fmtUSD(abono)} a factura ${fac.num} (${metodo})`);

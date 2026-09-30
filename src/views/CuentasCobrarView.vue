@@ -234,7 +234,7 @@ function abrirModalAbono(f) {
   errors.value = {};
 }
 
-function confirmarAbono() {
+async function confirmarAbono() {
   errors.value = {};
   if (!facturaSeleccionada.value) return;
   const val = parseFloat(montoAbono.value) || 0;
@@ -250,7 +250,7 @@ function confirmarAbono() {
     return;
   }
 
-  store.registrarCobro(facturaSeleccionada.value.id, val);
+  await store.registrarCobro(facturaSeleccionada.value.id, val, metodoAbono.value);
   modalAbonoVisible.value = false;
 }
 </script>
