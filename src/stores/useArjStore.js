@@ -790,12 +790,23 @@ export const useArjStore = defineStore('arj', {
         return { ok: false, error: 'Descuento no autorizado' };
       }
 
-      // 8. Calcular correlativo con año dinámico y filtrado por empresa
+      // 8. Calcular correlativo con año dinámico y BD / fallback local (C6)
       const prefijo = this.empresa === 'directa' ? 'VD' : 'DIST';
       const anio = new Date().getFullYear();
-      const facturasEmpresa = this.todasFacturas.filter(f => f.empresa === this.empresa);
-      const correlativo = String(facturasEmpresa.length + 1).padStart(5, '0');
-      const numFactura = `${prefijo}-${anio}-${correlativo}`;
+      let numFactura = null;
+
+      if (this.supabaseConectado) {
+        try {
+          const { obtenerSiguienteCorrelativoBD } = await import('../services/supabase.js');
+          numFactura = await obtenerSiguienteCorrelativoBD(this.empresa);
+        } catch (_) {}
+      }
+
+      if (!numFactura) {
+        const facturasEmpresa = this.todasFacturas.filter(f => f.empresa === this.empresa && f.num && f.num.includes(String(anio)));
+        const correlativo = String(facturasEmpresa.length + 1).padStart(5, '0');
+        numFactura = `${prefijo}-${anio}-${correlativo}`;
+      }
 
       const totalUSD = this.totalCarritoUSD;
       const totalBs = this.totalCarritoBs;

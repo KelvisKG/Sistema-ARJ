@@ -273,6 +273,42 @@ export async function cargarDatosCompletos() {
  * @param {string} empresa - 'directa' | 'distribuidora'
  * @returns {{ ok: boolean, data?: Object, error?: string, facturaId?: string|number }}
  */
+/**
+ * Obtiene el siguiente número correlativo consultando directamente la base de datos (C6)
+ * @param {string} empresa - 'directa' | 'distribuidora'
+ * @returns {Promise<string|null>}
+ */
+export async function obtenerSiguienteCorrelativoBD(empresa) {
+  const prefijo = empresa === 'directa' ? 'VD' : 'DIST';
+  const anio = new Date().getFullYear();
+  const patron = `${prefijo}-${anio}-%`;
+  try {
+    const { data, error } = await supabase
+      .from('facturas')
+      .select('numero')
+      .eq('empresa', empresa)
+      .ilike('numero', patron)
+      .order('numero', { ascending: false })
+      .limit(1);
+
+    if (!error && data && data.length > 0 && data[0].numero) {
+      const partes = data[0].numero.split('-');
+      if (partes.length >= 3) {
+        const ultimoNum = parseInt(partes[2], 10);
+        if (!isNaN(ultimoNum)) {
+          return `${prefijo}-${anio}-${String(ultimoNum + 1).padStart(5, '0')}`;
+        }
+      }
+    }
+    if (!error && data && data.length === 0) {
+      return `${prefijo}-${anio}-00001`;
+    }
+  } catch (e) {
+    console.warn('[ARJ] No se pudo obtener correlativo de BD:', e);
+  }
+  return null;
+}
+
 export async function guardarFacturaEnSupabase(factura, items, pagos, empresa) {
   // Guardia: sin conexión en navegador no intentamos (evita error cripítico de red)
   if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.onLine === false) {
