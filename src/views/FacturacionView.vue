@@ -508,6 +508,12 @@
           <div v-for="(p, pidx) in store.carrito.pagos" :key="pidx" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
             <div>
               <strong>{{ p.metodo }}</strong> <span v-if="p.ref" style="color:var(--text-muted)">({{ p.ref }})</span>
+              <div v-if="p.moneda === 'Bs'" style="font-size:11px;color:var(--text-muted)">
+                Bs. {{ Number(p.monto_bs || p.monto).toLocaleString('es-VE', { minimumFractionDigits: 2 }) }} (Tasa: {{ p.tasa_usada }})
+              </div>
+              <div v-else-if="p.moneda === 'USD_VERDE' && p.monto_verde" style="font-size:11px;color:var(--text-muted)">
+                Efectivo: ${{ Number(p.monto_verde).toFixed(2) }} (Acredita: ${{ Number(p.monto_usd).toFixed(2) }} BCV)
+              </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-weight:700;color:var(--green)">{{ fmtUSD(p.monto_usd) }}</span>
@@ -516,7 +522,7 @@
           </div>
 
           <div v-if="mostrarFormPago" style="margin-top:10px;background:var(--card-bg);padding:12px;border-radius:8px;border:1px solid var(--border)">
-            <select v-model="nuevoMetodo" class="val-input" style="width:100%;margin-bottom:8px">
+            <select v-model="nuevoMetodo" @change="onMetodoChange" class="val-input" style="width:100%;margin-bottom:8px">
               <option value="Divisas Efectivo">Divisas Efectivo</option>
               <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
               <option value="Transferencia Bancaria">Transferencia Bancaria</option>
@@ -524,14 +530,17 @@
             </select>
             <div style="display:flex;gap:8px;margin-bottom:8px">
               <div style="flex:1">
-                <input v-model.number="nuevoMontoIngresado" type="number" :placeholder="esPagoBs ? 'Monto Bs' : 'Monto USD'" class="val-input" style="width:100%"
+                <input v-model.number="nuevoMontoIngresado" type="number" :placeholder="esPagoBs ? 'Monto en Bs' : (esPagoVerde ? 'Monto $ Efectivo' : 'Monto USD')" class="val-input" style="width:100%"
                   :class="{ 'is-invalid': errorsPago.monto }" @input="errorsPago.monto = null">
                 <span v-if="errorsPago.monto" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsPago.monto }}</span>
               </div>
               <input v-model="nuevaRef" type="text" placeholder="Ref/Comprobante" class="val-input" style="flex:1">
             </div>
             <div v-if="esPagoBs && nuevoMontoIngresado > 0" style="margin-bottom:8px;font-size:11.5px;color:var(--dgray);text-align:right">
-              Equivale a: <strong style="color:var(--navy)">{{ fmtUSD(nuevoMontoIngresado / store.tasa_bcv) }}</strong>
+              Equivale a: <strong style="color:var(--navy)">{{ fmtUSD(store.tasa_par > 0 ? nuevoMontoIngresado / store.tasa_par : 0) }}</strong> (Tasa Paralelo: {{ store.tasa_par }})
+            </div>
+            <div v-else-if="esPagoVerde && nuevoMontoIngresado > 0" style="margin-bottom:8px;font-size:11.5px;color:var(--dgray);text-align:right">
+              Acredita a factura ($BCV): <strong style="color:var(--navy)">{{ fmtUSD(verdeABcv(nuevoMontoIngresado, store)) }}</strong>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:8px">
               <button class="btn btn-secondary btn-sm" @click="mostrarFormPago = false">Cancelar</button>
@@ -625,14 +634,20 @@
           <button
             class="btn btn-green"
             id="btn-emitir"
-            :disabled="store.carrito.items.length === 0"
+            :disabled="store.carrito.items.length === 0 || !store.tasasConfirmadasHoy || (store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05)"
             @click="confirmarEmitir"
           >
             <i class="ti ti-printer"></i> Emitir e Imprimir
           </button>
         </div>
         <div
-          v-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05 && store.totalCarritoUSD > 0"
+          v-if="!store.tasasConfirmadasHoy"
+          style="margin-top:6px;font-size:11.5px;color:var(--red);text-align:right;font-weight:600"
+        >
+          <i class="ti ti-lock"></i> Bloqueado: Debe confirmar las tasas del día en el panel superior antes de facturar
+        </div>
+        <div
+          v-else-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05 && store.totalCarritoUSD > 0"
           style="margin-top:6px;font-size:11.5px;color:var(--red);text-align:right;font-weight:600"
         >
           <i class="ti ti-lock"></i> Bloqueado: Falta pagar {{ fmtUSD(store.faltaPorPagarUSD) }}
@@ -645,7 +660,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBs, precioConTier, costoLanded, sinFob } from '../services/pricing.js';
+import { fmtUSD, fmtBs, precioConTier, costoLanded, sinFob, verdeABcv } from '../services/pricing.js';
 
 const store = useArjStore();
 const tabBusqueda = ref('normal');
@@ -665,6 +680,63 @@ const errorsPago = ref({});
 const esPagoBs = computed(() => {
   return nuevoMetodo.value === 'Pago Móvil (Bs)' || nuevoMetodo.value === 'Transferencia Bancaria';
 });
+
+const esPagoVerde = computed(() => {
+  return nuevoMetodo.value === 'Divisas Efectivo';
+});
+
+function onMetodoChange() {
+  errorsPago.value = {};
+  const faltaUSD = store.faltaPorPagarUSD;
+  if (faltaUSD <= 0) {
+    nuevoMontoIngresado.value = 0;
+    return;
+  }
+  if (esPagoBs.value) {
+    const tasa = store.tasa_par > 0 ? store.tasa_par : store.tasa_bcv;
+    nuevoMontoIngresado.value = Number((faltaUSD * tasa).toFixed(2));
+  } else if (esPagoVerde.value) {
+    const dto = (store.dto_divisa || 0) / 100;
+    nuevoMontoIngresado.value = Number((faltaUSD * (1 - dto)).toFixed(2));
+  } else {
+    nuevoMontoIngresado.value = Number(faltaUSD.toFixed(2));
+  }
+}
+
+function abrirFormPago() {
+  mostrarFormPago.value = true;
+  nuevoMetodo.value = 'Divisas Efectivo';
+  errorsPago.value = {};
+  nuevaRef.value = '';
+  onMetodoChange();
+}
+
+function agregarPago() {
+  errorsPago.value = {};
+  const monto = parseFloat(nuevoMontoIngresado.value) || 0;
+  if (monto <= 0) {
+    errorsPago.value = { monto: 'Ingrese un monto válido mayor a 0' };
+    return;
+  }
+
+  let moneda = 'USD';
+  if (esPagoBs.value) {
+    moneda = 'Bs';
+  } else if (esPagoVerde.value) {
+    moneda = 'USD_VERDE';
+  }
+
+  store.agregarPagoCarrito({
+    metodo: nuevoMetodo.value,
+    monto: monto,
+    moneda: moneda,
+    ref: (nuevaRef.value || '').trim()
+  });
+
+  mostrarFormPago.value = false;
+  nuevoMontoIngresado.value = 0;
+  nuevaRef.value = '';
+}
 
 const fechaHoy = computed(() => {
   return new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -780,32 +852,6 @@ function procesarImportacion() {
   }
 }
 
-function abrirFormPago() {
-  nuevoMontoIngresado.value = store.faltaPorPagarUSD > 0 ? store.faltaPorPagarUSD : store.totalCarritoUSD;
-  errorsPago.value = {};
-  mostrarFormPago.value = true;
-}
-
-function agregarPago() {
-  errorsPago.value = {};
-
-  if (!nuevoMontoIngresado.value || nuevoMontoIngresado.value <= 0) {
-    errorsPago.value.monto = 'Ingresa un monto mayor a 0';
-    return;
-  }
-
-  let montoFinalUSD = nuevoMontoIngresado.value;
-  let montoOpcionalBs = null;
-  if (esPagoBs.value) {
-    montoFinalUSD = nuevoMontoIngresado.value / store.tasa_bcv;
-    montoOpcionalBs = nuevoMontoIngresado.value;
-  }
-
-  store.agregarPagoCarrito(nuevoMetodo.value, montoFinalUSD, nuevaRef.value, montoOpcionalBs);
-  nuevaRef.value = '';
-  mostrarFormPago.value = false;
-}
-
 async function confirmarEmitir() {
   // 1. Validar que el carrito no esté vacío
   if (store.carrito.items.length === 0) {
@@ -832,6 +878,13 @@ async function confirmarEmitir() {
   // 4. Validación de tasas cambiarias
   if (!store.tasa_bcv || store.tasa_bcv <= 0 || !store.tasa_par || store.tasa_par <= 0) {
     store.notif('Las tasas de cambio (BCV y Paralelo) deben estar configuradas para emitir la factura', 'error');
+    return;
+  }
+
+  // 4b. Validación de confirmación de tasas hoy (M1)
+  if (!store.tasasConfirmadasHoy) {
+    store.notif('Debe confirmar las tasas de cambio de hoy antes de emitir la factura', 'error');
+    alert('⚠ BLOQUEO DE SEGURIDAD (M1):\nLas tasas cambiarias no han sido confirmadas para el día de hoy.\nPor favor confírmelas en el panel superior antes de emitir facturas.');
     return;
   }
 

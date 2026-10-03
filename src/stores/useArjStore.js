@@ -34,11 +34,12 @@ export const useArjStore = defineStore('arj', {
     // Navegación
     vistaActiva: 'facturacion',
 
-    // Divisas, Tasas y Brecha
-    tasa_bcv: 500.80,
-    tasa_par: 580.50,
-    dto_divisa: 18.29,
-    tasasConfirmadasHoy: true,
+    // Divisas, Tasas y Brecha (M1: arrancan en 0 y sin confirmar hasta leer BD)
+    tasa_bcv: 0,
+    tasa_par: 0,
+    dto_divisa: 0,
+    tasasConfirmadasHoy: false,
+    fechaConfirmacionTasas: null,
 
     // Conectividad
     supabaseConectado: false,
@@ -127,6 +128,11 @@ export const useArjStore = defineStore('arj', {
     dtoDivisaNeutro: (state) => {
       const b = state.tasa_bcv > 0 ? state.tasa_par / state.tasa_bcv : 1;
       return b > 0 ? (1 - 1 / b) * 100 : 0;
+    },
+
+    dtoDivisaPct: (state) => {
+      const d = parseFloat(state.dto_divisa);
+      return (Number.isFinite(d) && d >= 0) ? d : state.dtoDivisaNeutro;
     },
 
     dtoDivisaExcedente: (state) => {
@@ -351,20 +357,26 @@ export const useArjStore = defineStore('arj', {
       localStorage.setItem('ARJ_TASAS', JSON.stringify({
         bcv: this.tasa_bcv,
         par: this.tasa_par,
-        dto: this.dto_divisa
+        dto: this.dto_divisa,
+        confirmadasHoy: this.tasasConfirmadasHoy,
+        fecha: this.fechaConfirmacionTasas
       }));
     },
 
     async confirmarTasas() {
+      const hoy = new Date().toISOString().slice(0, 10);
       this.tasasConfirmadasHoy = true;
-      this.logBitacora('sistema', `Tasas actualizadas: BCV Bs.${this.tasa_bcv} / Paralelo Bs.${this.tasa_par}`);
+      this.fechaConfirmacionTasas = hoy;
+      this.guardarTasasLocales();
+      this.logBitacora('sistema', `Tasas confirmadas formalmente: BCV Bs.${this.tasa_bcv} / Paralelo Bs.${this.tasa_par}`);
 
       if (this.supabaseConectado) {
         import('../services/supabase.js').then(async ({ supabase }) => {
           try {
             await supabase.from('configuracion').update({
               tasa_bcv: this.tasa_bcv,
-              tasa_par: this.tasa_par
+              tasa_par: this.tasa_par,
+              tasas_actualizadas: new Date().toISOString()
             }).neq('id', 0);
           } catch (e) {
             console.warn('[ARJ] Error actualizando tasas en BD:', e);
@@ -706,18 +718,77 @@ export const useArjStore = defineStore('arj', {
       this.notif(`Cliente seleccionado: ${cli.nombre}`, 'info');
     },
 
-    // Pagos Múltiples en Carrito
-    agregarPagoCarrito(metodo, montoUSD, ref = '') {
-      const vUSD = parseFloat(montoUSD) || 0;
-      if (vUSD <= 0) return;
-      const vBs = Math.round(vUSD * this.tasa_bcv * 100) / 100;
+    // Pagos Múltiples en Carrito (M2)
+    agregarPagoCarrito(pagoData, montoSecundario = null, ref = '', montoOpcionalBs = null) {
+      let metodo = 'Divisas Efectivo';
+      let montoIngresado = 0;
+      let moneda = 'USD';
+      let refPago = ref;
+      let montoUSD = 0;
+      let montoBs = 0;
+      let montoVerde = null;
+      let tasaUsada = this.tasa_bcv;
+
+      if (typeof pagoData === 'object' && pagoData !== null) {
+        metodo = pagoData.metodo || metodo;
+        montoIngresado = parseFloat(pagoData.monto ?? pagoData.monto_usd ?? pagoData.monto_bs ?? 0) || 0;
+        moneda = pagoData.moneda || (metodo.toLowerCase().includes('bs') ? 'Bs' : 'USD');
+        refPago = pagoData.ref || pagoData.referencia || ref;
+        montoUSD = parseFloat(pagoData.monto_usd) || 0;
+        montoBs = parseFloat(pagoData.monto_bs) || 0;
+        montoVerde = pagoData.monto_verde != null ? parseFloat(pagoData.monto_verde) : null;
+        tasaUsada = parseFloat(pagoData.tasa_usada) || (moneda === 'Bs' ? this.tasa_par : this.tasa_bcv);
+      } else {
+        metodo = pagoData || metodo;
+        montoUSD = parseFloat(montoSecundario) || 0;
+        montoIngresado = montoUSD;
+        refPago = ref || '';
+        if (montoOpcionalBs != null && parseFloat(montoOpcionalBs) > 0) {
+          montoBs = parseFloat(montoOpcionalBs);
+        }
+      }
+
+      const mLower = metodo.toLowerCase();
+      const esBs = moneda === 'Bs' || mLower.includes('bs') || mLower.includes('móvil') || mLower.includes('movil') || mLower.includes('transferencia') || mLower.includes('punto');
+      const esVerde = mLower.includes('divisa') || mLower.includes('verde') || (mLower.includes('efectivo') && !esBs);
+
+      if (esBs) {
+        moneda = 'Bs';
+        tasaUsada = this.tasa_par;
+        const valBs = montoBs > 0 ? montoBs : (montoIngresado > 0 ? montoIngresado : montoUSD * this.tasa_par);
+        montoBs = Math.round(valBs * 100) / 100;
+        // M2: Los pagos en Bs. se convierten con tasa_par
+        montoUSD = this.tasa_par > 0 ? Math.round((montoBs / this.tasa_par) * 100) / 100 : 0;
+      } else if (esVerde) {
+        moneda = 'USD_VERDE';
+        tasaUsada = this.tasa_bcv;
+        const valVerde = montoVerde != null && montoVerde > 0 ? montoVerde : (montoIngresado > 0 ? montoIngresado : montoUSD);
+        montoVerde = Math.round(valVerde * 100) / 100;
+        // M2: Un cobro en $Verde se acredita como $BCV (se divide entre factor de descuento divisa)
+        montoUSD = verdeABcv(montoVerde, this);
+        montoBs = Math.round(montoUSD * this.tasa_bcv * 100) / 100;
+      } else {
+        moneda = 'USD';
+        tasaUsada = this.tasa_bcv;
+        montoUSD = montoUSD > 0 ? montoUSD : montoIngresado;
+        montoBs = Math.round(montoUSD * this.tasa_bcv * 100) / 100;
+      }
+
+      if (montoUSD <= 0 && montoBs <= 0) return;
+
       this.carrito.pagos.push({
         metodo,
-        monto_usd: vUSD,
-        monto_bs: vBs,
-        ref: ref || ''
+        moneda,
+        monto: montoIngresado,
+        monto_usd: montoUSD,
+        monto_bs: montoBs,
+        monto_verde: montoVerde,
+        tasa_usada: tasaUsada,
+        ref: refPago
       });
-      this.notif(`Pago de ${fmtUSD(vUSD)} agregado`, 'info');
+
+      const txtMonto = moneda === 'Bs' ? `Bs. ${montoBs.toLocaleString('es-VE')}` : fmtUSD(montoVerde || montoUSD);
+      this.notif(`Pago de ${txtMonto} (${metodo}) agregado`, 'info');
     },
 
     removerPagoCarrito(idx) {
@@ -1119,12 +1190,15 @@ export const useArjStore = defineStore('arj', {
         try {
           const { supabase } = await import('../services/supabase.js');
 
-          // 1. Insertar fila en tabla 'pagos'
+          // 1. Insertar fila en tabla 'pagos' con la tasa correspondiente al método (M2)
+          const mLower = (metodo || '').toLowerCase();
+          const esBs = mLower.includes('bs') || mLower.includes('móvil') || mLower.includes('movil') || mLower.includes('transferencia') || mLower.includes('punto');
+          const tasaCobro = esBs ? (this.tasa_par || this.tasa_bcv) : (this.tasa_bcv || this.tasa_par);
           const pagoPayload = {
             factura_id: fac.id,
             monto_usd: abono,
-            monto_bs: Math.round(abono * this.tasa_bcv * 100) / 100,
-            tasa_usada: this.tasa_bcv,
+            monto_bs: Math.round(abono * tasaCobro * 100) / 100,
+            tasa_usada: tasaCobro,
             metodo: metodo,
             referencia: ref || '',
             registrado_por: this.usuarioNombre

@@ -19,6 +19,7 @@ function serializarEstado(state) {
     tasa_par: state.tasa_par,
     dto_divisa: state.dto_divisa,
     tasasConfirmadasHoy: state.tasasConfirmadasHoy,
+    fechaConfirmacionTasas: state.fechaConfirmacionTasas,
     
     // Preferencias de usuario
     favoritos: state.favoritos,
@@ -57,7 +58,16 @@ export function cargarDatosLocal(store) {
       if (datos.tasa_bcv) state.tasa_bcv = datos.tasa_bcv;
       if (datos.tasa_par) state.tasa_par = datos.tasa_par;
       if (datos.dto_divisa) state.dto_divisa = datos.dto_divisa;
-      if (datos.tasasConfirmadasHoy !== undefined) state.tasasConfirmadasHoy = datos.tasasConfirmadasHoy;
+      
+      // M1: Debe confirmar tasas hoy formalmente (solo persiste si fue ratificada en la misma fecha calendario)
+      const hoy = new Date().toISOString().slice(0, 10);
+      if (datos.fechaConfirmacionTasas === hoy && datos.tasasConfirmadasHoy === true) {
+        state.tasasConfirmadasHoy = true;
+        state.fechaConfirmacionTasas = hoy;
+      } else {
+        state.tasasConfirmadasHoy = false;
+        state.fechaConfirmacionTasas = null;
+      }
       if (datos.favoritos) state.favoritos = datos.favoritos;
       if (datos.turnoActual !== undefined) state.turnoActual = datos.turnoActual;
       if (datos.carrito && datos.carrito.items && datos.carrito.items.length > 0) {

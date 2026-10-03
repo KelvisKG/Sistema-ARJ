@@ -19,10 +19,10 @@
       <div class="header-right">
         <div class="tasa-info" @click="store.cambiarVista('config')" title="Tasa de cambio paralela">
           <i class="ti ti-currency-dollar"></i>
-          Paralelo: <strong id="tasa-par">{{ store.tasa_par.toFixed(2) }}</strong>
+          Paralelo: <strong id="tasa-par">{{ (store.tasa_par || 0).toFixed(2) }}</strong>
         </div>
         <div class="tasa-info" @click="store.cambiarVista('config')" title="Tasa oficial BCV">
-          BCV: <strong id="tasa-bcv">{{ store.tasa_bcv.toFixed(2) }}</strong>
+          BCV: <strong id="tasa-bcv">{{ (store.tasa_bcv || 0).toFixed(2) }}</strong>
         </div>
 
         <button
@@ -67,7 +67,7 @@
       <i class="ti ti-alert-triangle" style="font-size:20px;flex:none"></i>
       <div class="bt-txt">
         <div id="bt-msg"><strong>Las tasas no se han confirmado hoy.</strong></div>
-        <div class="bt-sub" id="bt-sub">Verifica la tasa BCV ({{ store.tasa_bcv.toFixed(2) }}) y Paralelo ({{ store.tasa_par.toFixed(2) }}) antes de continuar.</div>
+        <div class="bt-sub" id="bt-sub">Verifica la tasa BCV ({{ (store.tasa_bcv || 0).toFixed(2) }}) y Paralelo ({{ (store.tasa_par || 0).toFixed(2) }}) antes de continuar.</div>
       </div>
       <div style="display:flex;gap:6px">
         <button @click="store.cambiarVista('config')"><i class="ti ti-settings"></i> Ir a Tasas</button>
@@ -95,7 +95,7 @@
           <i class="ti ti-package"></i> <strong>Inventario:</strong> {{ repuestosCriticosCount }} repuestos tienen stock mínimo o agotado.
         </div>
         <div style="color:var(--dgray);font-size:12px;border-top:1px solid var(--border);padding-top:8px;margin-top:8px">
-          Tasa BCV: <strong>{{ store.tasa_bcv }}</strong> · Paralelo: <strong>{{ store.tasa_par }}</strong> · Brecha: <strong>{{ ((store.tasa_par / store.tasa_bcv - 1) * 100).toFixed(1) }}%</strong>
+          Tasa BCV: <strong>{{ store.tasa_bcv }}</strong> · Paralelo: <strong>{{ store.tasa_par }}</strong> · Brecha: <strong>{{ store.tasa_bcv > 0 ? ((store.tasa_par / store.tasa_bcv - 1) * 100).toFixed(1) + '%' : '0%' }}</strong>
         </div>
       </div>
     </div>
