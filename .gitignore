@@ -31,3 +31,4 @@ dist-ssr
 # Local database dumps and scratch files
 Base de datos ARJ/
 scratch/
+scripts/

@@ -740,6 +740,15 @@ export const useArjStore = defineStore('arj', {
 
     // Emisión de Factura Formal
     async emitirFactura() {
+      // 0. Bloqueo estricto sin conexión a la base de datos (C7)
+      if (!this.supabaseConectado || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        this.notif('❌ Emisión bloqueada: Sin conexión a la base de datos central. No se permite facturar offline.', 'error');
+        return {
+          ok: false,
+          error: 'Sin conexión a la base de datos central. La emisión fue bloqueada para garantizar la sincronización de inventario y correlativos.'
+        };
+      }
+
       // 1. Validar que el carrito no esté vacío
       if (this.carrito.items.length === 0) {
         this.notif('El carrito está vacío. Agrega productos antes de facturar.', 'warning');
@@ -790,22 +799,22 @@ export const useArjStore = defineStore('arj', {
         return { ok: false, error: 'Descuento no autorizado' };
       }
 
-      // 8. Calcular correlativo con año dinámico y BD / fallback local (C6)
-      const prefijo = this.empresa === 'directa' ? 'VD' : 'DIST';
-      const anio = new Date().getFullYear();
+      // 8. Obtener correlativo oficial desde la base de datos (C6)
       let numFactura = null;
-
-      if (this.supabaseConectado) {
-        try {
-          const { obtenerSiguienteCorrelativoBD } = await import('../services/supabase.js');
-          numFactura = await obtenerSiguienteCorrelativoBD(this.empresa);
-        } catch (_) {}
+      try {
+        const { obtenerSiguienteCorrelativoBD } = await import('../services/supabase.js');
+        numFactura = await obtenerSiguienteCorrelativoBD(this.empresa);
+      } catch (errCorr) {
+        console.error('[ARJ] Error obteniendo correlativo de BD:', errCorr);
       }
 
+      // Si falla la consulta a BD, BLOQUEAR emisión para evitar colisión de números (C6)
       if (!numFactura) {
-        const facturasEmpresa = this.todasFacturas.filter(f => f.empresa === this.empresa && f.num && f.num.includes(String(anio)));
-        const correlativo = String(facturasEmpresa.length + 1).padStart(5, '0');
-        numFactura = `${prefijo}-${anio}-${correlativo}`;
+        this.notif('❌ Emisión bloqueada: No se pudo obtener el correlativo oficial desde la base de datos.', 'error');
+        return {
+          ok: false,
+          error: 'No se pudo obtener el correlativo oficial desde la base de datos. Se bloquea la emisión para evitar duplicidad de correlativos.'
+        };
       }
 
       const totalUSD = this.totalCarritoUSD;
@@ -973,15 +982,22 @@ export const useArjStore = defineStore('arj', {
         this.notif('Solo el gerente puede anular facturas', 'error');
         return false;
       }
+
+      // C7 / Seguridad: Bloquear anulación sin conexión con la base de datos central
+      if (!this.supabaseConectado || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        this.notif('❌ Anulación bloqueada: Sin conexión a la base de datos central.', 'error');
+        return false;
+      }
+
       const fac = this.todasFacturas.find(f => f.id === facturaId || f.num === facturaId);
       if (!fac) {
         this.notif('Factura no encontrada', 'error');
         return false;
       }
 
-      // Persistir en BD PRIMERO si está conectado
+      // Persistir en BD PRIMERO
       // Solo enviamos a BD si el ID no es el temporal local (que empieza con 'FAC-')
-      if (this.supabaseConectado && fac.id && !String(fac.id).startsWith('FAC-')) {
+      if (fac.id && !String(fac.id).startsWith('FAC-')) {
         const res = await anularFacturaEnSupabase(fac.id, motivo, this.usuarioNombre, fac.empresa);
         if (!res.ok) {
           this.notif(`❌ Error al anular en la base de datos: ${res.error}`, 'error');

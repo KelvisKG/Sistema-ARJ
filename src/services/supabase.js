@@ -281,6 +281,18 @@ export async function cargarDatosCompletos() {
 export async function obtenerSiguienteCorrelativoBD(empresa) {
   const prefijo = empresa === 'directa' ? 'VD' : 'DIST';
   const anio = new Date().getFullYear();
+
+  // 1. Intentar RPC con secuencia atómica y bloqueo FOR UPDATE en Postgres (C6)
+  try {
+    const { data: seqData, error: seqErr } = await supabase.rpc('obtener_siguiente_correlativo_seq', {
+      p_empresa: empresa
+    });
+    if (!seqErr && seqData && typeof seqData === 'string' && seqData.startsWith(prefijo)) {
+      return seqData;
+    }
+  } catch (_) {}
+
+  // 2. Fallback consultando el último número registrado en la base de datos
   const patron = `${prefijo}-${anio}-%`;
   try {
     const { data, error } = await supabase
@@ -304,19 +316,70 @@ export async function obtenerSiguienteCorrelativoBD(empresa) {
       return `${prefijo}-${anio}-00001`;
     }
   } catch (e) {
-    console.warn('[ARJ] No se pudo obtener correlativo de BD:', e);
+    console.error('[ARJ] Error al obtener correlativo de la base de datos:', e);
   }
   return null;
 }
 
+/**
+ * Deduce la tasa correspondiente según el método de pago (C3 / M2).
+ * Métodos en Bolívares usan tasa Paralelo, métodos en USD usan tasa BCV.
+ */
+function deducirTasaPago(pago, factura) {
+  if (pago.tasa_usada && parseFloat(pago.tasa_usada) > 0) {
+    return parseFloat(pago.tasa_usada);
+  }
+  const m = (pago.metodo || '').toString().toLowerCase();
+  const esBs = m.includes('bs') || m.includes('móvil') || m.includes('movil') ||
+               m.includes('transferencia') || m.includes('punto') || m.includes('debito') ||
+               m.includes('deposito') || pago.moneda === 'Bs';
+  if (esBs) {
+    return parseFloat(factura.tasa_par || factura.tasa_bcv || 1);
+  }
+  return parseFloat(factura.tasa_bcv || factura.tasa_par || 1);
+}
+
+/**
+ * Auxiliar: Revierte stock previamente descontado si ocurre un error durante el proceso de guardado (C4)
+ */
+async function _revertirStockDescontado(itemsDescontados, stockField) {
+  for (const item of itemsDescontados) {
+    try {
+      const { data: prod } = await supabase
+        .from('productos')
+        .select(`id, ${stockField}`)
+        .eq('id', item.id)
+        .maybeSingle();
+      if (prod) {
+        const stockRestaurado = (prod[stockField] || 0) + item.cant;
+        await supabase.from('productos').update({ [stockField]: stockRestaurado }).eq('id', item.id);
+      }
+    } catch (e) {
+      console.error(`[ARJ] Error en reversión compensatoria de producto ${item.id}:`, e);
+    }
+  }
+}
+
+/**
+ * Guarda una factura COMPLETA en Supabase con persistencia atómica en 4 tablas:
+ * 1. facturas (cabecera) → 2. factura_items (detalle) → 3. productos (UPDATE stock) → 4. pagos
+ *
+ * Utiliza la función RPC 'emitir_factura_atomica' en Postgres si está disponible (C4).
+ * Si no está disponible, ejecuta un pipeline compensatorio estricto con rollback automático.
+ *
+ * @param {Object} factura - Objeto factura completo del store
+ * @param {Array}  items   - Array de items del carrito al momento de emitir
+ * @param {Array}  pagos   - Array de pagos registrados en el carrito
+ * @param {string} empresa - 'directa' | 'distribuidora'
+ * @returns {{ ok: boolean, data?: Object, error?: string, facturaId?: string|number }}
+ */
 export async function guardarFacturaEnSupabase(factura, items, pagos, empresa) {
-  // Guardia: sin conexión en navegador no intentamos (evita error cripítico de red)
+  // Guardia: sin conexión en navegador no intentamos
   if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.onLine === false) {
     return { ok: false, error: 'Sin conexión a internet. La factura no fue guardada.' };
   }
 
   try {
-    // ═══ 1. INSERT en tabla 'facturas' (esquema real de la BD) ═══
     const ahora = new Date();
     const facturaPayload = {
       numero:            factura.num,
@@ -342,6 +405,70 @@ export async function guardarFacturaEnSupabase(factura, items, pagos, empresa) {
       cobrar_verde:      factura.cobrar_verde || null
     };
 
+    // Preparar renglones con deducción de origen (C2)
+    const itemsPayload = (items || []).map(it => {
+      const factorLanded = parseFloat(it.factor_landed || it.factor || 0);
+      let origenFinal = (it.origen || '').toString().trim().toLowerCase();
+      // Si no trae origen explícito 'local' o 'importado', se deduce por factor_landed (<= 1.001 -> local)
+      if (origenFinal !== 'local' && origenFinal !== 'importado') {
+        origenFinal = (Number.isFinite(factorLanded) && factorLanded > 0 && factorLanded <= 1.001) ? 'local' : 'importado';
+      }
+      const cant = parseInt(it.cant, 10) || 0;
+      const fob = parseFloat(it.fob) || 0;
+      const precio = parseFloat(it.precio) || 0;
+      return {
+        producto_id:     it.id || null,
+        cod_alt:         it.cod_alt || '',
+        descripcion:     it.desc || '',
+        cantidad:        cant,
+        fob_unitario:    fob,
+        precio_unitario: precio,
+        total_linea:     cant * precio,
+        tier:            factura.tier || 'Publico',
+        factor_landed:   (Number.isFinite(factorLanded) && factorLanded > 0) ? factorLanded : null,
+        origen:          origenFinal
+      };
+    });
+
+    // Preparar pagos con deducción de tasa por método (C3 / M2)
+    const pagosPayload = (pagos || []).map(p => {
+      const tasaUsada = deducirTasaPago(p, factura);
+      const montoUSD = parseFloat(p.monto_usd) || 0;
+      const montoBs = (parseFloat(p.monto_bs) > 0)
+        ? parseFloat(p.monto_bs)
+        : Math.round(montoUSD * tasaUsada * 100) / 100;
+      return {
+        monto_usd:      montoUSD,
+        monto_bs:       montoBs,
+        tasa_usada:     tasaUsada,
+        metodo:         p.metodo || 'Efectivo',
+        referencia:     p.ref || p.referencia || '',
+        registrado_por: factura.vendedor || 'Sistema'
+      };
+    });
+
+    // ═══ INTENTO 1: FUNCIÓN RPC TRANSACCIONAL ATÓMICA EN POSTGRES (C4) ═══
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('emitir_factura_atomica', {
+        p_factura: facturaPayload,
+        p_items: itemsPayload,
+        p_pagos: pagosPayload,
+        p_empresa: empresa
+      });
+
+      if (!rpcErr && rpcRes) {
+        if (rpcRes.ok) {
+          return { ok: true, data: rpcRes.data };
+        } else {
+          return { ok: false, error: rpcRes.error || 'Error en transacción atómica de Postgres' };
+        }
+      }
+    } catch (_) {
+      // Si la función RPC no existe en la BD, continúa al flujo con rollback compensatorio
+    }
+
+    // ═══ INTENTO 2: PIPELINE CON TRANSACCIONALIDAD COMPENSATORIA ESTRICTA (FALLBACK) ═══
+    // 1. INSERT en tabla 'facturas'
     const { data: facturaData, error: errorFactura } = await supabase
       .from('facturas')
       .insert([facturaPayload])
@@ -355,80 +482,109 @@ export async function guardarFacturaEnSupabase(factura, items, pagos, empresa) {
 
     const facturaId = facturaData.id;
 
-    // ═══ 2. INSERT en tabla 'factura_items' (detalle de productos) ═══
-    if (items && items.length > 0) {
-      const itemsPayload = items.map(it => ({
-        factura_id:      facturaId,
-        producto_id:     it.id || null,
-        cod_alt:         it.cod_alt || '',
-        descripcion:     it.desc || '',
-        cantidad:        it.cant || 0,
-        fob_unitario:    parseFloat(it.fob) || 0,
-        precio_unitario: parseFloat(it.precio) || 0,
-        total_linea:     (it.cant || 0) * (parseFloat(it.precio) || 0),
-        tier:            factura.tier || 'Publico',
-        origen:          it.origen || 'importado'
+    // 2. INSERT en tabla 'factura_items'
+    if (itemsPayload.length > 0) {
+      const itemsConId = itemsPayload.map(it => ({
+        ...it,
+        factura_id: facturaId
       }));
 
-      const { error: errorItems } = await supabase
+      let { error: errorItems } = await supabase
         .from('factura_items')
-        .insert(itemsPayload);
+        .insert(itemsConId);
+
+      // Si la BD no tiene la columna factor_landed (ej. staging), reintentar sin ella preservando origen
+      if (errorItems && (errorItems.message?.includes('factor_landed') || errorItems.code === 'PGRST204')) {
+        const itemsSinFactor = itemsConId.map(({ factor_landed, ...resto }) => resto);
+        const reintento = await supabase
+          .from('factura_items')
+          .insert(itemsSinFactor);
+        errorItems = reintento.error;
+      }
 
       if (errorItems) {
         console.error('[ARJ] Error insertando factura_items:', errorItems);
-        // La cabecera ya está en BD. Retornamos con el ID para que el caller pueda informar
+        // Rollback compensatorio: eliminar cabecera para no dejar registros huérfanos (C4)
+        await supabase.from('facturas').delete().eq('id', facturaId);
         return {
           ok: false,
-          error: `Cabecera guardada (ID: ${facturaId}) pero falló el detalle de productos: ${errorItems.message}`,
-          facturaId
+          error: `Error al registrar productos (${errorItems.message}). La factura fue revertida.`
         };
       }
     }
 
-    // ═══ 3. UPDATE stock en tabla 'productos' ═══
+    // 3. UPDATE stock en tabla 'productos' (con seguimiento de cambios para rollback)
     const stockField = empresa === 'directa' ? 'stock_vd' : 'stock_dist';
+    const itemsDescontados = [];
+
     for (const it of (items || [])) {
-      if (!it.id) continue; // sin ID no podemos hacer UPDATE seguro
+      if (!it.id) {
+        // C4: No ignorar en silencio. Producto sin ID no puede garantizar stock
+        await _revertirStockDescontado(itemsDescontados, stockField);
+        await supabase.from('factura_items').delete().eq('factura_id', facturaId);
+        await supabase.from('facturas').delete().eq('id', facturaId);
+        return {
+          ok: false,
+          error: `El producto "${it.desc || it.cod_alt}" no tiene identificador válido para descontar inventario.`
+        };
+      }
+
       try {
-        // Leer stock actual y restar (operación atómica simple)
         const { data: prodActual, error: errRead } = await supabase
           .from('productos')
-          .select(stockField)
+          .select(`id, ${stockField}`)
           .eq('id', it.id)
           .single();
 
-        if (!errRead && prodActual !== null) {
-          const nuevoStock = (prodActual[stockField] || 0) - (it.cant || 0);
-          await supabase
-            .from('productos')
-            .update({ [stockField]: nuevoStock })
-            .eq('id', it.id);
+        if (errRead || !prodActual) {
+          throw new Error(errRead?.message || 'Producto no encontrado en BD');
         }
+
+        const nuevoStock = (prodActual[stockField] || 0) - (it.cant || 0);
+        const { error: errUpdate } = await supabase
+          .from('productos')
+          .update({ [stockField]: nuevoStock })
+          .eq('id', it.id);
+
+        if (errUpdate) {
+          throw new Error(errUpdate.message);
+        }
+
+        itemsDescontados.push({ id: it.id, cant: it.cant });
       } catch (eStock) {
-        // No abortar la factura por error de stock — se logra al menos la trazabilidad
-        console.warn(`[ARJ] Error actualizando stock de producto ${it.id}:`, eStock);
+        console.error(`[ARJ] Error crítico descontando stock de ${it.cod_alt || it.id}:`, eStock);
+        // Rollback completo de lo aplicado hasta ahora
+        await _revertirStockDescontado(itemsDescontados, stockField);
+        await supabase.from('factura_items').delete().eq('factura_id', facturaId);
+        await supabase.from('facturas').delete().eq('id', facturaId);
+        return {
+          ok: false,
+          error: `Fallo al descontar stock del producto ${it.cod_alt || it.desc}: ${eStock.message}. Emisión abortada.`
+        };
       }
     }
 
-    // ═══ 4. INSERT en tabla 'pagos' (si hay pagos registrados) ═══
-    if (pagos && pagos.length > 0) {
-      const pagosPayload = pagos.map(p => ({
-        factura_id:     facturaId,
-        monto_usd:      parseFloat(p.monto_usd) || 0,
-        monto_bs:       parseFloat(p.monto_bs) || 0,
-        tasa_usada:     factura.tasa_bcv,
-        metodo:         p.metodo || 'Efectivo',
-        referencia:     p.ref || '',
-        registrado_por: factura.vendedor
+    // 4. INSERT en tabla 'pagos' (C3: fallar en voz alta y revertir si hay error)
+    if (pagosPayload.length > 0) {
+      const pagosConId = pagosPayload.map(p => ({
+        ...p,
+        factura_id: facturaId
       }));
 
       const { error: errorPagos } = await supabase
         .from('pagos')
-        .insert(pagosPayload);
+        .insert(pagosConId);
 
       if (errorPagos) {
-        // Logueamos pero no fallamos: la factura y sus items ya quedaron
-        console.warn('[ARJ] Error insertando pagos (factura ya guardada):', errorPagos);
+        console.error('[ARJ] Error insertando pagos:', errorPagos);
+        // C3: Debe fallar en voz alta y revertir todo lo aplicado previamente
+        await _revertirStockDescontado(itemsDescontados, stockField);
+        await supabase.from('factura_items').delete().eq('factura_id', facturaId);
+        await supabase.from('facturas').delete().eq('id', facturaId);
+        return {
+          ok: false,
+          error: `Error registrando los pagos (${errorPagos.message}). Emisión abortada y revertida por seguridad.`
+        };
       }
     }
 
@@ -441,9 +597,10 @@ export async function guardarFacturaEnSupabase(factura, items, pagos, empresa) {
 }
 
 /**
- * Anula una factura en Supabase:
- * 1. Actualiza estado en 'facturas' a 'anulada'
- * 2. Lee factura_items y devuelve el stock a 'productos'
+ * Anula una factura en Supabase con integridad transaccional (C5):
+ * 1. Restituye el stock de todos los items en 'productos'
+ * 2. Actualiza estado en 'facturas' a 'anulada'
+ * Si la restitución de stock falla, NO se anula la factura y se preserva el inventario.
  *
  * @param {string|number} facturaId  - ID real de Supabase (UUID o int)
  * @param {string}        motivo     - Motivo de anulación (obligatorio)
@@ -457,59 +614,60 @@ export async function anularFacturaEnSupabase(facturaId, motivo, usuario, empres
   }
   try {
     const motivoCompleto = usuario ? `${motivo} (Por: ${usuario})` : motivo;
-    const payloadBase = {
-      estado:           'anulada',
-      motivo_anulacion: motivoCompleto,
-      fecha_anulacion:  new Date().toISOString()
-    };
 
-    // Filtro flexible: si facturaId es numérico o UUID busca por id, sino por numero
+    // ═══ INTENTO 1: RPC TRANSACCIONAL ATÓMICA (C5) ═══
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('anular_factura_atomica', {
+        p_factura_id: String(facturaId),
+        p_motivo: motivoCompleto,
+        p_usuario: usuario || 'Sistema',
+        p_empresa: empresa
+      });
+
+      if (!rpcErr && rpcRes) {
+        if (rpcRes.ok) {
+          return { ok: true };
+        } else {
+          return { ok: false, error: rpcRes.error };
+        }
+      }
+    } catch (_) {}
+
+    // ═══ INTENTO 2: FALLBACK ESTRICTO CLIENTE ═══
     const esUUIDoNumero = typeof facturaId === 'number' || (typeof facturaId === 'string' && !facturaId.startsWith('FAC-') && !facturaId.startsWith('VD-') && !facturaId.startsWith('DIST-'));
     const columnaFiltro = esUUIDoNumero ? 'id' : 'numero';
 
-    // 1. Marcar factura como anulada (probando primero con anulado_por si la columna existe)
-    let { error: errFac } = await supabase
-      .from('facturas')
-      .update({
-        ...payloadBase,
-        anulado_por: usuario
-      })
-      .eq(columnaFiltro, facturaId);
-
-    // Si la BD no tiene la columna 'anulado_por', reintentar con payloadBase estándar
-    if (errFac && (errFac.message?.includes('anulado_por') || errFac.code === 'PGRST204')) {
-      const reintento = await supabase
-        .from('facturas')
-        .update(payloadBase)
-        .eq(columnaFiltro, facturaId);
-      errFac = reintento.error;
-    }
-
-    if (errFac) {
-      console.error('[ARJ] Error anulando factura en BD:', errFac);
-      return { ok: false, error: `Error al anular la factura: ${errFac.message}` };
-    }
-
-    // 2. Obtener el ID real de la factura para buscar los factura_items
+    // Obtener ID real y verificar estado previo
     let idReal = facturaId;
-    if (!esUUIDoNumero) {
-      const { data: facData } = await supabase
-        .from('facturas')
-        .select('id')
-        .eq('numero', facturaId)
-        .maybeSingle();
-      if (facData) idReal = facData.id;
-    }
+    const { data: facCheck, error: errFacCheck } = await supabase
+      .from('facturas')
+      .select('id, estado')
+      .eq(columnaFiltro, facturaId)
+      .maybeSingle();
 
-    // 3. Leer los items de factura_items para devolver el stock
+    if (errFacCheck || !facCheck) {
+      return { ok: false, error: 'Factura no encontrada en la base de datos' };
+    }
+    if (facCheck.estado === 'anulada') {
+      return { ok: false, error: 'La factura ya se encuentra anulada previamente' };
+    }
+    idReal = facCheck.id;
+
+    // Leer items vinculados a la factura
     const { data: items, error: errItems } = await supabase
       .from('factura_items')
       .select('producto_id, cod_alt, cantidad')
       .eq('factura_id', idReal);
 
-    if (!errItems && items && items.length > 0) {
-      const stockField = empresa === 'directa' ? 'stock_vd' : 'stock_dist';
+    if (errItems) {
+      return { ok: false, error: `No se pudieron leer los renglones de la factura: ${errItems.message}` };
+    }
 
+    // 1. Restituir inventario PRIMERO comprobando cada producto (C5)
+    const stockField = empresa === 'directa' ? 'stock_vd' : 'stock_dist';
+    const itemsRestituidos = [];
+
+    if (items && items.length > 0) {
       for (const it of items) {
         try {
           let prodId = it.producto_id;
@@ -521,11 +679,9 @@ export async function anularFacturaEnSupabase(facturaId, motivo, usuario, empres
               .select(`id, ${stockField}`)
               .eq('id', prodId)
               .maybeSingle();
-            if (prod) {
-              stockActual = prod[stockField] || 0;
-            }
+            if (prod) stockActual = prod[stockField] || 0;
           }
-          // Fallback por cod_alt si no se encontró por ID
+
           if (stockActual === null && it.cod_alt) {
             const { data: prod } = await supabase
               .from('productos')
@@ -538,17 +694,74 @@ export async function anularFacturaEnSupabase(facturaId, motivo, usuario, empres
             }
           }
 
-          if (prodId && stockActual !== null) {
-            const stockRestituido = stockActual + (it.cantidad || 0);
-            await supabase
-              .from('productos')
-              .update({ [stockField]: stockRestituido })
-              .eq('id', prodId);
+          if (!prodId || stockActual === null) {
+            throw new Error(`Producto ${it.cod_alt || it.producto_id} no encontrado en catálogo`);
           }
+
+          const stockRestituido = stockActual + (it.cantidad || 0);
+          const { error: errUpdateStock } = await supabase
+            .from('productos')
+            .update({ [stockField]: stockRestituido })
+            .eq('id', prodId);
+
+          if (errUpdateStock) {
+            throw new Error(errUpdateStock.message);
+          }
+
+          itemsRestituidos.push({ id: prodId, cant: it.cantidad });
         } catch (eStock) {
-          console.warn(`[ARJ] Error restituyendo stock de producto ${it.cod_alt || it.producto_id} al anular:`, eStock);
+          // Deshacer las restituciones parciales realizadas hasta el momento
+          for (const r of itemsRestituidos) {
+            try {
+              const { data: pCur } = await supabase.from('productos').select(stockField).eq('id', r.id).single();
+              if (pCur) {
+                await supabase.from('productos').update({ [stockField]: (pCur[stockField] || 0) - r.cant }).eq('id', r.id);
+              }
+            } catch (_) {}
+          }
+          return {
+            ok: false,
+            error: `Error restituyendo inventario del producto ${it.cod_alt || it.producto_id}: ${eStock.message}. La anulación fue cancelada para preservar el stock.`
+          };
         }
       }
+    }
+
+    // 2. Marcar factura como anulada una vez garantizada la restitución del inventario
+    const payloadBase = {
+      estado:           'anulada',
+      motivo_anulacion: motivoCompleto,
+      fecha_anulacion:  new Date().toISOString()
+    };
+
+    let { error: errFac } = await supabase
+      .from('facturas')
+      .update({
+        ...payloadBase,
+        anulado_por: usuario
+      })
+      .eq('id', idReal);
+
+    if (errFac && (errFac.message?.includes('anulado_por') || errFac.code === 'PGRST204')) {
+      const reintento = await supabase
+        .from('facturas')
+        .update(payloadBase)
+        .eq('id', idReal);
+      errFac = reintento.error;
+    }
+
+    if (errFac) {
+      console.error('[ARJ] Error marcando factura como anulada:', errFac);
+      // Revertir restitución de stock si falló la actualización del estado de factura
+      for (const r of itemsRestituidos) {
+        try {
+          const { data: pCur } = await supabase.from('productos').select(stockField).eq('id', r.id).single();
+          if (pCur) {
+            await supabase.from('productos').update({ [stockField]: (pCur[stockField] || 0) - r.cant }).eq('id', r.id);
+          }
+        } catch (_) {}
+      }
+      return { ok: false, error: `Error al anular la factura: ${errFac.message}` };
     }
 
     return { ok: true };
