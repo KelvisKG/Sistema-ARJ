@@ -17,10 +17,10 @@ export const PRECIOS_TIER = {
   T3: 0.80
 };
 
-// Redondeo al centavo exacto — política confirmada por gerencia (sin redondeo hacia arriba)
+// Redondeo bonito: hacia arriba al $0,50 más cercano (igual que el monolito v13)
 export function redondeoBonito(n) {
-  if (n <= 0) return 0;
-  return Math.round(n * 100) / 100;
+  if (!(n > 0)) return 0;
+  return Math.ceil(n * 2) / 2;
 }
 
 export function sinFob(it) {
@@ -54,8 +54,11 @@ export function dtoDivisaNeutro(estado) {
   return b > 0 ? (1 - 1 / b) * 100 : 0;
 }
 
+// null / '' / undefined = usar la brecha del día (v13.12)
 export function dtoDivisaPct(estado) {
-  const d = parseFloat(estado?.dto_divisa);
+  const raw = estado?.dto_divisa;
+  if (raw === null || raw === undefined || raw === '') return dtoDivisaNeutro(estado);
+  const d = parseFloat(raw);
   return (Number.isFinite(d) && d >= 0) ? d : dtoDivisaNeutro(estado);
 }
 
