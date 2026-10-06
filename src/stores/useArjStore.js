@@ -1,101 +1,96 @@
 // =====================================================================
 // ARJ - Store Central Pinia (Vue 3)
-// 100% fiel a toda la arquitectura y funcionalidades del Sistema ARJ
+//
+// Reglas de esta capa:
+//   · La sesión, el rol y la empresa salen del perfil en Supabase (C-05/C-06).
+//   · Nada se marca como "guardado" hasta que la base de datos lo confirma.
+//   · El dinero se calcula con services/cobros.js (modelo del monolito v13).
 // =====================================================================
 import { defineStore } from 'pinia';
-import { cargarDatosCompletos, guardarFacturaEnSupabase, anularFacturaEnSupabase, guardarBitacoraEnSupabase } from '../services/supabase.js';
+import * as db from '../services/supabase.js';
 import { cargarDatosLocal } from '../services/persistence.js';
 import {
-  precioConTier,
-  precioBaseItem,
-  costoLanded,
-  sinFob,
-  totalEnDivisas,
-  bcvAVerde,
-  verdeABcv,
-  fmtUSD,
-  fmtBs,
-  PRECIOS_TIER
+  precioConTier, precioBaseItem, costoLanded, sinFob, bcvAVerde, verdeABcv, fmtUSD, dtoDivisaNeutro as _neutro,
+  dtoDivisaPct as _pct, dtoDivisaExcedentePct, factorLandedDe, origenDe
 } from '../services/pricing.js';
+import {
+  totalesCarrito, faltaPorPagar, montoParaCompletar, resumenEmision, pagosParaBD, monedaDeMetodo,
+  requiereReferencia, calcularAbono
+} from '../services/cobros.js';
+import { esHoyVE, periodoDe } from '../services/fechas.js';
+
+const carritoVacio = () => ({
+  cliente_id: null,
+  cliente_nombre: '',
+  tier: 'Publico',
+  tipo_pago: 'contado',
+  dias_credito: 30,
+  notas: '',
+  descuento_manual: 0,
+  descuento_motivo: '',
+  pidio_fiscal: false,
+  cobrar_verde: null,        // cobro redondo en efectivo (v13.22)
+  cotizacion_origen: null,   // { id, num } si viene de una cotización (A-10)
+  items: [],
+  pagos: []                  // [{ metodo, moneda: 'USD'|'Bs', monto, ref }]
+});
+
+const empresaDePerfil = e => (e === 'dist' || e === 'distribuidora') ? 'distribuidora' : (e === 'directa' ? 'directa' : 'ambas');
 
 export const useArjStore = defineStore('arj', {
   state: () => ({
-    // Sesión y Usuario
+    // Sesión (solo desde Supabase)
+    verificandoSesion: true,
     autenticado: false,
-    rol: 'gerente', // 'gerente' | 'vendedor'
-    usuarioNombre: 'JJ (Gerente General)',
-    usuarioEmail: 'josehjimenezcas@gmail.com',
+    perfil: null,              // fila de `perfiles`
+    rol: 'vendedor',
+    usuarioNombre: '',
+    empresaPermitida: 'ambas', // 'ambas' | 'directa' | 'distribuidora'
 
-    // Empresa Activa: 'directa' (Venta Directa) | 'distribuidora' (Distribuidora)
+    // Empresa activa
     empresa: 'directa',
     empresaDestino: '',
     mostrandoTransicionEmpresa: false,
 
-    // Navegación
     vistaActiva: 'facturacion',
 
-    // Divisas, Tasas y Brecha (M1: arrancan en 0 y sin confirmar hasta leer BD)
+    // Tasas (de configuracion). dto_divisa null = brecha del día (C-10)
     tasa_bcv: 0,
     tasa_par: 0,
-    dto_divisa: 0,
-    tasasConfirmadasHoy: false,
-    fechaConfirmacionTasas: null,
+    tasas_actualizadas: null,
+    dto_divisa: null,
+    reloj: Date.now(),         // fuerza a reevaluar "confirmadas hoy" al cambiar el día
 
     // Conectividad
     supabaseConectado: false,
+    errorCarga: '',
     cargando: false,
+    procesando: false,         // evita doble envío en operaciones de dinero
 
-    // Catálogo y Datos Maestros
+    // Datos
+    configuracion: null,
+    sistemas: [],
     productos: [],
     clientes: [],
-    facturasCobrar: [],
     todasFacturas: [],
     presupuestos: [],
-    apartados: [],
-    notasCredito: [],
-    movimientos: [], // Kardex
-    movimientosDinero: [], // Flujo de caja
+    movimientos: [],           // kardex visible de la sesión (lo histórico vive en BD)
+    movimientosDinero: [],
     embarques: [],
     turnos: [],
-    turnoActual: null,
     bitacora: [],
-    ventasRecientes: [],
     favoritos: [],
-    
-    // Metas de Venta y Equipo (guardado local)
-    metas_hist: {},
-    equipo_ventas: [],
 
-    // Carrito de Facturación
-    carrito: {
-      cliente_id: null,
-      cliente_nombre: '',
-      tier: 'Publico',
-      tipo_pago: 'contado',
-      dias_credito: 15,
-      anticipo: 0,
-      notas: '',
-      descuento_manual: 0,
-      descuento_motivo: '',
-      pidio_fiscal: false,
-      items: [],
-      pagos: [] // [{ metodo, monto_usd, monto_bs, ref }]
-    },
+    carrito: carritoVacio(),
 
-    // Notificaciones Toast
-    toast: {
-      visible: false,
-      mensaje: '',
-      tipo: 'info'
-    },
+    toast: { visible: false, mensaje: '', tipo: 'info' },
 
-    // Filtros de búsqueda
     busquedaFacturacion: '',
     busquedaInventario: '',
     filtroSistema: '',
     filtroMarca: '',
 
-    // Modales y Estados UI
+    // Modales
     modoCajaActivo: false,
     modalFacturaActivo: false,
     facturaReciente: null,
@@ -110,299 +105,217 @@ export const useArjStore = defineStore('arj', {
     modalAnularActivo: false,
     facturaAAnular: null,
     modalNuevoClienteActivo: false,
-    modalFavoritosActivo: false,
     modalListaPreciosActivo: false,
-    modalAbonoActivo: false,
-    facturaParaAbono: null,
     modalPresupuestoActivo: false,
     presupuestoSeleccionado: null
   }),
 
   getters: {
-    // Brecha cambiario y factor
-    brechaParaleloBCV: (state) => {
-      if (state.tasa_bcv <= 0) return 1;
-      return state.tasa_par / state.tasa_bcv;
-    },
+    esGerente: s => s.rol === 'gerente',
+    puedeCambiarEmpresa: s => s.empresaPermitida === 'ambas',
 
-    dtoDivisaNeutro: (state) => {
-      const b = state.tasa_bcv > 0 ? state.tasa_par / state.tasa_bcv : 1;
-      return b > 0 ? (1 - 1 / b) * 100 : 0;
+    // C-09: confirmación compartida por todas las terminales, en hora de Venezuela
+    tasasConfirmadasHoy: s => {
+      void s.reloj;
+      return !!s.tasas_actualizadas && esHoyVE(s.tasas_actualizadas);
     },
+    tasasCargadas: s => s.tasa_bcv > 0 && s.tasa_par > 0,
 
-    dtoDivisaPct: (state) => {
-      const d = parseFloat(state.dto_divisa);
-      return (Number.isFinite(d) && d >= 0) ? d : state.dtoDivisaNeutro;
-    },
+    estadoTasas: s => ({ tasa_bcv: s.tasa_bcv, tasa_par: s.tasa_par, dto_divisa: s.dto_divisa, cobrar_verde: s.carrito.cobrar_verde }),
+    brechaParaleloBCV: s => (s.tasa_bcv > 0 ? s.tasa_par / s.tasa_bcv : 1),
+    dtoDivisaNeutro() { return _neutro(this.estadoTasas); },
+    dtoDivisaPct() { return _pct(this.estadoTasas); },
+    dtoDivisaExcedente() { return dtoDivisaExcedentePct(this.estadoTasas); },
 
-    dtoDivisaExcedente: (state) => {
-      const d = state.dto_divisa;
-      const n = state.dtoDivisaNeutro;
-      return (d - n) > 0.001 ? (d - n) : 0;
-    },
+    totales() { return totalesCarrito(this.carrito.items, this.estadoTasas); },
+    totalItemsCarrito: s => s.carrito.items.reduce((a, it) => a + (parseInt(it.cant) || 0), 0),
+    subtotalCarrito: s => s.carrito.items.reduce((a, it) => a + it.cant * precioBaseItem(it), 0),
+    totalCarritoUSD() { return this.totales.subtotal; },
+    totalCarritoBs() { return this.totales.totalBs; },
+    totalCarritoEfectivoVerde() { return this.totales.totalUsd; },
+    faltaPorPagarUSD() { return faltaPorPagar(this.carrito.pagos, this.totales); },
+    totalPagadoCarritoUSD() { return Math.max(0, this.totales.subtotal - this.faltaPorPagarUSD); },
 
-    // Totales del Carrito
-    totalItemsCarrito: (state) => {
-      return state.carrito.items.reduce((acc, it) => acc + (parseInt(it.cant) || 0), 0);
-    },
-
-    subtotalCarrito: (state) => {
-      return state.carrito.items.reduce((acc, it) => acc + (it.cant * (it.precio_base || it.precio)), 0);
-    },
-
-    descuentoMontoCarrito: (state) => {
-      const dto = state.carrito.descuento_manual || 0;
-      if (dto <= 0) return 0;
-      return state.subtotalCarrito * (dto / 100);
-    },
-
-    totalCarritoUSD: (state) => {
-      return Math.max(0, state.carrito.items.reduce((acc, it) => acc + (it.cant * it.precio), 0));
-    },
-
-    totalCarritoBs: (state) => {
-      return state.totalCarritoUSD * state.tasa_bcv;
-    },
-
-    totalCarritoEfectivoVerde: (state) => {
-      return totalEnDivisas(state.totalCarritoUSD, state);
-    },
-
-    totalPagadoCarritoUSD: (state) => {
-      return state.carrito.pagos.reduce((acc, p) => acc + (parseFloat(p.monto_usd) || 0), 0);
-    },
-
-    faltaPorPagarUSD: (state) => {
-      return Math.max(0, state.totalCarritoUSD - state.totalPagadoCarritoUSD);
-    },
-
-    // Margen estimado del carrito
-    margenCarritoPct: (state) => {
-      const venta = state.totalCarritoUSD;
+    margenCarritoPct() {
+      const venta = this.totales.subtotal;
       if (venta <= 0) return 0;
-      const costoTotal = state.carrito.items.reduce((acc, it) => {
-        return acc + (it.cant * costoLanded(it, state.productos));
-      }, 0);
-      if (costoTotal <= 0) return 0;
-      return Math.round(((venta - costoTotal) / venta) * 100);
+      const costo = this.carrito.items.reduce((a, it) => a + it.cant * costoLanded(it, this.productos), 0);
+      return costo > 0 ? Math.round(((venta - costo) / venta) * 100) : 0;
     },
 
-    // Total de deuda activa
-    totalDeudaActiva: (state) => {
-      const empKey = state.empresa === 'directa' ? 'directa' : 'distribuidora';
-      return state.facturasCobrar
-        .filter(f => f.empresa === empKey)
-        .reduce((acc, f) => acc + (parseFloat(f.saldo_pendiente) || 0), 0);
-    }
+    facturasCobrar: s => s.todasFacturas.filter(f => f.estado !== 'pagada' && f.estado !== 'anulada' && f.saldo_pendiente > 0.009),
+
+    totalDeudaActiva() {
+      return this.facturasCobrar.filter(f => f.empresa === this.empresa).reduce((a, f) => a + f.saldo_pendiente, 0);
+    },
+
+    ventasRecientes: s => s.todasFacturas.slice(0, 20),
+    equipo_ventas: s => (s.configuracion && s.configuracion.equipo) || [],
+    metas_hist: s => (s.configuracion && s.configuracion.metas_hist) || {},
+    turnoActual: s => s.turnos.find(t => t.estado === 'abierto' && t.usuario_id === (s.perfil && s.perfil.id)) || null
   },
 
   actions: {
-    // Restauración síncrona de sesión para evitar parpadeos
-    restaurarSesion() {
-      const sesionGuardada = localStorage.getItem('arj_sesion');
-      if (sesionGuardada) {
-        try {
-          const dataSesion = JSON.parse(sesionGuardada);
-          if (dataSesion && dataSesion.autenticado) {
-            this.autenticado = true;
-            this.rol = dataSesion.rol;
-            this.usuarioNombre = dataSesion.usuarioNombre;
-          }
-        } catch (e) { }
+    // ═══════════════ SESIÓN ═══════════════
+    async restaurarSesion() {
+      this.verificandoSesion = true;
+      try {
+        const r = await db.obtenerPerfilSesion();
+        if (r.ok) {
+          this._aplicarPerfil(r.perfil);
+          await this.initApp();
+        }
+      } finally {
+        this.verificandoSesion = false;
       }
     },
 
-    // Inicialización del sistema
-    async initApp() {
+    async iniciarSesion(email, password) {
       this.cargando = true;
       try {
-        // Carga offline-first instantánea de datos y carrito
-        cargarDatosLocal(this);
-
-        // Intento de refresco en background desde Supabase
-        const datos = await cargarDatosCompletos();
-        if (datos.conectado) {
-          this.productos = datos.productos;
-          this.clientes = datos.clientes;
-          
-          // Merge local items to preserve them for PDF generation since Supabase doesn't return items
-          if (datos.todasFacturas) {
-            datos.todasFacturas.forEach(fSup => {
-              const fLoc = this.todasFacturas.find(f => f.id === fSup.id || f.num === fSup.num);
-              if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) fSup.items = fLoc.items;
-            });
-            this.todasFacturas = datos.todasFacturas;
-          }
-          if (datos.facturasCobrar) {
-            datos.facturasCobrar.forEach(fSup => {
-              const fLoc = this.facturasCobrar.find(f => f.id === fSup.id || f.num === fSup.num);
-              if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) fSup.items = fLoc.items;
-            });
-            this.facturasCobrar = datos.facturasCobrar;
-          }
-          if (datos.presupuestos) {
-            datos.presupuestos.forEach(pSup => {
-              const pLoc = this.presupuestos.find(p => p.id === pSup.id || p.num === pSup.num);
-              if (pLoc && pLoc.items && Array.isArray(pLoc.items) && pLoc.items.length > 0) pSup.items = pLoc.items;
-            });
-            this.presupuestos = datos.presupuestos;
-          }
-
-          this.ventasRecientes = datos.ventasRecientes || [];
-          
-          this.supabaseConectado = true;
-          
-          if (datos.bitacora && datos.bitacora.length > 0) {
-            this.bitacora = datos.bitacora;
-          }
-
-          if (datos.embarques && datos.embarques.length > 0) {
-            this.embarques = datos.embarques;
-          }
-
-          // Priorizar SIEMPRE las tasas de la base de datos (Supabase) sobre las locales
-          // datos.tasas puede ser null si la tabla configuracion falló — en ese caso no sobreescribir
-          if (datos.tasas && datos.tasas.tasa_bcv > 0 && datos.tasas.tasa_par > 0) {
-             this.tasa_bcv = datos.tasas.tasa_bcv;
-             this.tasa_par = datos.tasas.tasa_par;
-             this.dto_divisa = datos.tasas.dto_divisa || this.dto_divisa;
-             this.guardarTasasLocales();
-          }
-
-          this.logBitacora('sistema', 'Sistema ARJ inicializado y sincronizado');
-        } else {
-          // Si no conectó pero hay tasas locales, las cargamos
-          const tasasGuardadas = localStorage.getItem('ARJ_TASAS');
-          if (tasasGuardadas) {
-            try {
-               const p = JSON.parse(tasasGuardadas);
-               this.tasa_bcv = p.bcv || this.tasa_bcv;
-               this.tasa_par = p.par || this.tasa_par;
-               this.dto_divisa = p.dto || this.dto_divisa;
-            } catch(e) {}
-          }
-          this.logBitacora('sistema', 'Sistema ARJ en modo Offline');
-        }
-
-        this.iniciarSincronizacionOnline();
-      } catch (e) {
-        console.error('[ARJ Store] Error inicializando:', e);
+        const r = await db.iniciarSesion(email, password);
+        if (!r.ok) return r;
+        this._aplicarPerfil(r.perfil);
+        await this.initApp();
+        this.logBitacora('sesion', `${this.usuarioNombre} inició sesión como ${this.rol.toUpperCase()}`);
+        this.notif(`Bienvenido ${this.usuarioNombre}`, 'success');
+        return { ok: true };
       } finally {
         this.cargando = false;
       }
     },
 
-    iniciarSincronizacionOnline() {
-      if (this._escuchandoRed) return;
-      this._escuchandoRed = true;
-      window.addEventListener('online', async () => {
-        if (!this.autenticado) return;
-        this.notif('Conexión recuperada. Extrayendo datos actualizados...', 'info');
-        try {
-          const { cargarDatosCompletos } = await import('../services/supabase.js');
-          const datos = await cargarDatosCompletos();
-          if (datos.conectado) {
-            this.productos = datos.productos || [];
-            this.clientes = datos.clientes || [];
-            
-            // Merge local items to preserve them
-            if (datos.todasFacturas) {
-              datos.todasFacturas.forEach(fSup => {
-                const fLoc = this.todasFacturas.find(f => f.id === fSup.id || f.num === fSup.num);
-                if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) {
-                  fSup.items = fLoc.items;
-                }
-              });
-              this.todasFacturas = datos.todasFacturas;
-            }
-            if (datos.facturasCobrar) {
-              datos.facturasCobrar.forEach(fSup => {
-                const fLoc = this.facturasCobrar.find(f => f.id === fSup.id || f.num === fSup.num);
-                if (fLoc && fLoc.items && Array.isArray(fLoc.items) && fLoc.items.length > 0) {
-                  fSup.items = fLoc.items;
-                }
-              });
-              this.facturasCobrar = datos.facturasCobrar;
-            }
-            if (datos.presupuestos) {
-              datos.presupuestos.forEach(pSup => {
-                const pLoc = this.presupuestos.find(p => p.id === pSup.id || p.num === pSup.num);
-                if (pLoc && pLoc.items && Array.isArray(pLoc.items) && pLoc.items.length > 0) {
-                  pSup.items = pLoc.items;
-                }
-              });
-              this.presupuestos = datos.presupuestos;
-            }
-            this.ventasRecientes = datos.ventasRecientes || [];
-            this.presupuestos = datos.presupuestos || [];
-            this.supabaseConectado = true;
-            this.notif('Sistema actualizado con los últimos datos de la nube.', 'success');
-          }
-        } catch(e) {
-          console.error('[ARJ] Error en sincronización online:', e);
-        }
-      });
+    _aplicarPerfil(perfil) {
+      this.perfil = perfil;
+      this.rol = perfil.rol === 'gerente' ? 'gerente' : 'vendedor';
+      this.usuarioNombre = perfil.nombre_display || 'Usuario';
+      this.empresaPermitida = empresaDePerfil(perfil.empresa);
+      // A-02: el vendedor entra directo a SU empresa
+      this._fijarEmpresa(this.empresaPermitida === 'ambas' ? 'directa' : this.empresaPermitida);
+      this.autenticado = true;
     },
 
-    // Gestión de Tasas
-    calcularBrecha() {
-      const b = this.tasa_bcv > 0 ? this.tasa_par / this.tasa_bcv : 1;
-      const neutro = b > 0 ? (1 - 1 / b) * 100 : 0;
-      // Actualizamos el descuento divisa igual al neutro por defecto
-      this.dto_divisa = Math.round(neutro * 100) / 100;
-      this.guardarTasasLocales();
-    },
-
-    guardarTasasLocales() {
-      localStorage.setItem('ARJ_TASAS', JSON.stringify({
-        bcv: this.tasa_bcv,
-        par: this.tasa_par,
-        dto: this.dto_divisa,
-        confirmadasHoy: this.tasasConfirmadasHoy,
-        fecha: this.fechaConfirmacionTasas
-      }));
-    },
-
-    async confirmarTasas() {
-      const hoy = new Date().toISOString().slice(0, 10);
-      this.tasasConfirmadasHoy = true;
-      this.fechaConfirmacionTasas = hoy;
-      this.guardarTasasLocales();
-      this.logBitacora('sistema', `Tasas confirmadas formalmente: BCV Bs.${this.tasa_bcv} / Paralelo Bs.${this.tasa_par}`);
-
-      if (this.supabaseConectado) {
-        import('../services/supabase.js').then(async ({ supabase }) => {
-          try {
-            await supabase.from('configuracion').update({
-              tasa_bcv: this.tasa_bcv,
-              tasa_par: this.tasa_par,
-              tasas_actualizadas: new Date().toISOString()
-            }).neq('id', 0);
-          } catch (e) {
-            console.warn('[ARJ] Error actualizando tasas en BD:', e);
-          }
-        });
+    _fijarEmpresa(emp) {
+      this.empresa = emp;
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('empresa-directa', 'empresa-distribuidora');
+        document.body.classList.add(`empresa-${emp}`);
       }
     },
 
-    // Notificaciones Toast
+    async logout() {
+      if (this.autenticado) this.logBitacora('sesion', `${this.usuarioNombre} cerró sesión`);
+      await db.cerrarSesion();
+      const tema = localStorage.getItem('arj_tema');
+      localStorage.clear();
+      if (tema) localStorage.setItem('arj_tema', tema);
+      // Recargar la página borra toda la memoria del navegador (igual que el monolito)
+      window.location.reload();
+    },
+
+    // ═══════════════ CARGA ═══════════════
+    async initApp() {
+      this.cargando = true;
+      try {
+        cargarDatosLocal(this);
+        const d = await db.cargarDatosCompletos();
+        if (!d.conectado) {
+          this.supabaseConectado = false;
+          this.errorCarga = d.error || 'No se pudo conectar con la base de datos';
+          this.notif('Sin conexión con la base de datos: ' + this.errorCarga, 'error');
+          return;
+        }
+        this.errorCarga = '';
+        this.productos = d.productos;
+        this.clientes = d.clientes;
+        this.todasFacturas = d.todasFacturas;
+        this.presupuestos = d.presupuestos;
+        this.embarques = d.embarques;
+        this.sistemas = d.sistemas;
+        this.bitacora = d.bitacora;
+        this._aplicarConfiguracion(d.configuracion);
+        this.supabaseConectado = true;
+        this._iniciarRelojYRed();
+      } catch (e) {
+        console.error('[ARJ] Error inicializando:', e);
+        this.supabaseConectado = false;
+      } finally {
+        this.cargando = false;
+      }
+    },
+
+    _aplicarConfiguracion(cfg) {
+      if (!cfg) return;
+      this.configuracion = cfg;
+      this.tasa_bcv = cfg.tasa_bcv;
+      this.tasa_par = cfg.tasa_par;
+      this.tasas_actualizadas = cfg.tasas_actualizadas;
+    },
+
+    _iniciarRelojYRed() {
+      if (this._escuchando) return;
+      this._escuchando = true;
+      setInterval(() => { this.reloj = Date.now(); }, 60000);
+      window.addEventListener('online', async () => {
+        if (!this.autenticado) return;
+        this.notif('Conexión recuperada. Actualizando datos...', 'info');
+        await this.initApp();
+      });
+      window.addEventListener('offline', () => {
+        this.supabaseConectado = false;
+        this.notif('Sin conexión: no se puede facturar, cobrar ni modificar inventario hasta que vuelva.', 'warning');
+      });
+    },
+
+    async recargarProductos() {
+      try { this.productos = await db.cargarProductos(); } catch (e) { console.warn('[ARJ] recargar productos:', e); }
+    },
+    async recargarClientes() {
+      try { this.clientes = await db.cargarClientes(); } catch (e) { console.warn('[ARJ] recargar clientes:', e); }
+    },
+    async recargarFacturas() {
+      try { this.todasFacturas = await db.cargarFacturasRecientes(); } catch (e) { console.warn('[ARJ] recargar facturas:', e); }
+    },
+    async recargarCotizaciones() {
+      try { this.presupuestos = await db.cargarCotizaciones(); } catch (e) { console.warn('[ARJ] recargar cotizaciones:', e); }
+    },
+    async recargarEmbarques() {
+      try { this.embarques = await db.cargarEmbarques(); } catch (e) { console.warn('[ARJ] recargar embarques:', e); }
+    },
+    async recargarConfiguracion() {
+      try { this._aplicarConfiguracion(await db.cargarConfiguracion()); } catch (e) { console.warn('[ARJ] recargar config:', e); }
+    },
+
+    // Guardia común para operaciones que escriben en la BD
+    _exigirConexion(accion) {
+      if (!this.supabaseConectado || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+        this.notif(`❌ ${accion} bloqueado: sin conexión a la base de datos.`, 'error');
+        return false;
+      }
+      return true;
+    },
+    _exigirGerente(accion) {
+      if (this.rol !== 'gerente') {
+        this.notif(`Solo el gerente puede ${accion}`, 'error');
+        return false;
+      }
+      return true;
+    },
+
+    // ═══════════════ UI ═══════════════
     notif(mensaje, tipo = 'info') {
       this.toast.mensaje = mensaje;
       this.toast.tipo = tipo;
       this.toast.visible = true;
-      setTimeout(() => {
-        if (this.toast.mensaje === mensaje) {
-          this.toast.visible = false;
-        }
-      }, 4000);
+      setTimeout(() => { if (this.toast.mensaje === mensaje) this.toast.visible = false; }, tipo === 'error' ? 7000 : 4000);
     },
 
-    // Bitácora de Auditoría
     logBitacora(tipo, mensaje, esAlerta = false) {
+      const ahora = new Date();
       const reg = {
-        id: Date.now(),
-        fecha: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        fecha_completa: new Date().toLocaleDateString('es-VE') + ' ' + new Date().toLocaleTimeString('es-VE'),
+        id: Date.now() + Math.random(),
+        fecha: ahora.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        fecha_completa: ahora.toLocaleDateString('es-VE') + ' ' + ahora.toLocaleTimeString('es-VE'),
         tipo,
         usuario: this.usuarioNombre,
         empresa: this.empresa,
@@ -410,292 +323,188 @@ export const useArjStore = defineStore('arj', {
         esAlerta
       };
       this.bitacora.unshift(reg);
-      if (this.supabaseConectado && tipo !== 'sistema') {
-        guardarBitacoraEnSupabase(reg);
+      if (this.autenticado && tipo !== 'sistema') db.guardarBitacoraEnSupabase(reg);
+    },
+
+    cambiarVista(vista) {
+      const soloGerente = ['movimientos', 'reportes', 'alertas', 'bitacora', 'exportar', 'config'];
+      if (soloGerente.includes(vista) && this.rol !== 'gerente') {
+        this.notif('Esa sección es solo para el gerente', 'error');
+        return;
       }
+      this.vistaActiva = vista;
     },
 
-    // Control de sesión
-    login(rol, nombre) {
-      this.rol = rol;
-      this.usuarioNombre = nombre || (rol === 'gerente' ? 'JJ (Gerente General)' : 'HUMBERTO ARJ (Ventas)');
-      this.autenticado = true;
-
-      // Persistir sesión
-      localStorage.setItem('arj_sesion', JSON.stringify({
-        autenticado: true,
-        rol: this.rol,
-        usuarioNombre: this.usuarioNombre
-      }));
-
-      this.logBitacora('sesion', `Usuario ${this.usuarioNombre} ingresó como ${rol.toUpperCase()}`);
-      this.notif(`Bienvenido ${this.usuarioNombre}`, 'success');
-    },
-
-    logout() {
-      if (this.autenticado) {
-        this.logBitacora('sesion', `Usuario ${this.usuarioNombre} cerró sesión`);
-      }
-
-      // 1. Limpiar sesión en Supabase para evitar autologin fantasma
-      import('../services/supabase.js').then(({ supabase }) => {
-        supabase.auth.signOut().catch(() => {});
-      });
-
-      // 2. Destruir TODA la caché de raíz (excepto tema y tasas locales fijadas)
-      const theme = localStorage.getItem('arj_tema');
-      const tasasLocales = localStorage.getItem('ARJ_TASAS');
-      localStorage.clear();
-      if (theme) localStorage.setItem('arj_tema', theme);
-      if (tasasLocales) localStorage.setItem('ARJ_TASAS', tasasLocales);
-
-      // 3. Reset completo del estado en memoria (sin recargar la página)
-      this.autenticado = false;
-      this.rol = 'gerente';
-      this.usuarioNombre = '';
-      this.vistaActiva = 'facturacion';
-      this.productos = [];
-      this.clientes = [];
-      this.facturasCobrar = [];
-      this.todasFacturas = [];
-      this.presupuestos = [];
-      this.apartados = [];
-      this.notasCredito = [];
-      this.movimientos = [];
-      this.movimientosDinero = [];
-      this.embarques = [];
-      this.turnos = [];
-      this.turnoActual = null;
-      this.bitacora = [];
-      this.ventasRecientes = [];
-      this.favoritos = [];
-      this.supabaseConectado = false;
-      this.cargando = false;
-      this.limpiarCarrito();
-
-      // Cerrar todos los modales abiertos
-      this.modalFacturaActivo = false;
-      this.modalTraspasoActivo = false;
-      this.modalRecepcionActivo = false;
-      this.modalEmbarquesActivo = false;
-      this.modalEditProdActivo = false;
-      this.modalDtoDivisaActivo = false;
-      this.modalDtoManualActivo = false;
-      this.modalAnularActivo = false;
-      this.modalNuevoClienteActivo = false;
-      this.modalFavoritosActivo = false;
-      this.modalListaPreciosActivo = false;
-      this.modalAbonoActivo = false;
-      this.modalPresupuestoActivo = false;
-      this.presupuestoSeleccionado = null;
-      this.modoCajaActivo = false;
-    },
-
-    async registrarUsuario(email, password, nombre, empresa) {
-      this.cargando = true;
-      try {
-        const { supabase } = await import('../services/supabase.js');
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              nombre: nombre,
-              empresa: empresa || 'ambas'
-            }
-          }
-        });
-        
-        if (error) {
-          throw error;
-        }
-        
-        return { ok: true, data };
-      } catch (err) {
-        console.error('[ARJ Store] Error registrando usuario:', err);
-        return { ok: false, error: err.message };
-      } finally {
-        this.cargando = false;
-      }
-    },
-
-    // Cambio de Empresa (Directa vs Distribuidora) con Transición
+    // ═══════════════ EMPRESA (A-02) ═══════════════
     cambiarEmpresa(emp) {
       if (emp !== 'directa' && emp !== 'distribuidora') return;
-      if (emp === this.empresa) return; // Ya estamos en esta empresa
-
-      // Iniciar la transición
+      if (emp === this.empresa) return;
+      if (!this.puedeCambiarEmpresa) {
+        this.notif('Tu usuario solo opera en ' + (this.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'), 'error');
+        return;
+      }
+      if (this.carrito.items.length > 0 || this.carrito.pagos.length > 0) {
+        this.notif('Vacía la factura en curso antes de cambiar de empresa', 'warning');
+        return;
+      }
       this.empresaDestino = emp;
       this.mostrandoTransicionEmpresa = true;
-
-      // Esperar 400ms para hacer el cambio lógico por detrás mientras la pantalla está tapada
       setTimeout(() => {
-        this.empresa = emp;
-        document.body.classList.remove('empresa-directa', 'empresa-distribuidora');
-        document.body.classList.add(`empresa-${emp}`);
-
-        // En Venta Directa siempre aplica Precio Público por defecto; en Distribuidora el tier del cliente
-        if (emp === 'directa') {
-          this.carrito.tier = 'Publico';
-        } else if (this.carrito.cliente_id) {
+        this._fijarEmpresa(emp);
+        this.carrito.tier = 'Publico';
+        this.carrito.descuento_manual = 0;
+        this.carrito.descuento_motivo = '';
+        if (emp === 'distribuidora' && this.carrito.cliente_id) {
           const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
           if (cli && cli.nivel) this.carrito.tier = cli.nivel;
         }
         this.actualizarPreciosCarrito();
-        this.logBitacora('empresa', `Cambio de contexto operativo a ${emp === 'directa' ? 'ARJ Venta Directa' : 'Distribuidora ARJ'}`);
-        this.notif(
-          emp === 'directa' ? 'Operando en ARJ Venta Directa (Mostrador)' : 'Operando en Distribuidora ARJ (Mayorista)',
-          'info'
-        );
+        this.logBitacora('empresa', `Cambio a ${emp === 'directa' ? 'ARJ Venta Directa' : 'Distribuidora ARJ'}`);
       }, 400);
-
-      // Ocultar la transición después de la animación (1.5s total = 1500ms)
-      setTimeout(() => {
-        this.mostrandoTransicionEmpresa = false;
-      }, 1450);
+      setTimeout(() => { this.mostrandoTransicionEmpresa = false; }, 1450);
     },
 
-    cambiarVista(vista) {
-      this.vistaActiva = vista;
+    // ═══════════════ TASAS (C-09) ═══════════════
+    async confirmarTasas(bcv = this.tasa_bcv, par = this.tasa_par) {
+      if (!this._exigirGerente('confirmar las tasas')) return false;
+      if (!this._exigirConexion('Confirmar tasas')) return false;
+      const b = parseFloat(bcv), p = parseFloat(par);
+      if (!(b > 0) || !(p > 0)) { this.notif('Las tasas deben ser números mayores que cero', 'error'); return false; }
+      if (b > p) { this.notif('El BCV quedó por encima del paralelo. Revisa: normalmente es al revés.', 'error'); return false; }
+      const r = await db.confirmarTasasBD(b, p);
+      if (!r.ok) { this.notif('No se guardaron las tasas: ' + r.error, 'error'); return false; }
+      this.tasa_bcv = b;
+      this.tasa_par = p;
+      this.tasas_actualizadas = r.tasas_actualizadas;
+      if (this.configuracion) Object.assign(this.configuracion, { tasa_bcv: b, tasa_par: p, tasas_actualizadas: r.tasas_actualizadas });
+      this.dto_divisa = null;
+      this.logBitacora('precio', `Confirmó tasas: BCV Bs.${b} · Paralelo Bs.${p}`, true);
+      this.notif('Tasas confirmadas. Las facturas ya emitidas mantienen su tasa congelada.', 'success');
+      return true;
     },
 
-    // Manejo de Carrito
+    fijarDtoDivisa(pct) {
+      if (!this._exigirGerente('ajustar el descuento por divisas')) return;
+      this.dto_divisa = pct;
+      const ex = this.dtoDivisaExcedente;
+      this.logBitacora('precio', `Descuento por divisas ajustado a ${Number(pct).toFixed(1)}%` +
+        (ex > 0.001 ? ` (${ex.toFixed(1)} pts por encima de la brecha)` : ' (conversión a la brecha)'), ex > 0.001);
+      this.actualizarVerdesCarrito();
+    },
+
+    // ═══════════════ CARRITO ═══════════════
     agregarAlCarrito(prod, cant = 1) {
-      const stockDisponible = this.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0);
-      const stockOtra = this.empresa === 'directa' ? (prod.stock_dist || 0) : (prod.stock_vd || 0);
-      const otraEmp = this.empresa === 'directa' ? 'Distribuidora' : 'Venta Directa';
-      const idx = this.carrito.items.findIndex(it => it.id === prod.id || it.cod_alt === prod.cod_alt);
-
+      const n = Math.max(1, parseInt(cant) || 1);
+      const stock = this.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0);
+      const idx = this.carrito.items.findIndex(it => it.id === prod.id);
       if (idx !== -1) {
         const item = this.carrito.items[idx];
-        item.cant += cant;
-        if (item.cant > stockDisponible) {
-          this.notif(`Aviso: '${prod.desc}' supera stock disponible (${stockDisponible}). Se registrará como préstamo inter-empresarial.`, 'warning');
-        } else {
-          this.notif(`Incrementado '${prod.desc}' a ${item.cant} unidades`, 'info');
-        }
-      } else {
-        const tierKey = this.carrito.tier || 'Publico';
-        const dto = (this.empresa === 'directa' && this.carrito.descuento_manual > 0) ? this.carrito.descuento_manual : 0;
-        const base = precioConTier(prod.fob, tierKey, prod);
-        const precio = dto > 0 ? Math.round(base * (1 - dto / 100) * 100) / 100 : base;
-
-        this.carrito.items.push({
-          id: prod.id,
-          cod_alt: prod.cod_alt,
-          cod_orig: prod.cod_orig,
-          desc: prod.desc,
-          marca: prod.marca,
-          fob: prod.fob,
-          stock_vd: prod.stock_vd,
-          stock_dist: prod.stock_dist,
-          cant: cant,
-          precio: precio,
-          precio_base: base,
-          precio_fijo: false,
-          modo_verde: false,
-          precio_verde: bcvAVerde(precio, this),
-          factor_landed: prod.factor_landed,
-          origen: prod.origen
-        });
-
-        if (cant > stockDisponible) {
-          this.notif(`Aviso: '${prod.desc}' supera stock local (${stockDisponible} disp., ${otraEmp} tiene ${stockOtra}). Préstamo inter-empresarial.`, 'warning');
-        } else {
-          this.notif(`Agregado '${prod.desc}' al carrito`, 'success');
-        }
+        item.cant += n;
+        if (item.cant > stock) this.notif(`'${prod.desc}' supera el stock disponible (${stock}). Se registrará como préstamo inter-empresa.`, 'warning');
+        return;
       }
+      const item = {
+        id: prod.id,
+        cod_alt: prod.cod_alt,
+        cod_orig: prod.cod_orig,
+        desc: prod.desc,
+        marca: prod.marca,
+        fob: prod.fob,
+        precio_manual: prod.precio_manual,
+        stock_vd: prod.stock_vd,
+        stock_dist: prod.stock_dist,
+        factor_landed: prod.factor_landed,
+        origen: prod.origen,
+        cant: n,
+        precio: 0,
+        precio_base: 0,
+        precio_fijo: false,
+        modo_verde: false,
+        precio_verde: 0
+      };
+      this._preciarItem(item);
+      this.carrito.items.push(item);
+      if (n > stock) this.notif(`'${prod.desc}' supera el stock (${stock}). Se registrará como préstamo inter-empresa.`, 'warning');
+    },
+
+    // Una sola ruta de precios (v13.9): descuento manual > precio congelado > tier
+    _preciarItem(it) {
+      const dto = (this.empresa === 'directa' && this.carrito.descuento_manual > 0) ? this.carrito.descuento_manual : 0;
+      if (dto > 0) {
+        it.precio = Math.round(precioBaseItem(it) * (1 - dto / 100) * 100) / 100;
+      } else if (it.precio_fijo) {
+        it.precio = precioBaseItem(it);
+      } else {
+        it.precio = precioConTier(it.fob, this.carrito.tier || 'Publico', it);
+        it.precio_base = it.precio;
+      }
+      it.precio_verde = bcvAVerde(it.precio, this.estadoTasas);
+    },
+
+    actualizarPreciosCarrito() {
+      this.carrito.items.forEach(it => this._preciarItem(it));
+    },
+    actualizarVerdesCarrito() {
+      this.carrito.items.forEach(it => { it.precio_verde = bcvAVerde(it.precio, this.estadoTasas); });
     },
 
     removerDelCarrito(index) {
-      if (index >= 0 && index < this.carrito.items.length) {
-        this.carrito.items.splice(index, 1);
-        this.notif('Producto eliminado de la lista', 'info');
-      }
+      if (index >= 0 && index < this.carrito.items.length) this.carrito.items.splice(index, 1);
     },
 
     actualizarCantCarrito(index, cant) {
-      if (index >= 0 && index < this.carrito.items.length) {
-        const item = this.carrito.items[index];
-        const prod = this.productos.find(p => p.id === item.id || p.cod_alt === item.cod_alt);
-        const stockDisponible = prod ? (this.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0)) : 0;
-        const nuevaCant = Math.max(1, parseInt(cant) || 1);
-
-        item.cant = nuevaCant;
-        if (nuevaCant > stockDisponible) {
-          this.notif(`Aviso: cantidad (${nuevaCant}) supera stock local (${stockDisponible}). Se registrará como préstamo inter-empresarial.`, 'warning');
-        }
-      }
+      const item = this.carrito.items[index];
+      if (!item) return;
+      const prod = this.productos.find(p => p.id === item.id);
+      const stock = prod ? (this.empresa === 'directa' ? prod.stock_vd : prod.stock_dist) : 0;
+      item.cant = Math.max(1, parseInt(cant) || 1);
+      if (item.cant > stock) this.notif(`Cantidad (${item.cant}) supera el stock (${stock}). Préstamo inter-empresa.`, 'warning');
     },
 
     toggleModoVerdeItem(index) {
-      if (this.rol !== 'gerente') {
-        this.notif('Solo el gerente puede modificar precios directamente', 'error');
-        return;
-      }
+      if (!this._exigirGerente('modificar precios')) return;
       const it = this.carrito.items[index];
-      if (it) {
-        it.modo_verde = !it.modo_verde;
-        if (it.modo_verde) {
-          it.precio_verde = bcvAVerde(it.precio, this);
-        }
-      }
+      if (!it) return;
+      it.modo_verde = !it.modo_verde;
+      it.precio_verde = bcvAVerde(it.precio, this.estadoTasas);
     },
 
     cambiarPrecioVerdeItem(index, valorVerde) {
-      if (this.rol !== 'gerente') {
-        this.notif('Solo el gerente puede modificar precios', 'error');
-        return;
-      }
+      if (!this._exigirGerente('modificar precios')) return;
       const it = this.carrito.items[index];
-      if (it) {
-        const v = parseFloat(valorVerde) || 0;
-        const ant = it.precio;
-        it.precio_verde = v;
-        it.precio = verdeABcv(v, this);
-        it.precio_fijo = true;
-        it.precio_base = it.precio;
-        this.logBitacora('precio', `Precio de '${it.desc}' fijado en ${fmtUSD(v)} efectivo (${fmtUSD(ant)} -> ${fmtUSD(it.precio)} BCV)`, true);
-      }
+      if (!it) return;
+      const v = parseFloat(valorVerde) || 0;
+      if (v <= 0) { this.notif('Precio inválido', 'error'); return; }
+      const ant = it.precio;
+      it.precio = verdeABcv(v, this.estadoTasas);
+      it.precio_verde = v;
+      it.precio_fijo = true;  // v13.23: no lo pisa un cambio de tier o cliente
+      it.precio_base = it.precio;
+      this.logBitacora('precio', `Precio de '${it.desc}' fijado en ${fmtUSD(v)} efectivo (${fmtUSD(ant)} → ${fmtUSD(it.precio)} BCV)`, true);
     },
 
+    // A-01: solo el gerente cambia el nivel de precio, en ambas empresas
     cambiarTier(nuevoTier) {
-      if (this.rol !== 'gerente' && this.empresa === 'directa') {
-        this.notif('Solo el gerente puede cambiar tiers en Venta Directa', 'error');
+      if (!this._exigirGerente('cambiar el nivel de precio')) return;
+      if (this.empresa === 'directa' && nuevoTier !== 'Publico') {
+        this.notif('En Venta Directa siempre se cobra precio público. Usa el descuento manual.', 'warning');
         return;
       }
       this.carrito.tier = nuevoTier;
       this.actualizarPreciosCarrito();
-      this.notif(`Nivel de precio cambiado a: ${nuevoTier}`, 'info');
-    },
-
-    actualizarPreciosCarrito() {
-      const dto = (this.empresa === 'directa' && this.carrito.descuento_manual > 0) ? this.carrito.descuento_manual : 0;
-      this.carrito.items.forEach(it => {
-        if (!it.precio_fijo) {
-          const prod = this.productos.find(p => p.id === it.id);
-          const base = precioConTier(it.fob, this.carrito.tier || 'Publico', prod);
-          if (dto > 0) {
-            it.precio = Math.round(base * (1 - dto / 100) * 100) / 100;
-          } else {
-            it.precio = base;
-          }
-          it.precio_base = base;
-          it.precio_verde = bcvAVerde(it.precio, this);
-        }
-      });
     },
 
     aplicarDescuentoManual(pct, motivo) {
-      if (this.rol !== 'gerente') {
-        this.notif('Solo el gerente puede aplicar descuentos manuales', 'error');
-        return;
-      }
-      this.carrito.descuento_manual = pct;
-      this.carrito.descuento_motivo = motivo;
+      if (!this._exigirGerente('aplicar descuentos manuales')) return;
+      if (this.empresa !== 'directa') { this.notif('El descuento manual es solo para Venta Directa', 'error'); return; }
+      const p = parseFloat(pct) || 0;
+      if (p < 0 || p > 50) { this.notif('El descuento debe estar entre 0% y 50%', 'error'); return; }
+      if (p > 0 && !(motivo || '').trim()) { this.notif('Indica el motivo del descuento', 'error'); return; }
+      this.carrito.descuento_manual = p;
+      this.carrito.descuento_motivo = p > 0 ? motivo.trim() : '';
       this.actualizarPreciosCarrito();
-      this.logBitacora('precio', `Descuento manual de ${pct}% aplicado por ${this.usuarioNombre}. Motivo: "${motivo}"`, true);
-      this.notif(pct > 0 ? `Descuento de ${pct}% aplicado correctamente` : 'Descuento manual retirado', 'success');
+      if (p > 0) this.logBitacora('precio', `Descuento manual ${p}% a ${this.carrito.cliente_nombre || 'cliente'} — motivo: "${motivo}"`, true);
+      this.notif(p > 0 ? `Descuento de ${p}% aplicado` : 'Descuento manual retirado', 'success');
     },
 
     seleccionarCliente(cli) {
@@ -706,632 +515,469 @@ export const useArjStore = defineStore('arj', {
       }
       this.carrito.cliente_id = cli.id;
       this.carrito.cliente_nombre = cli.nombre;
-      if (this.empresa === 'distribuidora' && cli.nivel) {
-        this.carrito.tier = cli.nivel;
-      } else {
+      if (this.empresa === 'directa') {
+        // En Venta Directa SIEMPRE precio público; el descuento manual se reinicia
         this.carrito.tier = 'Publico';
+        this.carrito.descuento_manual = 0;
+        this.carrito.descuento_motivo = '';
+      } else {
+        this.carrito.tier = cli.nivel || 'Publico';
       }
-      if (cli.tipo === 'credito') {
-        this.carrito.tipo_pago = 'credito';
-      }
+      this.carrito.tipo_pago = cli.tipo === 'credito' ? 'credito' : 'contado';
       this.actualizarPreciosCarrito();
-      this.notif(`Cliente seleccionado: ${cli.nombre}`, 'info');
     },
 
-    // Pagos Múltiples en Carrito (M2)
-    agregarPagoCarrito(pagoData, montoSecundario = null, ref = '', montoOpcionalBs = null) {
-      let metodo = 'Divisas Efectivo';
-      let montoIngresado = 0;
-      let moneda = 'USD';
-      let refPago = ref;
-      let montoUSD = 0;
-      let montoBs = 0;
-      let montoVerde = null;
-      let tasaUsada = this.tasa_bcv;
-
-      if (typeof pagoData === 'object' && pagoData !== null) {
-        metodo = pagoData.metodo || metodo;
-        montoIngresado = parseFloat(pagoData.monto ?? pagoData.monto_usd ?? pagoData.monto_bs ?? 0) || 0;
-        moneda = pagoData.moneda || (metodo.toLowerCase().includes('bs') ? 'Bs' : 'USD');
-        refPago = pagoData.ref || pagoData.referencia || ref;
-        montoUSD = parseFloat(pagoData.monto_usd) || 0;
-        montoBs = parseFloat(pagoData.monto_bs) || 0;
-        montoVerde = pagoData.monto_verde != null ? parseFloat(pagoData.monto_verde) : null;
-        tasaUsada = parseFloat(pagoData.tasa_usada) || (moneda === 'Bs' ? this.tasa_par : this.tasa_bcv);
-      } else {
-        metodo = pagoData || metodo;
-        montoUSD = parseFloat(montoSecundario) || 0;
-        montoIngresado = montoUSD;
-        refPago = ref || '';
-        if (montoOpcionalBs != null && parseFloat(montoOpcionalBs) > 0) {
-          montoBs = parseFloat(montoOpcionalBs);
-        }
-      }
-
-      const mLower = metodo.toLowerCase();
-      const esBs = moneda === 'Bs' || mLower.includes('bs') || mLower.includes('móvil') || mLower.includes('movil') || mLower.includes('transferencia') || mLower.includes('punto');
-      const esVerde = mLower.includes('divisa') || mLower.includes('verde') || (mLower.includes('efectivo') && !esBs);
-
-      if (esBs) {
-        moneda = 'Bs';
-        tasaUsada = this.tasa_par;
-        const valBs = montoBs > 0 ? montoBs : (montoIngresado > 0 ? montoIngresado : montoUSD * this.tasa_par);
-        montoBs = Math.round(valBs * 100) / 100;
-        // M2: Los pagos en Bs. se convierten con tasa_par
-        montoUSD = this.tasa_par > 0 ? Math.round((montoBs / this.tasa_par) * 100) / 100 : 0;
-      } else if (esVerde) {
-        moneda = 'USD_VERDE';
-        tasaUsada = this.tasa_bcv;
-        const valVerde = montoVerde != null && montoVerde > 0 ? montoVerde : (montoIngresado > 0 ? montoIngresado : montoUSD);
-        montoVerde = Math.round(valVerde * 100) / 100;
-        // M2: Un cobro en $Verde se acredita como $BCV (se divide entre factor de descuento divisa)
-        montoUSD = verdeABcv(montoVerde, this);
-        montoBs = Math.round(montoUSD * this.tasa_bcv * 100) / 100;
-      } else {
-        moneda = 'USD';
-        tasaUsada = this.tasa_bcv;
-        montoUSD = montoUSD > 0 ? montoUSD : montoIngresado;
-        montoBs = Math.round(montoUSD * this.tasa_bcv * 100) / 100;
-      }
-
-      if (montoUSD <= 0 && montoBs <= 0) return;
-
-      this.carrito.pagos.push({
-        metodo,
-        moneda,
-        monto: montoIngresado,
-        monto_usd: montoUSD,
-        monto_bs: montoBs,
-        monto_verde: montoVerde,
-        tasa_usada: tasaUsada,
-        ref: refPago
-      });
-
-      const txtMonto = moneda === 'Bs' ? `Bs. ${montoBs.toLocaleString('es-VE')}` : fmtUSD(montoVerde || montoUSD);
-      this.notif(`Pago de ${txtMonto} (${metodo}) agregado`, 'info');
+    // ═══════════════ PAGOS (C-03) ═══════════════
+    agregarPagoCarrito({ metodo, monto, ref = '' }) {
+      const m = parseFloat(monto) || 0;
+      if (m <= 0) { this.notif('Monto de pago inválido', 'error'); return false; }
+      this.carrito.pagos.push({ metodo, moneda: monedaDeMetodo(metodo), monto: Math.round(m * 100) / 100, ref: (ref || '').trim() });
+      return true;
     },
-
     removerPagoCarrito(idx) {
-      if (idx >= 0 && idx < this.carrito.pagos.length) {
-        this.carrito.pagos.splice(idx, 1);
-      }
+      if (idx >= 0 && idx < this.carrito.pagos.length) this.carrito.pagos.splice(idx, 1);
+    },
+    montoCompletarPago(idx) {
+      return montoParaCompletar(this.carrito.pagos, idx, this.totales);
+    },
+
+    // v13.22 cobro redondo en efectivo (solo gerente)
+    fijarCobrarVerde(valor) {
+      if (!this._exigirGerente('ajustar el cobro en efectivo')) return;
+      const n = parseFloat(valor);
+      this.carrito.cobrar_verde = (Number.isFinite(n) && n > 0) ? Math.round(n * 100) / 100 : null;
+    },
+    redondearCobrarVerde() {
+      if (!this._exigirGerente('ajustar el cobro en efectivo')) return;
+      const objetivo = Math.round(this.totales.totalUsdBase);
+      this.carrito.cobrar_verde = objetivo > 0 ? objetivo : null;
     },
 
     limpiarCarrito() {
-      this.carrito.items = [];
-      this.carrito.pagos = [];
-      this.carrito.cliente_id = null;
-      this.carrito.cliente_nombre = '';
-      this.carrito.notas = '';
-      this.carrito.anticipo = 0;
-      this.carrito.descuento_manual = 0;
-      this.carrito.descuento_motivo = '';
-      this.carrito.pidio_fiscal = false;
+      this.carrito = carritoVacio();
+      this.dto_divisa = null; // v13.12: la siguiente factura vuelve a la brecha del día
     },
 
-    // Emisión de Factura Formal
+    // ═══════════════ EMISIÓN ═══════════════
+    validarEmision() {
+      const c = this.carrito;
+      if (!this.supabaseConectado) return 'Sin conexión a la base de datos. No se permite facturar offline.';
+      if (c.items.length === 0) return 'El carrito está vacío.';
+      if (!c.cliente_id) return 'Selecciona un cliente registrado antes de emitir.';
+      if (!this.tasasCargadas) return 'Faltan las tasas de cambio (BCV y paralelo).';
+      if (!this.tasasConfirmadasHoy) return 'Las tasas no se han confirmado hoy. El gerente debe confirmarlas antes de facturar.';
+      const sinCosto = c.items.filter(sinFob);
+      if (sinCosto.length) return `${sinCosto.length} producto(s) sin costo FOB: ${sinCosto.map(i => i.cod_alt).join(', ')}`;
+      const sinDesc = c.items.filter(it => !it.desc || !String(it.desc).trim());
+      if (sinDesc.length) return `Hay ${sinDesc.length} renglón(es) sin descripción.`;
+      if (c.descuento_manual > 0 && this.rol !== 'gerente') return 'Solo el gerente puede aplicar descuentos manuales.';
+      const sinRef = c.pagos.filter(p => requiereReferencia(p.metodo) && !p.ref);
+      if (sinRef.length) return `Falta la referencia del pago (${sinRef.map(p => p.metodo).join(', ')}).`;
+      if (c.tipo_pago === 'contado' && this.faltaPorPagarUSD > 1) {
+        return `Los pagos no cubren el total. Faltan ${fmtUSD(this.faltaPorPagarUSD)}.`;
+      }
+      return null;
+    },
+
     async emitirFactura() {
-      // 0. Bloqueo estricto sin conexión a la base de datos (C7)
-      if (!this.supabaseConectado || (typeof navigator !== 'undefined' && !navigator.onLine)) {
-        this.notif('❌ Emisión bloqueada: Sin conexión a la base de datos central. No se permite facturar offline.', 'error');
-        return {
-          ok: false,
-          error: 'Sin conexión a la base de datos central. La emisión fue bloqueada para garantizar la sincronización de inventario y correlativos.'
-        };
-      }
+      if (this.procesando) return { ok: false, error: 'Ya hay una emisión en curso' };
+      const err = this.validarEmision();
+      if (err) { this.notif('Emisión bloqueada: ' + err, 'error'); return { ok: false, error: err }; }
 
-      // 1. Validar que el carrito no esté vacío
-      if (this.carrito.items.length === 0) {
-        this.notif('El carrito está vacío. Agrega productos antes de facturar.', 'warning');
-        return { ok: false, error: 'Carrito vacío' };
-      }
+      const c = this.carrito;
+      const cli = this.clientes.find(x => x.id === c.cliente_id);
+      if (!cli) return { ok: false, error: 'El cliente no existe en la base de datos' };
 
-      // 2. Validación de facturas de contado (Prioritaria)
-      if (this.carrito.tipo_pago === 'contado' && this.faltaPorPagarUSD > 0.05) {
-        this.notif(`Emisión bloqueada: Los pagos no cubren el total. Faltan ${fmtUSD(this.faltaPorPagarUSD)}`, 'error');
-        return { ok: false, error: 'Pago incompleto', faltaPorPagar: this.faltaPorPagarUSD };
-      }
+      const descManual = (this.empresa === 'directa' && c.descuento_manual > 0)
+        ? Math.round(c.items.reduce((a, it) => a + it.cant * (precioBaseItem(it) - it.precio), 0) * 100) / 100
+        : 0;
+      const r = resumenEmision({
+        items: c.items, pagos: c.pagos, tipoPago: c.tipo_pago, estado: this.estadoTasas,
+        descManual, motivoManual: descManual > 0 ? `Descuento manual ${c.descuento_manual}%: ${c.descuento_motivo}` : ''
+      });
 
-      // 3. Validar cliente
-      if (!this.carrito.cliente_id && (!this.carrito.cliente_nombre || !this.carrito.cliente_nombre.trim())) {
-        this.notif('Selecciona un cliente antes de emitir la factura', 'error');
-        return { ok: false, error: 'Sin cliente seleccionado' };
-      }
-
-      // 4. Validar tasas cambiarias
-      if (!this.tasa_bcv || this.tasa_bcv <= 0 || !this.tasa_par || this.tasa_par <= 0) {
-        this.notif('Las tasas de cambio (BCV y Paralelo) deben estar configuradas para emitir la factura', 'error');
-        return { ok: false, error: 'Tasas no configuradas' };
-      }
-
-      // 4b. Tasas deben haber sido confirmadas hoy (no usar valores en memoria sin verificar)
-      if (!this.tasasConfirmadasHoy) {
-        this.notif('Debe confirmar las tasas de cambio hoy antes de emitir facturas', 'error');
-        return { ok: false, error: 'Tasas no confirmadas hoy' };
-      }
-
-      // 5. Bloqueo estricto v13.17: Producto sin costo FOB no se factura
-      const sinCosto = this.carrito.items.filter(sinFob);
-      if (sinCosto.length > 0) {
-        this.notif(`Emisión bloqueada: ${sinCosto.length} producto(s) no tienen costo FOB cargado`, 'error');
-        return { ok: false, error: 'Productos sin FOB', sinCosto };
-      }
-
-      // 6. Red de seguridad v13.3: Ningún renglón sin descripción
-      const sinDesc = this.carrito.items.filter(it => !it.desc || !String(it.desc).trim());
-      if (sinDesc.length > 0) {
-        this.notif(`Hay ${sinDesc.length} renglón(es) sin descripción. Corrige el producto antes de facturar.`, 'error');
-        return { ok: false, error: 'Productos sin descripción' };
-      }
-
-      // 7. Descuento manual solo permitido a gerente
-      if (this.carrito.descuento_manual > 0 && this.rol !== 'gerente') {
-        this.notif('Solo el gerente puede aplicar descuentos manuales', 'error');
-        return { ok: false, error: 'Descuento no autorizado' };
-      }
-
-      // 8. Obtener correlativo oficial desde la base de datos (C6)
-      let numFactura = null;
-      try {
-        const { obtenerSiguienteCorrelativoBD } = await import('../services/supabase.js');
-        numFactura = await obtenerSiguienteCorrelativoBD(this.empresa);
-      } catch (errCorr) {
-        console.error('[ARJ] Error obteniendo correlativo de BD:', errCorr);
-      }
-
-      // Si falla la consulta a BD, BLOQUEAR emisión para evitar colisión de números (C6)
-      if (!numFactura) {
-        this.notif('❌ Emisión bloqueada: No se pudo obtener el correlativo oficial desde la base de datos.', 'error');
-        return {
-          ok: false,
-          error: 'No se pudo obtener el correlativo oficial desde la base de datos. Se bloquea la emisión para evitar duplicidad de correlativos.'
-        };
-      }
-
-      const totalUSD = this.totalCarritoUSD;
-      const totalBs = this.totalCarritoBs;
-
-      const esContado = this.carrito.tipo_pago === 'contado';
-      const abonoCalculado = esContado ? totalUSD : Math.min(totalUSD, Math.round(this.totalPagadoCarritoUSD * 100) / 100);
-      const saldoPendiente = esContado ? 0 : Math.max(0, Math.round((totalUSD - abonoCalculado) * 100) / 100);
-      const estadoFactura = (esContado || saldoPendiente <= 0.01) ? 'pagada' : (abonoCalculado > 0 ? 'parcial' : 'pendiente');
-
-      // Calcular cobrar_verde (efectivo en divisas para el cobrador)
-      const cobrarVerde = totalEnDivisas(totalUSD, this);
-
-      const nuevaFactura = {
-        id: `FAC-${numFactura}`, // ID local temporal, se reemplaza con el UUID de BD tras el insert
-        num: numFactura,
+      const factura = {
         empresa: this.empresa,
-        tier: this.carrito.tier || 'Publico',
-        cliente: this.carrito.cliente_nombre || 'CLIENTE MOSTRADOR',
-        cliente_id: this.carrito.cliente_id,
-        vendedor: this.usuarioNombre,
-        fecha: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
-        fecha_raw: new Date().toISOString(),
-        vence: new Date(Date.now() + (this.carrito.dias_credito * 86400000)).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
-        total: totalUSD,
-        abonado: abonoCalculado,
-        saldo_pendiente: saldoPendiente,
-        estado: estadoFactura,
-        dias: this.carrito.dias_credito,
-        tipo_pago: this.carrito.tipo_pago,
+        cliente_id: cli.id,
+        cliente_nombre: cli.nombre,
+        // A-03: snapshot fiscal tal como estaba el cliente al emitir
+        cliente_nombre_snap: cli.nombre || '',
+        cliente_rif_snap: cli.rif || '',
+        cliente_tel_snap: cli.tel || '',
+        cliente_dir_snap: cli.direccion || '',
+        subtotal_usd: Math.round(r.subtotal * 100) / 100,
+        saldo_pendiente: r.saldoIni,
+        estado: r.estadoFactura,
+        tipo_pago: c.tipo_pago,
+        dias_credito: c.tipo_pago === 'credito' ? (parseInt(c.dias_credito) || 30) : 0,
         tasa_par: this.tasa_par,
         tasa_bcv: this.tasa_bcv,
-        factor_bs: 1.00,
-        descuento_manual: this.carrito.descuento_manual,
-        descuento_motivo: this.carrito.descuento_motivo || '',
-        pidio_fiscal: this.carrito.pidio_fiscal,
-        cobrar_verde: cobrarVerde,
-        pagos: JSON.parse(JSON.stringify(this.carrito.pagos)),
-        items: JSON.parse(JSON.stringify(this.carrito.items))
+        factor_bs: r.factorBs,
+        descuento_manual: r.descuentoTotal,
+        descuento_manual_pct: c.descuento_manual || 0,
+        motivo_descuento: r.motivo,
+        pidio_fiscal: !!c.pidio_fiscal,
+        cobrar_verde: r.cobrarVerde,
+        cotizacion_id: c.cotizacion_origen ? c.cotizacion_origen.id : null
       };
+      const items = c.items.map(it => ({
+        producto_id: it.id,
+        cod_alt: it.cod_alt,
+        descripcion: it.desc,
+        cantidad: it.cant,
+        fob_unitario: it.fob || 0,
+        precio_unitario: it.precio,
+        total_linea: Math.round(it.cant * it.precio * 100) / 100,
+        tier: c.tier || 'Publico',
+        factor_landed: factorLandedDe(it, this.productos),  // se congela (no se reescribe la utilidad)
+        origen: origenDe(it, this.productos)
+      }));
+      const pagos = pagosParaBD(c.pagos, this.estadoTasas, this.usuarioNombre);
 
-      // Descontar inventario local (reflejo inmediato en UI mientras la BD confirma)
-      this.carrito.items.forEach(it => {
-        const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
-        if (prod) {
-          if (this.empresa === 'directa') {
-            prod.stock_vd = (prod.stock_vd || 0) - it.cant;
-          } else {
-            prod.stock_dist = (prod.stock_dist || 0) - it.cant;
-          }
-          // Kardex local
-          this.movimientos.unshift({
-            id: Date.now() + Math.random(),
-            fecha: new Date().toLocaleTimeString('es-VE') + ' ' + new Date().toLocaleDateString('es-VE'),
-            tipo: 'salida',
-            producto: it.desc,
-            cod_alt: it.cod_alt,
-            cant: it.cant,
-            empresa: this.empresa,
-            motivo: `Venta Factura ${numFactura}`,
-            usuario: this.usuarioNombre
-          });
-        }
-      });
-
-      // Actualizar saldo del cliente si es crédito (local)
-      if (!esContado && this.carrito.cliente_id && saldoPendiente > 0) {
-        const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
-        if (cli) {
-          if (this.empresa === 'directa') {
-            cli.saldo_vd = Math.round(((cli.saldo_vd || 0) + saldoPendiente) * 100) / 100;
-          } else {
-            cli.saldo_dist = Math.round(((cli.saldo_dist || 0) + saldoPendiente) * 100) / 100;
-          }
-        }
-      }
-
-      // Agregar a los arrays locales (antes del await para que la UI responda)
-      this.todasFacturas.unshift(nuevaFactura);
-      if (nuevaFactura.estado !== 'pagada') {
-        this.facturasCobrar.unshift(nuevaFactura);
-      }
-
-      this.logBitacora('venta', `Factura ${numFactura} emitida a ${nuevaFactura.cliente} por ${fmtUSD(totalUSD)}`);
-
-      // Persistir en Supabase (4 tablas en orden)
-      if (this.supabaseConectado) {
-        const resultado = await guardarFacturaEnSupabase(
-          nuevaFactura,
-          nuevaFactura.items,
-          nuevaFactura.pagos,
-          this.empresa
-        );
-
-        if (!resultado.ok) {
-          // REVERTIR todo lo aplicado localmente
-          this._revertirFacturaLocal(nuevaFactura);
-          this.notif(`❌ Error al guardar factura en la base de datos: ${resultado.error}`, 'error');
-          this.logBitacora('error', `Factura ${numFactura} falló al persistir: ${resultado.error}`, true);
-          return { ok: false, error: resultado.error };
-        }
-
-        // Actualizar el ID local con el UUID real de la BD
-        if (resultado.data && resultado.data.id) {
-          const fLocal = this.todasFacturas.find(f => f.num === numFactura);
-          if (fLocal) fLocal.id = resultado.data.id;
-          const fCobrar = this.facturasCobrar.find(f => f.num === numFactura);
-          if (fCobrar) fCobrar.id = resultado.data.id;
-          nuevaFactura.id = resultado.data.id;
-        }
-
-        // Persistir saldo actualizado del cliente en Supabase si fue a crédito
-        if (!esContado && this.carrito.cliente_id && saldoPendiente > 0) {
-          const cli = this.clientes.find(c => c.id === this.carrito.cliente_id);
-          if (cli) {
-            const campoSaldo = this.empresa === 'directa' ? 'saldo_vd' : 'saldo_dist';
-            const { supabase } = await import('../services/supabase.js');
-            await supabase.from('clientes').update({ [campoSaldo]: cli[campoSaldo] }).eq('id', this.carrito.cliente_id);
-          }
-        }
-      }
-
-      this.facturaReciente = nuevaFactura;
-      this.modalFacturaActivo = true;
-      this.limpiarCarrito();
-      this.notif(`Factura ${numFactura} emitida con éxito`, 'success');
-      return { ok: true, factura: nuevaFactura };
-    },
-
-    // Método auxiliar: revierte cambios locales si la persistencia en BD falló
-    _revertirFacturaLocal(factura) {
-      // Revertir stock local
-      if (factura.items) {
-        factura.items.forEach(it => {
-          const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
-          if (prod) {
-            if (factura.empresa === 'directa') {
-              prod.stock_vd = (prod.stock_vd || 0) + it.cant;
-            } else {
-              prod.stock_dist = (prod.stock_dist || 0) + it.cant;
-            }
-          }
-        });
-      }
-      // Revertir saldo del cliente (si era crédito)
-      if (factura.tipo_pago !== 'contado' && factura.cliente_id && factura.saldo_pendiente > 0) {
-        const cli = this.clientes.find(c => c.id === factura.cliente_id);
-        if (cli) {
-          if (factura.empresa === 'directa') {
-            cli.saldo_vd = Math.max(0, Math.round(((cli.saldo_vd || 0) - factura.saldo_pendiente) * 100) / 100);
-          } else {
-            cli.saldo_dist = Math.max(0, Math.round(((cli.saldo_dist || 0) - factura.saldo_pendiente) * 100) / 100);
-          }
-        }
-      }
-      // Quitar de los arrays locales
-      this.todasFacturas = this.todasFacturas.filter(f => f.num !== factura.num);
-      this.facturasCobrar = this.facturasCobrar.filter(f => f.num !== factura.num);
-      // Quitar del kardex local
-      this.movimientos = this.movimientos.filter(m => !m.motivo?.includes(factura.num));
-    },
-    // Anulación de Factura con reversión de inventario y persistencia en BD
-    async anularFactura(facturaId, motivo) {
-      if (this.rol !== 'gerente') {
-        this.notif('Solo el gerente puede anular facturas', 'error');
-        return false;
-      }
-
-      // C7 / Seguridad: Bloquear anulación sin conexión con la base de datos central
-      if (!this.supabaseConectado || (typeof navigator !== 'undefined' && !navigator.onLine)) {
-        this.notif('❌ Anulación bloqueada: Sin conexión a la base de datos central.', 'error');
-        return false;
-      }
-
-      const fac = this.todasFacturas.find(f => f.id === facturaId || f.num === facturaId);
-      if (!fac) {
-        this.notif('Factura no encontrada', 'error');
-        return false;
-      }
-
-      // Persistir en BD PRIMERO
-      // Solo enviamos a BD si el ID no es el temporal local (que empieza con 'FAC-')
-      if (fac.id && !String(fac.id).startsWith('FAC-')) {
-        const res = await anularFacturaEnSupabase(fac.id, motivo, this.usuarioNombre, fac.empresa);
+      this.procesando = true;
+      try {
+        const res = await db.emitirFacturaBD(factura, items, pagos);
         if (!res.ok) {
-          this.notif(`❌ Error al anular en la base de datos: ${res.error}`, 'error');
-          return false;
+          this.notif('❌ La factura NO se emitió: ' + res.error, 'error');
+          this.logBitacora('error', `Emisión rechazada: ${res.error}`, true);
+          return { ok: false, error: res.error };
         }
-      }
-
-      // Aplicar localmente
-      fac.estado = 'anulada';
-      fac.anulada_por = this.usuarioNombre;
-      fac.anulada_fecha = new Date().toLocaleTimeString('es-VE') + ' ' + new Date().toLocaleDateString('es-VE');
-      fac.anulada_motivo = motivo || 'Anulación por gerencia';
-
-      // Revertir inventario local
-      if (fac.items && fac.items.length > 0) {
-        fac.items.forEach(it => {
-          const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
-          if (prod) {
-            if (fac.empresa === 'directa') {
-              prod.stock_vd = (prod.stock_vd || 0) + it.cant;
-            } else {
-              prod.stock_dist = (prod.stock_dist || 0) + it.cant;
-            }
-          }
-        });
-      }
-
-      // Revertir saldo del cliente si tenía saldo pendiente
-      if (fac.tipo_pago === 'credito' && fac.cliente_id && fac.saldo_pendiente > 0) {
-        const cli = this.clientes.find(c => c.id === fac.cliente_id);
-        if (cli) {
-          const campoSaldo = fac.empresa === 'directa' ? 'saldo_vd' : 'saldo_dist';
-          if (fac.empresa === 'directa') {
-            cli.saldo_vd = Math.max(0, Math.round(((cli.saldo_vd || 0) - fac.saldo_pendiente) * 100) / 100);
-          } else {
-            cli.saldo_dist = Math.max(0, Math.round(((cli.saldo_dist || 0) - fac.saldo_pendiente) * 100) / 100);
-          }
-          if (this.supabaseConectado) {
-            const { supabase } = await import('../services/supabase.js');
-            await supabase.from('clientes').update({ [campoSaldo]: cli[campoSaldo] }).eq('id', fac.cliente_id);
-          }
+        const fac = db.mapFactura(res.data);
+        fac.items = c.items.map(it => ({ ...it }));
+        fac.pagos = pagos;
+        this.todasFacturas.unshift(fac);
+        if (c.cotizacion_origen) {
+          const cot = this.presupuestos.find(p => p.id === c.cotizacion_origen.id);
+          if (cot) cot.estado = 'convertida';
         }
+        this.logBitacora('factura', `Emitió ${fac.num} a ${fac.cliente} — ${fmtUSD(fac.total)}`);
+        this.facturaReciente = fac;
+        this.modalFacturaActivo = true;
+        const fiscal = c.pidio_fiscal;
+        this.limpiarCarrito();
+        await Promise.all([this.recargarProductos(), this.recargarClientes()]);
+        this.notif(`✓ Factura ${fac.num} emitida`, 'success');
+        if (fiscal) setTimeout(() => this.notif('📋 Recordatorio: el cliente pidió factura fiscal', 'warning'), 2000);
+        return { ok: true, factura: fac };
+      } finally {
+        this.procesando = false;
       }
+    },
 
-      // Remover de facturas por cobrar
-      this.facturasCobrar = this.facturasCobrar.filter(f => f.id !== fac.id && f.num !== fac.num);
-      this.logBitacora('anulacion', `Factura ${fac.num} anulada. Motivo: "${fac.anulada_motivo}"`, true);
-      this.notif(`Factura ${fac.num} anulada y existencias devueltas al inventario`, 'warning');
+    // ═══════════════ ANULACIÓN ═══════════════
+    async anularFactura(facturaId, motivo) {
+      if (!this._exigirGerente('anular facturas')) return false;
+      if (!this._exigirConexion('Anulación')) return false;
+      if (!(motivo || '').trim()) { this.notif('El motivo es obligatorio', 'error'); return false; }
+      const fac = this.todasFacturas.find(f => f.id === facturaId);
+      if (!fac) { this.notif('Factura no encontrada', 'error'); return false; }
+      this.procesando = true;
+      try {
+        const r = await db.anularFacturaBD(fac.id, motivo.trim());
+        if (!r.ok) { this.notif('❌ No se anuló: ' + r.error, 'error'); return false; }
+        const nueva = await db.cargarFactura(fac.id);
+        if (nueva) Object.assign(fac, nueva);
+        this.logBitacora('anulacion', `Anuló ${fac.num}. Motivo: "${motivo}"`, true);
+        await Promise.all([this.recargarProductos(), this.recargarClientes()]);
+        this.notif(`Factura ${fac.num} anulada y existencias devueltas`, 'warning');
+        return true;
+      } finally {
+        this.procesando = false;
+      }
+    },
+
+    // ═══════════════ COBROS CxC (C-04) ═══════════════
+    async registrarCobro(facturaId, { montoIn, moneda, modo, metodo, ref }) {
+      if (!this._exigirConexion('Cobro')) return { ok: false };
+      if (this.procesando) return { ok: false, error: 'Ya hay un cobro en curso' };
+      const fac = this.todasFacturas.find(f => f.id === facturaId);
+      if (!fac) return { ok: false, error: 'Factura no encontrada' };
+      if (requiereReferencia(metodo) && !(ref || '').trim()) return { ok: false, error: 'La referencia es obligatoria para ' + metodo };
+      if (!this.tasasCargadas) return { ok: false, error: 'Faltan las tasas de cambio' };
+
+      const calc = calcularAbono({ f: fac, montoIn, moneda, modo, estado: this.estadoTasas });
+      if (!calc.ok) return calc;
+      const pago = {
+        monto_usd: calc.entregado.verde,
+        monto_bs: calc.entregado.bs,
+        tasa_usada: calc.entregado.tasa,
+        metodo,
+        referencia: (ref || '').trim()
+      };
+      this.procesando = true;
+      try {
+        const r = await db.registrarAbonoBD(fac.id, calc.acreditaUSD, pago);
+        if (!r.ok) return { ok: false, error: r.error };
+        fac.saldo_pendiente = r.saldo_pendiente;
+        fac.estado = r.estado;
+        fac.estado_bd = r.estado;
+        fac.abonado = Math.max(0, fac.total - r.saldo_pendiente);
+        await this.recargarClientes();
+        this.logBitacora('cobro', `Abono ${fmtUSD(calc.acreditaUSD)} a ${fac.num} (${metodo}). Saldo: ${fmtUSD(r.saldo_pendiente)}`);
+        return { ok: true, acreditaUSD: calc.acreditaUSD, saldo: r.saldo_pendiente };
+      } finally {
+        this.procesando = false;
+      }
+    },
+
+    // ═══════════════ COTIZACIONES (A-10) ═══════════════
+    async guardarPresupuesto({ cliente_id, cliente, items, tier }) {
+      if (!this._exigirConexion('Guardar cotización')) return null;
+      if (!items || !items.length) { this.notif('La cotización no tiene productos', 'error'); return null; }
+      const r = await db.guardarCotizacionBD(
+        { empresa: this.empresa, cliente_id: cliente_id || null, cliente_nombre: cliente || 'CLIENTE MOSTRADOR', tasa_bcv: this.tasa_bcv, tasa_par: this.tasa_par },
+        items.map(it => ({
+          producto_id: it.id, cod_alt: it.cod_alt, descripcion: it.desc, cantidad: it.cant,
+          fob_unitario: it.fob || 0, precio_unitario: it.precio, tier: tier || 'Publico'
+        }))
+      );
+      if (!r.ok) { this.notif('No se guardó la cotización: ' + r.error, 'error'); return null; }
+      await this.recargarCotizaciones();
+      this.logBitacora('presupuesto', `Cotización ${r.numero} para ${cliente || 'mostrador'} por ${fmtUSD(r.total)}`);
+      this.notif(`Cotización ${r.numero} guardada (vigencia 45 días)`, 'success');
+      return this.presupuestos.find(p => p.id === r.id) || null;
+    },
+
+    async rechazarPresupuesto(id) {
+      const r = await db.cambiarEstadoCotizacionBD(id, 'rechazada');
+      if (!r.ok) { this.notif('No se pudo rechazar: ' + r.error, 'error'); return false; }
+      const p = this.presupuestos.find(x => x.id === id);
+      if (p) p.estado = 'rechazada';
       return true;
     },
 
-
-    // Presupuestos
-    guardarPresupuesto(datos) {
-      const prefijo = this.empresa === 'directa' ? 'PRE-VD' : 'PRE-DIST';
-      const anio = new Date().getFullYear();
-      const correlativo = String(this.presupuestos.filter(p => p.empresa === this.empresa).length + 1).padStart(4, '0');
-      const num = `${prefijo}-${anio}-${correlativo}`;
-      const vence = new Date(Date.now() + (45 * 86400000));
-      const diasRest = 45;
-      const nuevo = {
-        id: Date.now(),
-        num,
-        empresa: this.empresa,
-        cliente: datos.cliente || 'CLIENTE MOSTRADOR',
-        cliente_id: datos.cliente_id,
-        vendedor: this.usuarioNombre,
-        fecha: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
-        fecha_raw: new Date().toISOString(),
-        vence: vence.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
-        total: datos.total || this.totalCarritoUSD,
-        estado: 'activa',
-        dias_restantes: diasRest,
-        items_count: (datos.items || this.carrito.items || []).length,
-        items: JSON.parse(JSON.stringify(datos.items || this.carrito.items))
-      };
-      this.presupuestos.unshift(nuevo);
-      this.logBitacora('presupuesto', `Cotización ${num} generada para ${nuevo.cliente} por ${fmtUSD(nuevo.total)}`);
-      this.notif(`Presupuesto ${num} guardado (vigencia 45 días)`, 'success');
-      return nuevo;
-    },
-
+    // Carga la cotización al carrito con los precios COTIZADOS congelados.
+    // Se marca 'convertida' solo cuando la factura se emite (en la BD).
     convertirPresupuestoEnVenta(preId) {
-      const pre = this.presupuestos.find(p => p.id === preId || p.num === preId);
+      const pre = this.presupuestos.find(p => p.id === preId);
       if (!pre) return;
+      if (pre.empresa !== this.empresa) {
+        this.notif(`Esa cotización es de ${pre.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'}. Cambia de empresa primero.`, 'warning');
+        return;
+      }
+      if (['convertida', 'rechazada', 'vencida'].includes(pre.estado)) {
+        this.notif(`La cotización está ${pre.estado}`, 'warning');
+        return;
+      }
       this.limpiarCarrito();
-      this.carrito.cliente_id = pre.cliente_id;
-      this.carrito.cliente_nombre = pre.cliente;
+      const cli = this.clientes.find(c => c.id === pre.cliente_id);
+      if (cli) this.seleccionarCliente(cli);
+      const faltan = [];
       pre.items.forEach(it => {
         const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
-        if (prod) {
-          this.agregarAlCarrito(prod, it.cant);
+        if (!prod) { faltan.push(it.cod_alt); return; }
+        this.agregarAlCarrito(prod, it.cant);
+        const linea = this.carrito.items.find(x => x.id === prod.id);
+        if (linea && it.precio > 0) {
+          linea.precio_fijo = true;
+          linea.precio_base = it.precio;
+          this._preciarItem(linea);
         }
       });
-      pre.estado = 'convertida';
-      this.cambiarVista('facturacion');
-      this.notif(`Cotización ${pre.num} cargada al carrito para emitir factura`, 'success');
+      this.carrito.cotizacion_origen = { id: pre.id, num: pre.num };
+      this.vistaActiva = 'facturacion';
+      if (faltan.length) this.notif(`No están en el catálogo: ${faltan.join(', ')}`, 'warning');
+      else this.notif(`Cotización ${pre.num} cargada con sus precios cotizados`, 'success');
     },
 
-    // Cobros y Abonos con persistencia en Supabase (tabla pagos + facturas + clientes)
-    async registrarCobro(facturaId, montoUSD, metodo = 'dolar_efectivo', ref = '') {
-      const fac = this.facturasCobrar.find(f => f.id === facturaId || f.num === facturaId);
-      if (!fac) {
-        this.notif('Factura no encontrada', 'error');
+    // ═══════════════ CLIENTES (C-02) ═══════════════
+    async crearCliente(datos) {
+      if (!this._exigirConexion('Crear cliente')) return null;
+      const r = await db.crearClienteBD(datos);
+      if (!r.ok) { this.notif('❌ El cliente NO se guardó: ' + r.error, 'error'); return null; }
+      this.clientes.unshift(r.cliente);
+      this.clientes.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      this.logBitacora('cliente', `Registró cliente ${r.cliente.nombre}`);
+      this.notif(`Cliente ${r.cliente.nombre} registrado`, 'success');
+      return r.cliente;
+    },
+
+    async actualizarCliente(id, datos) {
+      if (!this._exigirConexion('Actualizar cliente')) return false;
+      if (datos.nivel && datos.nivel !== 'Publico' && this.rol !== 'gerente') {
+        this.notif('Solo el gerente puede asignar niveles T1/T2/T3', 'error');
         return false;
       }
-      const abono = parseFloat(montoUSD) || 0;
-      if (abono <= 0) {
-        this.notif('Monto de abono inválido', 'warning');
-        return false;
-      }
-
-      const nuevoAbonado = Math.min(fac.total, (fac.abonado || 0) + abono);
-      const nuevoSaldoPendiente = Math.max(0, Math.round((fac.total - nuevoAbonado) * 100) / 100);
-      const nuevoEstado = nuevoSaldoPendiente <= 0.01 ? 'pagada' : 'parcial';
-
-      // Persistir en Supabase si está conectado
-      if (this.supabaseConectado && fac.id && !String(fac.id).startsWith('FAC-')) {
-        try {
-          const { supabase } = await import('../services/supabase.js');
-
-          // 1. Insertar fila en tabla 'pagos' con la tasa correspondiente al método (M2)
-          const mLower = (metodo || '').toLowerCase();
-          const esBs = mLower.includes('bs') || mLower.includes('móvil') || mLower.includes('movil') || mLower.includes('transferencia') || mLower.includes('punto');
-          const tasaCobro = esBs ? (this.tasa_par || this.tasa_bcv) : (this.tasa_bcv || this.tasa_par);
-          const pagoPayload = {
-            factura_id: fac.id,
-            monto_usd: abono,
-            monto_bs: Math.round(abono * tasaCobro * 100) / 100,
-            tasa_usada: tasaCobro,
-            metodo: metodo,
-            referencia: ref || '',
-            registrado_por: this.usuarioNombre
-          };
-          const { error: errPago } = await supabase.from('pagos').insert([pagoPayload]);
-          if (errPago) {
-            console.warn('[ARJ] Advertencia insertando pago:', errPago);
-          }
-
-          // 2. Actualizar saldo en tabla 'facturas'
-          const { error: errFac } = await supabase.from('facturas').update({
-            saldo_pendiente: nuevoSaldoPendiente,
-            estado: nuevoEstado
-          }).eq('id', fac.id);
-          if (errFac) {
-            this.notif(`Error actualizando saldo en BD: ${errFac.message}`, 'error');
-            return false;
-          }
-
-          // 3. Actualizar saldo deudor en tabla 'clientes'
-          if (fac.cliente_id) {
-            const cli = this.clientes.find(c => c.id === fac.cliente_id);
-            if (cli) {
-              const campoSaldo = fac.empresa === 'directa' ? 'saldo_vd' : 'saldo_dist';
-              const nuevoSaldoCli = Math.max(0, Math.round(((cli[campoSaldo] || 0) - abono) * 100) / 100);
-              await supabase.from('clientes').update({ [campoSaldo]: nuevoSaldoCli }).eq('id', fac.cliente_id);
-            }
-          }
-        } catch (err) {
-          console.error('[ARJ] Error persistiendo cobro en Supabase:', err);
-          this.notif(`Error al registrar cobro: ${err.message}`, 'error');
-          return false;
-        }
-      }
-
-      // Aplicar cambios en el estado local
-      fac.abonado = nuevoAbonado;
-      fac.saldo_pendiente = nuevoSaldoPendiente;
-      fac.estado = nuevoEstado;
-
-      // Descontar del saldo local del cliente
-      if (fac.cliente_id) {
-        const cli = this.clientes.find(c => c.id === fac.cliente_id);
-        if (cli) {
-          if (fac.empresa === 'directa') {
-            cli.saldo_vd = Math.max(0, Math.round(((cli.saldo_vd || 0) - abono) * 100) / 100);
-          } else {
-            cli.saldo_dist = Math.max(0, Math.round(((cli.saldo_dist || 0) - abono) * 100) / 100);
-          }
-        }
-      }
-
-      if (nuevoEstado === 'pagada') {
-        this.facturasCobrar = this.facturasCobrar.filter(f => f.id !== fac.id);
-        this.notif(`Factura ${fac.num} cancelada en su totalidad`, 'success');
-      } else {
-        this.notif(`Abono de ${fmtUSD(abono)} registrado para factura ${fac.num}`, 'success');
-      }
-      this.logBitacora('cobro', `Abono de ${fmtUSD(abono)} a factura ${fac.num} (${metodo})`);
+      const r = await db.actualizarClienteBD(id, datos);
+      if (!r.ok) { this.notif('❌ No se actualizó: ' + r.error, 'error'); return false; }
+      await this.recargarClientes();
+      this.logBitacora('cliente', `Actualizó cliente ${datos.nombre}`);
+      this.notif('Cliente actualizado', 'success');
       return true;
     },
 
-    // Traspaso entre Distribuidora y Venta Directa
-    ejecutarTraspaso(prodId, cantidad, motivo) {
-      const prod = this.productos.find(p => p.id === prodId || p.cod_alt === prodId);
-      if (!prod) {
-        this.notif('Producto no encontrado', 'error');
-        return false;
-      }
-      const cant = parseInt(cantidad) || 0;
-      if (cant <= 0 || cant > prod.stock_dist) {
-        this.notif(`Cantidad inválida. Stock disponible en Distribuidora: ${prod.stock_dist}`, 'warning');
-        return false;
-      }
-      prod.stock_dist -= cant;
-      prod.stock_vd += cant;
-
-      const mov = {
-        id: Date.now(),
-        fecha: new Date().toLocaleTimeString('es-VE') + ' ' + new Date().toLocaleDateString('es-VE'),
-        tipo: 'traspaso',
-        producto: prod.desc,
-        cod_alt: prod.cod_alt,
-        cant: cant,
-        empresa: 'distribuidora -> directa',
-        motivo: motivo || 'Traspaso para mostrador',
-        usuario: this.usuarioNombre
-      };
-      this.movimientos.unshift(mov);
-      this.logBitacora('traspaso', `Traspaso de ${cant} un. de '${prod.cod_alt}' desde Distribuidora a Venta Directa`);
-      this.notif(`Traspaso de ${cant} un. de '${prod.cod_alt}' realizado con éxito`, 'success');
+    // ═══════════════ INVENTARIO (C-01) ═══════════════
+    async guardarProducto(datos) {
+      if (!this._exigirGerente('editar productos')) return false;
+      if (!this._exigirConexion('Guardar producto')) return false;
+      const r = await db.guardarProductoBD({
+        id: datos.id || null, cod_alt: datos.cod_alt, cod_orig: datos.cod_orig, cod_barras: datos.cod_barras,
+        descripcion: datos.desc, marca: datos.marca, fob: datos.fob, stock_vd: datos.stock_vd, stock_dist: datos.stock_dist,
+        marca_modelo: datos.marca_modelo, sistema: datos.sistema, precio_manual: datos.precio_manual || null,
+        origen: datos.origen, factor_landed: datos.factor_landed, proveedor: datos.proveedor
+      });
+      if (!r.ok) { this.notif('❌ No se guardó el producto: ' + r.error, 'error'); return false; }
+      await this.recargarProductos();
+      this.logBitacora('producto', `${datos.id ? 'Editó' : 'Creó'} producto ${datos.cod_alt}`, true);
+      this.notif(`Producto ${datos.cod_alt} guardado`, 'success');
       return true;
     },
 
-    // Turnos de Caja
+    async desactivarProducto(prod) {
+      if (!this._exigirGerente('dar de baja productos')) return false;
+      if (!this._exigirConexion('Baja de producto')) return false;
+      const r = await db.desactivarProductoBD(prod.id);
+      if (!r.ok) { this.notif('No se dio de baja: ' + r.error, 'error'); return false; }
+      await this.recargarProductos();
+      this.logBitacora('producto', `Dio de baja ${prod.cod_alt} (${prod.desc})`, true);
+      this.notif(`${prod.cod_alt} dado de baja`, 'success');
+      return true;
+    },
+
+    // items: [{ producto_id, cantidad }]
+    async ejecutarTraspaso(items, referencia) {
+      if (!this._exigirGerente('hacer traspasos')) return null;
+      if (!this._exigirConexion('Traspaso')) return null;
+      const r = await db.aplicarTraspasoBD(items, referencia);
+      if (!r.ok) { this.notif('❌ Traspaso NO aplicado: ' + r.error, 'error'); return null; }
+      await this.recargarProductos();
+      this._kardex('traspaso', `Nota ${r.numero}: ${r.renglones} renglón(es), ${r.unidades} ud Dist → VD`, r.unidades);
+      this.logBitacora('traspaso', `Traspaso ${r.numero}: ${r.unidades} ud (${r.renglones} renglones) Dist → VD`, true);
+      this.notif(`Traspaso aplicado · Nota ${r.numero}`, 'success');
+      return r;
+    },
+
+    async aplicarRecepcion(args) {
+      if (!this._exigirGerente('registrar recepciones y conteos')) return null;
+      if (!this._exigirConexion('Recepción')) return null;
+      const r = await db.aplicarRecepcionBD(args);
+      if (!r.ok) { this.notif('❌ NO se aplicó: ' + r.error, 'error'); return null; }
+      await this.recargarProductos();
+      this._kardex(args.tipo === 'conteo' ? 'ajuste' : 'entrada', `${r.numero}${args.referencia ? ' — ' + args.referencia : ''}`, r.unidades);
+      this.logBitacora('inventario', `${args.tipo === 'conteo' ? 'Conteo físico' : 'Recepción'} ${r.numero}: ${r.renglones} productos, ${r.unidades} ud` +
+        (r.sellados ? ` · ${r.sellados} sellados` : '') + (r.conflictos && r.conflictos.length ? ` · ${r.conflictos.length} en conflicto de embarque` : ''), true);
+      return r;
+    },
+
+    // Ajuste puntual de stock = conteo físico de un producto
+    async ajustarStock(prod, tipo, cant, motivo) {
+      const actual = this.empresa === 'directa' ? prod.stock_vd : prod.stock_dist;
+      const fisico = tipo === 'entrada' ? actual + cant : actual - cant;
+      if (fisico < 0) { this.notif(`No puedes sacar ${cant}: solo hay ${actual}`, 'error'); return null; }
+      return this.aplicarRecepcion({
+        tipo: 'conteo', destino: this.empresa === 'directa' ? 'directa' : 'dist', embarqueId: null,
+        referencia: 'Ajuste manual: ' + motivo, items: [{ producto_id: prod.id, fisico }], noContados: []
+      });
+    },
+
+    async guardarEmbarque(datos) {
+      if (!this._exigirGerente('gestionar embarques')) return false;
+      if (!this._exigirConexion('Guardar embarque')) return false;
+      const r = await db.guardarEmbarqueBD(datos);
+      if (!r.ok) { this.notif('No se guardó el embarque: ' + r.error, 'error'); return false; }
+      await this.recargarEmbarques();
+      this.logBitacora('inventario', `${datos.id ? 'Editó' : 'Creó'} embarque ${r.data.codigo} — factor ${Number(r.data.factor).toFixed(4)}`, true);
+      this.notif(`Embarque ${r.data.codigo} guardado (factor ${Number(r.data.factor).toFixed(4)})`, 'success');
+      return true;
+    },
+
+    async recalcularEmbarque(emb) {
+      if (!this._exigirGerente('recalcular costos')) return false;
+      const r = await db.recalcularEmbarqueBD(emb.id);
+      if (!r.ok) { this.notif('No se recalculó: ' + r.error, 'error'); return false; }
+      await this.recargarProductos();
+      this.logBitacora('inventario', `Recalculó ${r.actualizados} producto(s) de ${emb.codigo} a factor ${Number(r.factor).toFixed(4)}`, true);
+      this.notif(`${r.actualizados} producto(s) recalculados`, 'success');
+      return true;
+    },
+
+    _kardex(tipo, motivo, cant) {
+      this.movimientos.unshift({
+        id: Date.now() + Math.random(),
+        fecha: new Date().toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' }),
+        tipo, producto: '', cod_alt: '', cant, empresa: this.empresa, motivo, usuario: this.usuarioNombre
+      });
+    },
+
+    // ═══════════════ CONFIGURACIÓN (A-07, A-08) ═══════════════
+    async actualizarConfiguracion(campos, descripcion) {
+      if (!this._exigirGerente('cambiar la configuración')) return false;
+      if (!this._exigirConexion('Guardar configuración')) return false;
+      const r = await db.actualizarConfiguracionBD(campos);
+      if (!r.ok) { this.notif('No se guardó: ' + r.error, 'error'); return false; }
+      await this.recargarConfiguracion();
+      if (descripcion) this.logBitacora('config', descripcion, true);
+      return true;
+    },
+
+    costosFijosDe(periodo) {
+      const cfg = this.configuracion;
+      if (!cfg) return 0;
+      const h = cfg.costos_fijos_hist || {};
+      if (h[periodo] != null) return parseFloat(h[periodo]) || 0;
+      // Hereda el último período anterior registrado; si no hay, el valor base
+      const anteriores = Object.keys(h).filter(k => k < periodo).sort();
+      return anteriores.length ? (parseFloat(h[anteriores[anteriores.length - 1]]) || 0) : (cfg.costos_fijos_mes || 0);
+    },
+    periodoActual() { return periodoDe(new Date()); },
+
+    // ═══════════════ TURNOS DE CAJA (M-07) ═══════════════
     abrirTurno(inicialUSD, inicialBs) {
-      const nuevo = {
+      if (this.turnoActual) { this.notif('Ya tienes un turno abierto', 'warning'); return; }
+      const t = {
         id: Date.now(),
+        usuario_id: this.perfil.id,
         cajero: this.usuarioNombre,
-        fecha_apertura: new Date().toLocaleTimeString('es-VE') + ' ' + new Date().toLocaleDateString('es-VE'),
+        empresa: this.empresa,
+        apertura_iso: new Date().toISOString(),
+        fecha_apertura: new Date().toLocaleString('es-VE'),
         fecha_cierre: null,
         inicial_usd: parseFloat(inicialUSD) || 0,
         inicial_bs: parseFloat(inicialBs) || 0,
-        ventas_usd: 0,
-        ventas_bs: 0,
         estado: 'abierto'
       };
-      this.turnos.unshift(nuevo);
-      this.turnoActual = nuevo;
-      this.logBitacora('caja', `Turno abierto por ${this.usuarioNombre} con $${nuevo.inicial_usd} y Bs.${nuevo.inicial_bs}`);
-      this.notif('Turno de caja abierto correctamente', 'success');
+      this.turnos.unshift(t);
+      this.logBitacora('caja', `Abrió turno con ${fmtUSD(t.inicial_usd)} + Bs.${t.inicial_bs}`);
+      this.notif('Turno de caja abierto', 'success');
     },
 
-    cerrarTurno(arqueoUSD, arqueoBs, notas) {
-      if (!this.turnoActual) return;
-      this.turnoActual.fecha_cierre = new Date().toLocaleTimeString('es-VE') + ' ' + new Date().toLocaleDateString('es-VE');
-      this.turnoActual.arqueo_usd = parseFloat(arqueoUSD) || 0;
-      this.turnoActual.arqueo_bs = parseFloat(arqueoBs) || 0;
-      this.turnoActual.notas_cierre = notas || '';
-      this.turnoActual.estado = 'cerrado';
-      this.logBitacora('caja', `Turno cerrado por ${this.usuarioNombre}. Arqueo: $${arqueoUSD} / Bs.${arqueoBs}`);
-      this.turnoActual = null;
-      this.notif('Turno de caja cerrado con reporte de arqueo', 'info');
+    // Efectivo cobrado por este usuario desde la apertura (de la BD)
+    async esperadoTurno() {
+      const t = this.turnoActual;
+      if (!t) return null;
+      const pagos = await db.cargarPagosDesde(t.apertura_iso, this.usuarioNombre);
+      let usd = 0, bs = 0;
+      pagos.forEach(p => {
+        if (/^efectivo usd$/i.test(p.metodo || '')) usd += parseFloat(p.monto_usd) || 0;
+        else if (/^efectivo bs/i.test(p.metodo || '')) bs += parseFloat(p.monto_bs) || 0;
+      });
+      return {
+        ventas_usd: Math.round(usd * 100) / 100,
+        ventas_bs: Math.round(bs * 100) / 100,
+        esperado_usd: Math.round((t.inicial_usd + usd) * 100) / 100,
+        esperado_bs: Math.round((t.inicial_bs + bs) * 100) / 100
+      };
     },
 
-    // Edición y Alta de Productos
-    guardarEdicionProducto(id, datos) {
-      const prod = this.productos.find(p => p.id === id);
-      if (!prod) return false;
-      Object.assign(prod, datos);
-      this.logBitacora('producto', `Producto '${prod.cod_alt}' editado por ${this.usuarioNombre}`);
-      this.notif(`Producto '${prod.cod_alt}' actualizado`, 'success');
-      return true;
+    cerrarTurno(arqueoUSD, arqueoBs, notas, esperado) {
+      const t = this.turnoActual;
+      if (!t) return null;
+      const realUsd = parseFloat(arqueoUSD) || 0;
+      const realBs = parseFloat(arqueoBs) || 0;
+      const difUsd = realUsd - (esperado ? esperado.esperado_usd : t.inicial_usd);
+      const difBs = realBs - (esperado ? esperado.esperado_bs : t.inicial_bs);
+      const dif = difUsd + (this.tasa_bcv > 0 ? difBs / this.tasa_bcv : 0);
+      Object.assign(t, {
+        fecha_cierre: new Date().toLocaleString('es-VE'),
+        arqueo_usd: realUsd, arqueo_bs: realBs, notas_cierre: notas || '',
+        ventas_usd: esperado ? esperado.ventas_usd : 0, ventas_bs: esperado ? esperado.ventas_bs : 0,
+        esperado_usd: esperado ? esperado.esperado_usd : t.inicial_usd, esperado_bs: esperado ? esperado.esperado_bs : t.inicial_bs,
+        diferencia_usd: Math.round(dif * 100) / 100,
+        estado: Math.abs(dif) < 0.5 ? 'cerrado' : 'cerrado_dif'
+      });
+      this.logBitacora('caja', `Cerró turno — diferencia ${fmtUSD(dif)} ${Math.abs(dif) < 0.5 ? '(cuadró)' : '(¡con diferencia!)'}`, Math.abs(dif) >= 0.5);
+      this.notif(Math.abs(dif) < 0.5 ? 'Turno cerrado: ¡cuadró!' : `Turno cerrado con diferencia de ${fmtUSD(dif)}`, Math.abs(dif) < 0.5 ? 'success' : 'warning');
+      return t;
     }
   }
 });

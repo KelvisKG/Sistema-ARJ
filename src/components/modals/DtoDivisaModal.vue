@@ -32,7 +32,7 @@
             type="number"
             step="0.5"
             min="0"
-            max="50"
+            max="60"
             class="val-input"
             style="width:110px;font-size:15px;font-weight:700;text-align:right"
             :class="{ 'is-invalid': errors.dto }"
@@ -72,21 +72,28 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD } from '../../services/pricing.js';
 
 const store = useArjStore();
-const dtoInput = ref(store.dto_divisa);
+const dtoInput = ref(0);
 const errors = ref({});
 
+// Cada vez que se abre, parte del % vigente (el del gerente o la brecha del día)
+watch(() => store.modalDtoDivisaActivo, (abierto) => {
+  if (abierto) {
+    dtoInput.value = Math.round(store.dtoDivisaPct * 10) / 10;
+    errors.value = {};
+  }
+}, { immediate: true });
+
 const montoACobrarVerde = computed(() => {
-  return Math.round(store.totalCarritoUSD * (1 - dtoInput.value / 100) * 100) / 100;
+  const v = parseFloat(dtoInput.value) || 0;
+  return Math.round(store.totales.subtotal * (1 - v / 100) * 100) / 100;
 });
 
-const puntosRegalados = computed(() => {
-  return dtoInput.value - store.dtoDivisaNeutro;
-});
+const puntosRegalados = computed(() => (parseFloat(dtoInput.value) || 0) - store.dtoDivisaNeutro);
 
 function aplicarNeutro() {
   dtoInput.value = parseFloat(store.dtoDivisaNeutro.toFixed(1));
@@ -95,16 +102,14 @@ function aplicarNeutro() {
 
 function guardarDescuento() {
   errors.value = {};
-
-  if (dtoInput.value < 0 || dtoInput.value > 50) {
-    errors.value.dto = 'El porcentaje debe estar entre 0% y 50%';
-    store.notif('Corrige el porcentaje (0-50%)', 'warning');
+  const v = parseFloat(dtoInput.value);
+  if (!Number.isFinite(v) || v < 0 || v > 60) {
+    errors.value.dto = 'El porcentaje debe estar entre 0% y 60%';
     return;
   }
-
-  store.dto_divisa = dtoInput.value;
+  // Si coincide con la brecha, se deja en null: la próxima vez sigue a la brecha del día
+  store.fijarDtoDivisa(Math.abs(v - store.dtoDivisaNeutro) < 0.05 ? null : v);
   store.modalDtoDivisaActivo = false;
-  store.logBitacora('precio', `Descuento de divisas configurado en ${dtoInput.value}% por ${store.usuarioNombre}`);
-  store.notif(`Descuento en divisas fijado en ${dtoInput.value}%`, 'success');
+  store.notif(`Descuento por divisas: ${v.toFixed(1)}%`, 'success');
 }
 </script>

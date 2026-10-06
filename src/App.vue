@@ -1,7 +1,15 @@
 <template>
   <div id="arj-root">
+    <!-- Verificando la sesión contra Supabase (no se muestra nada hasta saberlo) -->
+    <div v-if="store.verificandoSesion" class="login-screen">
+      <div class="login-box" style="text-align:center">
+        <i class="ti ti-loader-2" style="font-size:36px;color:var(--blue)"></i>
+        <p style="margin-top:12px">Verificando sesión...</p>
+      </div>
+    </div>
+
     <!-- Pantalla de Login si no está autenticado -->
-    <LoginScreen v-if="!store.autenticado" />
+    <LoginScreen v-else-if="!store.autenticado" />
 
     <!-- Sistema Principal -->
     <div v-else :class="['app-wrapper', `empresa-${store.empresa}`]" style="transition: background-color 0.5s ease, color 0.5s ease;">
@@ -51,6 +59,7 @@
             <ul style="padding-left:24px;margin-bottom:20px">
               <li style="margin-bottom:8px"><kbd style="background:#f1f5f9;border:1px solid #cbd5e1;padding:4px 8px;border-radius:6px;font-family:monospace;font-weight:bold;color:var(--text)">Esc</kbd> : Sirve para cerrar cualquier ventana emergente o salir rápido.</li>
               <li style="margin-bottom:8px"><kbd style="background:#f1f5f9;border:1px solid #cbd5e1;padding:4px 8px;border-radius:6px;font-family:monospace;font-weight:bold;color:var(--text)">Enter</kbd> : Úselo para confirmar una búsqueda de repuesto o cobrar.</li>
+              <li style="margin-bottom:8px"><kbd style="background:#f1f5f9;border:1px solid #cbd5e1;padding:4px 8px;border-radius:6px;font-family:monospace;font-weight:bold;color:var(--text)">Ctrl + Q</kbd> : Botón de pánico. Cierra la sesión y limpia la pantalla al instante.</li>
             </ul>
 
             <div style="background:#EFF6FF;border-left:5px solid var(--blue);padding:14px 16px;border-radius:8px;font-size:15px;color:var(--navy)">
@@ -113,7 +122,6 @@ import PresupuestoPreviewModal from './components/modals/PresupuestoPreviewModal
 import ToastNotification from './components/common/ToastNotification.vue';
 
 const store = useArjStore();
-store.restaurarSesion(); // Restaurar sesión síncronamente antes del primer render
 
 const mostrarModalAyuda = ref(false);
 
@@ -146,10 +154,21 @@ onMounted(async () => {
 
   document.body.classList.add(`empresa-${store.empresa}`);
 
-  if (store.autenticado) {
-    await supabase.auth.getSession(); // Wait for Supabase to restore token
-    await store.initApp();
-  }
+  // C-05: la sesión se valida contra Supabase + perfiles, nunca contra localStorage
+  await store.restaurarSesion();
+
+  // Si la sesión se cierra o vence en otra pestaña, se sale del sistema
+  supabase.auth.onAuthStateChange((evento) => {
+    if (evento === 'SIGNED_OUT' && store.autenticado) window.location.reload();
+  });
+
+  // Botón de pánico (Ctrl+Q): cierra la sesión y limpia la pantalla
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'q' && store.autenticado) {
+      e.preventDefault();
+      store.logout();
+    }
+  });
 });
 </script>
 

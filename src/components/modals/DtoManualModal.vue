@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD } from '../../services/pricing.js';
 
@@ -74,6 +74,14 @@ const store = useArjStore();
 const pctInput = ref(store.carrito.descuento_manual || 0);
 const motivoInput = ref(store.carrito.descuento_motivo || '');
 const errors = ref({});
+
+watch(() => store.modalDtoManualActivo, (abierto) => {
+  if (abierto) {
+    pctInput.value = store.carrito.descuento_manual || 0;
+    motivoInput.value = store.carrito.descuento_motivo || '';
+    errors.value = {};
+  }
+});
 
 const montoDescuento = computed(() => {
   if (pctInput.value <= 0) return 0;

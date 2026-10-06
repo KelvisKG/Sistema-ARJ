@@ -128,9 +128,9 @@
             <label>Nivel de Precio</label>
             <select v-model="nuevoCli.nivel" class="val-input">
               <option value="Publico">Público / Mostrador</option>
-              <option value="T1">T1 (Aliado / –5%)</option>
-              <option value="T2">T2 (Taller / –10%)</option>
-              <option value="T3">T3 (Mayorista / –20%)</option>
+              <option value="T1" :disabled="store.rol !== 'gerente'">T1 (Aliado / –5%)</option>
+              <option value="T2" :disabled="store.rol !== 'gerente'">T2 (Taller / –10%)</option>
+              <option value="T3" :disabled="store.rol !== 'gerente'">T3 (Mayorista / –20%)</option>
             </select>
           </div>
           <div class="field-col" style="margin-bottom:0">
@@ -172,13 +172,8 @@
             </select>
           </div>
           <div class="field-col" style="margin-bottom:0">
-            <label>Canal de Venta</label>
-            <select v-model="nuevoCli.canal_venta" class="val-input">
-              <option value="Mostrador">Mostrador</option>
-              <option value="Instagram">Instagram</option>
-              <option value="WhatsApp">WhatsApp</option>
-              <option value="Vendedor de Zona">Vendedor de Zona</option>
-            </select>
+            <label>Detalle de Captación</label>
+            <input v-model="nuevoCli.origen_detalle" type="text" placeholder="Ej: quién lo refirió" class="val-input">
           </div>
         </div>
 
@@ -347,9 +342,9 @@
             <label>Nivel de Precio</label>
             <select v-model="cliEditando.nivel" class="val-input">
               <option value="Publico">Público / Mostrador</option>
-              <option value="T1">T1 (Aliado / –5%)</option>
-              <option value="T2">T2 (Taller / –10%)</option>
-              <option value="T3">T3 (Mayorista / –20%)</option>
+              <option value="T1" :disabled="store.rol !== 'gerente'">T1 (Aliado / –5%)</option>
+              <option value="T2" :disabled="store.rol !== 'gerente'">T2 (Taller / –10%)</option>
+              <option value="T3" :disabled="store.rol !== 'gerente'">T3 (Mayorista / –20%)</option>
             </select>
           </div>
           <div class="field-col" style="margin-bottom:0">
@@ -416,8 +411,6 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
-import { guardarDatosLocal } from '../services/persistence.js';
-import { guardarClienteEnSupabase, actualizarClienteEnSupabase } from '../services/supabase.js';
 
 const store = useArjStore();
 const busqueda = ref('');
@@ -436,7 +429,7 @@ const nuevoCli = ref({
   contacto_nombre: '',
   contacto_cargo: '',
   origen: 'referido',
-  canal_venta: 'Mostrador'
+  origen_detalle: ''
 });
 
 const cliEditando = ref({
@@ -580,59 +573,37 @@ function abrirEditarCliente(c) {
 }
 
 async function guardarEdicionCliente() {
-  if (!cliEditando.value.nombre) {
-    store.notif('El nombre del cliente es obligatorio', 'warning');
+  if (!cliEditando.value.nombre || cliEditando.value.nombre.trim().length < 3) {
+    store.notif('El nombre del cliente es obligatorio (mín. 3 caracteres)', 'warning');
     return;
   }
-
   const id = cliEditando.value.id;
-  const idx = store.clientes.findIndex(x => x.id === id);
-  if (idx === -1) return;
-
-  const datosActualizados = {
-    ...store.clientes[idx],
-    nombre: cliEditando.value.nombre.toUpperCase(),
-    rif: (cliEditando.value.rif || '').toUpperCase(),
+  const ok = await store.actualizarCliente(id, {
+    nombre: cliEditando.value.nombre,
+    rif: cliEditando.value.rif,
     tel: cliEditando.value.tel,
     direccion: cliEditando.value.direccion,
     nivel: cliEditando.value.nivel,
     tipo: cliEditando.value.tipo,
-    empresa: cliEditando.value.empresa,
     origen: cliEditando.value.origen,
-    como_consiguio: cliEditando.value.origen,
     origen_detalle: cliEditando.value.origen_detalle,
     notas: cliEditando.value.notas,
     contacto_principal: {
-      nombre: cliEditando.value.contacto_nombre || '—',
-      cargo: cliEditando.value.contacto_cargo || '—',
+      nombre: (cliEditando.value.contacto_nombre || '').trim(),
+      cargo: (cliEditando.value.contacto_cargo || '').trim(),
       tel: cliEditando.value.contacto_tel || cliEditando.value.tel || ''
     }
-  };
-
-  store.clientes[idx] = datosActualizados;
-
+  });
+  if (!ok) return;
   if (clienteSeleccionado.value && clienteSeleccionado.value.id === id) {
-    clienteSeleccionado.value = { ...datosActualizados };
+    clienteSeleccionado.value = store.clientes.find(c => c.id === id) || null;
   }
-
-  guardarDatosLocal(store.$state);
-
-  try {
-    await actualizarClienteEnSupabase(id, datosActualizados);
-  } catch (e) {
-    console.warn('[ARJ] Error actualizando en Supabase:', e);
-  }
-
   mostrarModalEditar.value = false;
-  store.notif(`Cliente '${datosActualizados.nombre}' actualizado exitosamente`, 'success');
 }
 
 const facturasPendientesCli = computed(() => {
   if (!clienteSeleccionado.value) return [];
-  return store.todasFacturas.filter(f => 
-    (f.cliente === clienteSeleccionado.value.nombre) && 
-    (f.estado === 'pendiente' || f.estado === 'parcial')
-  );
+  return store.facturasCobrar.filter(f => f.cliente_id === clienteSeleccionado.value.id);
 });
 
 function facturarA(c) {
@@ -642,48 +613,27 @@ function facturarA(c) {
 }
 
 async function guardarNuevoCliente() {
-  if (!nuevoCli.value.nombre) {
-    store.notif('Por favor escribe el nombre del cliente', 'warning');
+  const n = nuevoCli.value;
+  if (!n.nombre || n.nombre.trim().length < 3) {
+    store.notif('Escribe el nombre del cliente (mín. 3 caracteres)', 'warning');
     return;
   }
-  const item = {
-    id: Date.now(),
-    nombre: nuevoCli.value.nombre.toUpperCase(),
-    rif: nuevoCli.value.rif.toUpperCase(),
-    tel: nuevoCli.value.tel,
-    nivel: nuevoCli.value.nivel,
-    tipo: nuevoCli.value.tipo,
-    direccion: nuevoCli.value.direccion,
-    origen: nuevoCli.value.origen || 'referido',
-    como_consiguio: nuevoCli.value.origen || 'referido',
-    canal_venta: nuevoCli.value.canal_venta,
-    saldo_vd: 0,
-    saldo_dist: 0,
-    contacto_principal: { 
-      nombre: nuevoCli.value.contacto_nombre, 
-      cargo: nuevoCli.value.contacto_cargo, 
-      tel: nuevoCli.value.tel 
-    }
-  };
-  store.clientes.unshift(item);
-  guardarDatosLocal(store.$state);
-
-  try {
-    await guardarClienteEnSupabase({
-      nombre: item.nombre,
-      rif: item.rif,
-      telefono: item.tel,
-      direccion: item.direccion,
-      nivel: item.nivel,
-      tipo_pago: item.tipo,
-      origen: item.origen,
-      canal_venta: item.canal_venta
-    });
-  } catch (e) {
-    console.warn('[ARJ] Error creando cliente en Supabase:', e);
-  }
-
+  const cli = await store.crearCliente({
+    nombre: n.nombre,
+    rif: n.rif,
+    tel: n.tel,
+    nivel: n.nivel,
+    tipo: n.tipo,
+    direccion: n.direccion,
+    origen: n.origen || 'referido',
+    origen_detalle: n.origen_detalle || '',
+    contacto_principal: { nombre: n.contacto_nombre, cargo: n.contacto_cargo, tel: n.tel }
+  });
+  if (!cli) return;
   mostrarModalNuevo.value = false;
-  store.notif(`Cliente '${item.nombre}' guardado exitosamente`, 'success');
+  nuevoCli.value = {
+    nombre: '', rif: '', tel: '', nivel: 'Publico', tipo: 'contado', direccion: '',
+    contacto_nombre: '', contacto_cargo: '', origen: 'referido', origen_detalle: ''
+  };
 }
 </script>

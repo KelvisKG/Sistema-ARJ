@@ -9,19 +9,23 @@
         <div class="brand">
           <i class="ti ti-building-store"></i> Sistema ARJ 
         </div>
-        <div class="empresa-switch" id="empresa-switch" @click="pedirConfirmacionCambio">
+        <div v-if="store.puedeCambiarEmpresa" class="empresa-switch" id="empresa-switch" @click="pedirConfirmacionCambio">
           <i class="ti ti-arrows-exchange"></i>
           <span id="empresa-actual">{{ nombreEmpresaActual }}</span>
           <i class="ti ti-chevron-down" style="font-size:12px"></i>
         </div>
+        <div v-else class="empresa-switch" id="empresa-switch" style="cursor:default" title="Tu usuario opera solo en esta empresa">
+          <i class="ti ti-lock"></i>
+          <span id="empresa-actual">{{ nombreEmpresaActual }}</span>
+        </div>
       </div>
 
       <div class="header-right">
-        <div class="tasa-info" @click="store.cambiarVista('config')" title="Tasa de cambio paralela">
+        <div class="tasa-info" @click="irATasas" title="Tasa de cambio paralela">
           <i class="ti ti-currency-dollar"></i>
           Paralelo: <strong id="tasa-par">{{ (store.tasa_par || 0).toFixed(2) }}</strong>
         </div>
-        <div class="tasa-info" @click="store.cambiarVista('config')" title="Tasa oficial BCV">
+        <div class="tasa-info" @click="irATasas" title="Tasa oficial BCV">
           BCV: <strong id="tasa-bcv">{{ (store.tasa_bcv || 0).toFixed(2) }}</strong>
         </div>
 
@@ -56,7 +60,7 @@
           <span class="role" id="user-role">{{ store.rol.toUpperCase() }}</span>
         </div>
 
-        <button class="panic-btn" @click="store.logout" title="Salir inmediatamente (Esc)">
+        <button class="panic-btn" @click="store.logout" title="Salir inmediatamente (Ctrl+Q)">
           <i class="ti ti-power"></i> Salir
         </button>
       </div>
@@ -67,11 +71,12 @@
       <i class="ti ti-alert-triangle" style="font-size:20px;flex:none"></i>
       <div class="bt-txt">
         <div id="bt-msg"><strong>Las tasas no se han confirmado hoy.</strong></div>
-        <div class="bt-sub" id="bt-sub">Verifica la tasa BCV ({{ (store.tasa_bcv || 0).toFixed(2) }}) y Paralelo ({{ (store.tasa_par || 0).toFixed(2) }}) antes de continuar.</div>
+        <div class="bt-sub" id="bt-sub">{{ textoUltimaConfirmacion }} · Vigentes: BCV {{ (store.tasa_bcv || 0).toFixed(2) }} · Paralelo {{ (store.tasa_par || 0).toFixed(2) }}.
+          <span v-if="store.rol !== 'gerente'">No se puede facturar hasta que el gerente las confirme.</span></div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div v-if="store.rol === 'gerente'" style="display:flex;gap:6px">
         <button @click="store.cambiarVista('config')"><i class="ti ti-settings"></i> Ir a Tasas</button>
-        <button style="background:var(--green)" @click="confirmarTasasRapido"><i class="ti ti-check"></i> Confirmar hoy</button>
+        <button style="background:var(--green)" :disabled="store.procesando" @click="confirmarTasasRapido"><i class="ti ti-check"></i> Confirmar hoy</button>
       </div>
     </div>
 
@@ -89,7 +94,7 @@
           <i class="ti ti-check"></i> Conexión en tiempo real con Supabase activa.
         </div>
         <div v-else style="color:var(--gold);margin-bottom:10px">
-          <i class="ti ti-info-circle"></i> Operando en modo local resiliente (localStorage activo).
+          <i class="ti ti-alert-triangle"></i> Sin conexión con la base de datos: no se puede facturar, cobrar ni modificar inventario.
         </div>
         <div v-if="repuestosCriticosCount > 0" style="color:var(--red);margin-bottom:10px">
           <i class="ti ti-package"></i> <strong>Inventario:</strong> {{ repuestosCriticosCount }} repuestos tienen stock mínimo o agotado.
@@ -271,14 +276,14 @@ onMounted(() => {
     store.notif('¡Sistema ARJ instalado como aplicación en Windows!', 'success');
   });
 
-  // Listener para salir rápido con Escape si no hay modales abiertos
+  // Esc cierra la ventana emergente que esté abierta
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (store.facturaEmitidaModal) store.cerrarFacturaModal();
+      if (store.modalFacturaActivo) store.modalFacturaActivo = false;
       else if (store.modoCajaActivo) store.modoCajaActivo = false;
-      else if (store.mostrarDtoDivisaModal) store.mostrarDtoDivisaModal = false;
-      else if (store.mostrarDtoManualModal) store.mostrarDtoManualModal = false;
-      else if (store.mostrarNuevoClienteModal) store.mostrarNuevoClienteModal = false;
+      else if (store.modalDtoDivisaActivo) store.modalDtoDivisaActivo = false;
+      else if (store.modalDtoManualActivo) store.modalDtoManualActivo = false;
+      else if (store.modalNuevoClienteActivo) store.modalNuevoClienteActivo = false;
       else if (notifsAbiertas.value) notifsAbiertas.value = false;
       else if (mostrarModalEmpresa.value) mostrarModalEmpresa.value = false;
       else if (menuAbierto.value) menuAbierto.value = false;
@@ -318,8 +323,21 @@ function toggleModoOscuro() {
   }
 }
 
-function confirmarTasasRapido() {
-  store.confirmarTasas();
-  store.notif('Tasas de cambio confirmadas para hoy', 'success');
+// Confirma sin exigir que el valor cambie: queda registrado que hoy se revisaron
+async function confirmarTasasRapido() {
+  await store.confirmarTasas(store.tasa_bcv, store.tasa_par);
 }
+
+function irATasas() {
+  if (store.rol === 'gerente') store.cambiarVista('config');
+}
+
+const textoUltimaConfirmacion = computed(() => {
+  const t = store.tasas_actualizadas;
+  if (!t) return 'Nunca se han confirmado';
+  const d = new Date(t);
+  const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+  return 'Última confirmación: ' + d.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) + ' a las ' +
+    d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) + (dias >= 1 ? ' (hace ' + dias + (dias === 1 ? ' día)' : ' días)') : '');
+});
 </script>

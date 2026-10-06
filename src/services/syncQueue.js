@@ -13,8 +13,8 @@ export function obtenerColaSincronizacion() {
     if (!raw) return [];
     const cola = JSON.parse(raw);
     if (!Array.isArray(cola)) return [];
-    // Descartar entradas con versión de esquema antigua o que contengan FACTURA
-    const colaValida = cola.filter(t => t && t.schema_version === SYNC_SCHEMA_VERSION && t.tipo !== 'FACTURA');
+    // Solo se conservan tareas de bitácora con el esquema vigente
+    const colaValida = cola.filter(t => t && t.schema_version === SYNC_SCHEMA_VERSION && t.tipo === 'BITACORA');
     if (colaValida.length !== cola.length) {
       guardarColaSincronizacion(colaValida);
     }
@@ -30,9 +30,9 @@ export function guardarColaSincronizacion(cola) {
 
 // Encola una acción para ser ejecutada después
 export function encolarAccion(tipo, payload) {
-  // GUARDIA: Las facturas NO se encolan — requieren persistencia atómica confirmada en BD.
-  if (tipo === 'FACTURA') {
-    console.error('[ARJ Sync] ERROR: Las facturas no deben encolarse. Use guardarFacturaEnSupabase directamente.');
+  // GUARDIA: solo la bitácora se encola. Todo lo demás requiere confirmación de la BD.
+  if (tipo !== 'BITACORA') {
+    console.error(`[ARJ Sync] ERROR: "${tipo}" no se puede encolar; debe guardarse en línea.`);
     return;
   }
 
@@ -71,12 +71,9 @@ export async function procesarColaSincronizacion() {
     try {
       let exito = false;
       
-      if (tarea.tipo === 'CLIENTE') {
-        const { error } = await supabase.from('clientes').insert([tarea.payload]);
-        exito = !error;
-        if (error) console.error('[ARJ Sync] Error cliente:', error.message);
-      }
-      else if (tarea.tipo === 'BITACORA') {
+      // Solo la bitácora admite cola offline. Clientes, facturas, pagos e
+      // inventario se guardan en línea o fallan en voz alta (C-02).
+      if (tarea.tipo === 'BITACORA') {
         const { error } = await supabase.from('bitacora').insert([tarea.payload]);
         exito = !error;
         if (error) console.error('[ARJ Sync] Error bitácora:', error.message);

@@ -49,9 +49,9 @@
                 <div
                   class="search-result-item"
                   style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer"
-                  @click="seleccionarCliente(null)"
+                  @click="seleccionarConsumidorFinal"
                 >
-                  <strong style="color:var(--text)">-- Cliente General / Mostrador --</strong>
+                  <strong style="color:var(--text)">-- Consumidor final (mostrador) --</strong>
                 </div>
                 <div
                   v-for="c in clientesFiltrados"
@@ -80,7 +80,7 @@
           <!-- NIVEL DE PRECIO EN DISTRIBUIDORA -->
           <div v-if="store.empresa === 'distribuidora'" class="field-row" id="fila-nivel-precio">
             <label>Nivel precio:</label>
-            <div class="tier-selector" id="tier-selector">
+            <div class="tier-selector" id="tier-selector" :style="{ opacity: store.rol === 'gerente' ? 1 : 0.6 }" :title="store.rol === 'gerente' ? '' : 'Solo el gerente cambia el nivel de precio'">
               <div
                 :class="['tier-btn', { active: store.carrito.tier === 'Publico' }]"
                 @click="store.cambiarTier('Publico')"
@@ -440,11 +440,11 @@
                   </td>
                 </tr>
                 <!-- ALERTA MARGEN BAJO (GERENTE) -->
-                <tr v-if="store.rol === 'gerente' && !sinFob(it) && margenItem(it) < 30">
+                <tr v-if="store.rol === 'gerente' && !sinFob(it) && margenItem(it) < MARGEN_MINIMO">
                   <td colspan="8" style="padding:0">
                     <div style="margin:0;background:#FFF3E0;border-left:3px solid #E65100;padding:6px 12px;font-size:11px;color:#BF360C;display:flex;gap:6px;align-items:center">
                       <i class="ti ti-trending-down" style="font-size:14px"></i>
-                      <div><strong>Margen de {{ margenItem(it) }}% en {{ it.cod_alt }}</strong> — por debajo del mínimo de 30%.</div>
+                      <div><strong>Margen de {{ margenItem(it) }}% en {{ it.cod_alt }}</strong> — por debajo del mínimo de {{ MARGEN_MINIMO }}%.</div>
                     </div>
                   </td>
                 </tr>
@@ -458,8 +458,12 @@
       <div>
         <div class="total-box">
           <div class="total-row">
-            <span>Subtotal</span>
+            <span>Subtotal (precio de lista)</span>
             <span id="t-subtotal">{{ fmtUSD(store.subtotalCarrito) }}</span>
+          </div>
+          <div v-if="store.subtotalCarrito - t.subtotal > 0.004" class="total-row" style="color:var(--lgold)">
+            <span>Descuento manual</span>
+            <span>−{{ fmtUSD(store.subtotalCarrito - t.subtotal) }}</span>
           </div>
           <div class="total-row iva-zero">
             <span><i class="ti ti-info-circle"></i> IVA (exento)</span>
@@ -467,33 +471,41 @@
           </div>
 
           <div class="total-row big">
-            <span>
-              Cobro en Divisas
-              <span
-                v-if="store.rol === 'gerente'"
-                class="badge badge-info"
-                style="font-size:9px;cursor:pointer;margin-left:4px"
-                title="Configurar descuento por divisas"
-                @click="store.modalDtoDivisaActivo = true"
-              >
-                −{{ store.dto_divisa.toFixed(1) }}%
-              </span>
-            </span>
-            <span id="t-total">{{ fmtUSD(store.totalCarritoUSD) }}</span>
+            <span>Total ($BCV)</span>
+            <span id="t-total-bcv">{{ fmtUSD(t.subtotal) }}</span>
           </div>
 
           <div class="total-row big" style="background:#FDF6E3;margin:4px -14px;padding:8px 14px;border-radius:4px">
-            <span style="color:#5D4037">Efectivo Divisas</span>
-            <span style="color:#5D4037;font-weight:800">{{ fmtUSD(store.totalCarritoEfectivoVerde) }}</span>
+            <span style="color:#5D4037">
+              Cobrar en efectivo $
+              <span
+                class="badge"
+                :style="{ fontSize: '9px', marginLeft: '4px', cursor: store.rol === 'gerente' ? 'pointer' : 'default', background: store.dtoDivisaExcedente > 0 ? 'var(--red)' : 'var(--blue)', color: '#fff' }"
+                :title="store.dtoDivisaExcedente > 0 ? 'Conversión + ' + store.dtoDivisaExcedente.toFixed(1) + ' puntos de descuento real' : 'Solo conversión a la brecha del día'"
+                @click="store.rol === 'gerente' && (store.modalDtoDivisaActivo = true)"
+              >−{{ store.dtoDivisaPct.toFixed(1) }}%</span>
+            </span>
+            <span style="color:#5D4037;font-weight:800">{{ fmtUSD(t.totalUsd) }}</span>
+          </div>
+          <div v-if="store.dtoDivisaExcedente > 0" style="font-size:10.5px;color:#FFD9D9;margin:2px 0 4px">
+            Regalas {{ store.dtoDivisaExcedente.toFixed(1) }} pts sobre la brecha = {{ fmtUSD(t.subtotal * store.dtoDivisaExcedente / 100) }}. Se registra como descuento.
+          </div>
+          <div v-if="t.ajuste && Math.abs(t.ajuste.dif) >= 0.005" :style="{ fontSize: '10.5px', margin: '2px 0 4px', color: t.ajuste.arriba ? '#FFD9D9' : '#FFF' }">
+            <template v-if="t.ajuste.arriba">⚠ Estás cobrando {{ fmtUSD(t.ajuste.dif) }} de MÁS en efectivo. Asegúrate de que el cliente lo sepa.</template>
+            <template v-else>Ajuste de {{ fmtUSD(Math.abs(t.ajuste.dif)) }} para cobrar {{ fmtUSD(t.ajuste.objetivo) }} en billetes. Sale de tu utilidad.</template>
+          </div>
+          <div v-if="store.rol === 'gerente' && t.subtotal > 0" style="display:flex;gap:6px;align-items:center;margin:4px 0 6px;font-size:11px">
+            <span style="color:rgba(255,255,255,.8)">Cobro redondo:</span>
+            <input type="text" inputmode="decimal" :value="store.carrito.cobrar_verde || ''" placeholder="—"
+              class="val-input" style="width:80px;padding:3px 6px;font-size:12px"
+              @change="store.fijarCobrarVerde(parseMontoVE($event.target.value))">
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px" @click="store.redondearCobrarVerde()">Redondear</button>
+            <button v-if="store.carrito.cobrar_verde" class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px" @click="store.fijarCobrarVerde(null)">×</button>
           </div>
 
           <div class="total-row small" style="border:none;padding-bottom:0">
-            <span>Cobrar en Dólar BCV ({{ store.tasa_bcv }})</span>
-            <span id="t-bs" style="font-weight:700;color:#FFF">{{ fmtBs(store.totalCarritoUSD, store.tasa_bcv) }}</span>
-          </div>
-          <div class="total-row small" style="border:none;padding-bottom:0;color:var(--lgold)">
-            <span>Equivalente Paralelo ({{ store.tasa_par }})</span>
-            <span style="font-weight:700">{{ fmtBs(store.totalCarritoUSD, store.tasa_par) }}</span>
+            <span>Cobrar en Bs (tasa BCV {{ store.tasa_bcv }})</span>
+            <span id="t-bs" style="font-weight:700;color:#FFF">{{ fmtBsMonto(t.totalBs) }}</span>
           </div>
           <div class="total-row small" style="border:none;padding-top:4px;color:rgba(255,255,255,0.6);font-size:10px;justify-content:flex-end;gap:8px">
             <span>Brecha cambiaria:</span>
@@ -501,52 +513,44 @@
           </div>
         </div>
 
-        <!-- SECCIÓN DE PAGOS MÚLTIPLES -->
+        <!-- PAGOS MÚLTIPLES: cada pago se mide contra el total anunciado en SU moneda -->
         <div class="pago-section" style="margin-top:14px">
           <div class="pago-tit"><i class="ti ti-coins"></i> Forma de pago — descuenta del total</div>
 
           <div v-for="(p, pidx) in store.carrito.pagos" :key="pidx" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
             <div>
-              <strong>{{ p.metodo }}</strong> <span v-if="p.ref" style="color:var(--text-muted)">({{ p.ref }})</span>
-              <div v-if="p.moneda === 'Bs'" style="font-size:11px;color:var(--text-muted)">
-                Bs. {{ Number(p.monto_bs || p.monto).toLocaleString('es-VE', { minimumFractionDigits: 2 }) }} (Tasa: {{ p.tasa_usada }})
-              </div>
-              <div v-else-if="p.moneda === 'USD_VERDE' && p.monto_verde" style="font-size:11px;color:var(--text-muted)">
-                Efectivo: ${{ Number(p.monto_verde).toFixed(2) }} (Acredita: ${{ Number(p.monto_usd).toFixed(2) }} BCV)
-              </div>
+              <strong>{{ p.metodo }}</strong> <span v-if="p.ref" style="color:var(--text-muted)">(Ref. {{ p.ref }})</span>
+              <div style="font-size:11px;color:var(--text-muted)">Cubre {{ (fraccionDe(p) * 100).toFixed(1) }}% de la factura</div>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-weight:700;color:var(--green)">{{ fmtUSD(p.monto_usd) }}</span>
+              <span style="font-weight:700;color:var(--green)">{{ p.moneda === 'USD' ? fmtUSD(p.monto) : fmtBsMonto(p.monto) }}</span>
               <button class="btn btn-danger btn-sm" style="padding:2px 6px;font-size:11px" @click="store.removerPagoCarrito(pidx)">&times;</button>
             </div>
           </div>
 
           <div v-if="mostrarFormPago" style="margin-top:10px;background:var(--card-bg);padding:12px;border-radius:8px;border:1px solid var(--border)">
-            <select v-model="nuevoMetodo" @change="onMetodoChange" class="val-input" style="width:100%;margin-bottom:8px">
-              <option value="Divisas Efectivo">Divisas Efectivo</option>
-              <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
-              <option value="Transferencia Bancaria">Transferencia Bancaria</option>
-              <option value="Zelle USD">Zelle USD</option>
+            <select v-model="nuevoMetodo" @change="completarMonto" class="val-input" style="width:100%;margin-bottom:8px">
+              <option v-for="m in METODOS_PAGO" :key="m" :value="m">{{ m }}</option>
             </select>
             <div style="display:flex;gap:8px;margin-bottom:8px">
-              <div style="flex:1">
-                <input v-model.number="nuevoMontoIngresado" type="number" :placeholder="esPagoBs ? 'Monto en Bs' : (esPagoVerde ? 'Monto $ Efectivo' : 'Monto USD')" class="val-input" style="width:100%"
+              <div style="flex:1;display:flex;align-items:center;gap:4px">
+                <span style="font-weight:700;color:var(--dgray);min-width:22px">{{ monedaNueva === 'USD' ? '$' : 'Bs' }}</span>
+                <input v-model="nuevoMontoTexto" type="text" inputmode="decimal" placeholder="0,00" class="val-input" style="width:100%"
                   :class="{ 'is-invalid': errorsPago.monto }" @input="errorsPago.monto = null">
-                <span v-if="errorsPago.monto" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsPago.monto }}</span>
               </div>
-              <input v-model="nuevaRef" type="text" placeholder="Ref/Comprobante" class="val-input" style="flex:1">
+              <input v-model="nuevaRef" type="text" :placeholder="requiereReferencia(nuevoMetodo) ? 'Referencia (obligatoria)' : 'Referencia'" class="val-input" style="flex:1"
+                :class="{ 'is-invalid': errorsPago.ref }" @input="errorsPago.ref = null">
             </div>
-            <div v-if="esPagoBs && nuevoMontoIngresado > 0" style="margin-bottom:8px;font-size:11.5px;color:var(--dgray);text-align:right">
-              Equivale a: <strong style="color:var(--navy)">{{ fmtUSD(store.tasa_par > 0 ? nuevoMontoIngresado / store.tasa_par : 0) }}</strong> (Tasa Paralelo: {{ store.tasa_par }})
-            </div>
-            <div v-else-if="esPagoVerde && nuevoMontoIngresado > 0" style="margin-bottom:8px;font-size:11.5px;color:var(--dgray);text-align:right">
-              Acredita a factura ($BCV): <strong style="color:var(--navy)">{{ fmtUSD(verdeABcv(nuevoMontoIngresado, store)) }}</strong>
-            </div>
-            <div style="display:flex;justify-content:flex-end;gap:8px">
-              <button class="btn btn-secondary btn-sm" @click="mostrarFormPago = false">Cancelar</button>
-              <button class="btn btn-success btn-sm" @click="agregarPago">
-                <i class="ti ti-plus"></i> Agregar
-              </button>
+            <span v-if="errorsPago.monto" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsPago.monto }}</span>
+            <span v-if="errorsPago.ref" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsPago.ref }}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
+              <button class="btn btn-secondary btn-sm" title="Llenar con el monto exacto que falta" @click="completarMonto">Completar</button>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" @click="mostrarFormPago = false">Cancelar</button>
+                <button class="btn btn-success btn-sm" @click="agregarPago">
+                  <i class="ti ti-plus"></i> Agregar
+                </button>
+              </div>
             </div>
           </div>
 
@@ -555,32 +559,26 @@
           </button>
 
           <div class="saldo-row" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
-            <span>Falta por pagar:</span>
-            <span style="font-weight:800;font-size:15px" :style="{ color: store.faltaPorPagarUSD > 0.05 ? 'var(--red)' : 'var(--green)' }">
-              {{ fmtUSD(store.faltaPorPagarUSD) }}
+            <span>{{ store.faltaPorPagarUSD > 0.1 ? 'Falta por pagar ($BCV):' : '✓ Pago completo' }}</span>
+            <span style="font-weight:800;font-size:15px" :style="{ color: store.faltaPorPagarUSD > 0.1 ? 'var(--red)' : 'var(--green)' }">
+              {{ fmtUSD(store.faltaPorPagarUSD > 0.1 ? store.faltaPorPagarUSD : 0) }}
             </span>
           </div>
-
-          <!-- AVISO EN VIVO: VALIDACIÓN DE CONTADO -->
-          <div
-            v-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05 && store.totalCarritoUSD > 0"
-            style="margin-top:10px;background:#FDECEA;border:1px solid #F5C2C7;border-left:4px solid var(--red);color:#842029;padding:9px 12px;border-radius:6px;font-size:12px;line-height:1.45"
-          >
-            <div style="display:flex;align-items:center;gap:6px;font-weight:700;margin-bottom:2px">
-              <i class="ti ti-alert-circle" style="font-size:16px;color:var(--red)"></i>
-              <span>Validación de Contado:</span>
-            </div>
-            <div>
-              Faltan <strong style="color:var(--red)">{{ fmtUSD(store.faltaPorPagarUSD) }}</strong>. Debe registrar el pago completo para poder emitir la factura.
-            </div>
+          <div v-if="store.faltaPorPagarUSD > 0.1 && t.subtotal > 0" style="font-size:11px;color:var(--dgray);text-align:right">
+            Equivale a {{ fmtUSD(t.totalUsd * store.faltaPorPagarUSD / t.subtotal) }} en efectivo o {{ fmtBsMonto(t.totalBs * store.faltaPorPagarUSD / t.subtotal) }}
           </div>
 
           <div
-            v-else-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD <= 0.05 && store.totalCarritoUSD > 0 && store.carrito.pagos.length > 0"
-            style="margin-top:10px;background:#E8F5E9;border:1px solid #C8E6C9;border-left:4px solid var(--green);color:#1B5E20;padding:8px 12px;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:8px"
+            v-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 1 && t.subtotal > 0"
+            style="margin-top:10px;background:#FDECEA;border:1px solid #F5C2C7;border-left:4px solid var(--red);color:#842029;padding:9px 12px;border-radius:6px;font-size:12px;line-height:1.45"
           >
-            <i class="ti ti-circle-check" style="font-size:16px;color:var(--green)"></i>
-            <span><strong>Pago completo:</strong> Factura de contado lista para emitir.</span>
+            <strong>Venta de contado:</strong> registra el pago completo para poder emitir.
+          </div>
+          <div
+            v-else-if="store.carrito.tipo_pago === 'credito' && store.carrito.pagos.length > 0 && t.subtotal > 0"
+            style="margin-top:10px;background:#E8F0F8;border-left:4px solid var(--blue);padding:8px 12px;border-radius:6px;font-size:12px"
+          >
+            Abono inicial: <strong>{{ fmtUSD(store.totalPagadoCarritoUSD) }}</strong> · queda a crédito <strong>{{ fmtUSD(store.faltaPorPagarUSD) }}</strong>
           </div>
         </div>
 
@@ -589,68 +587,40 @@
           <div class="pago-tit"><i class="ti ti-calendar"></i> Término Comercial</div>
           <div style="display:flex;gap:8px;align-items:center;margin:10px 0">
             <label style="font-size:12px;font-weight:600;color:var(--text);min-width:40px">Tipo:</label>
-            <select
-              v-model="store.carrito.tipo_pago"
-              id="tipo-pago-factura"
-              class="val-input"
-              style="flex:1"
-            >
+            <select v-model="store.carrito.tipo_pago" id="tipo-pago-factura" class="val-input" style="flex:1">
               <option value="contado">Contado</option>
               <option value="credito">Crédito</option>
             </select>
-            <select
-              v-if="store.carrito.tipo_pago === 'credito'"
-              v-model="store.carrito.dias_credito"
-              id="dias-credito"
-              class="val-input"
-              style="width:110px"
-            >
+            <select v-if="store.carrito.tipo_pago === 'credito'" v-model.number="store.carrito.dias_credito" id="dias-credito" class="val-input" style="width:110px">
               <option :value="15">15 días</option>
               <option :value="30">30 días</option>
               <option :value="45">45 días</option>
               <option :value="60">60 días</option>
             </select>
           </div>
+          <div v-if="store.carrito.cotizacion_origen" style="font-size:11.5px;color:var(--navy)">
+            <i class="ti ti-file-text"></i> Desde cotización <strong>{{ store.carrito.cotizacion_origen.num }}</strong> (precios cotizados)
+          </div>
         </div>
 
-        <!-- CHECKBOX FACTURA FISCAL -->
         <div class="fiscal-check" style="margin-top:10px">
-          <input
-            v-model="store.carrito.pidio_fiscal"
-            type="checkbox"
-            id="emitir-fiscal"
-          >
+          <input v-model="store.carrito.pidio_fiscal" type="checkbox" id="emitir-fiscal">
           <label for="emitir-fiscal">
             <i class="ti ti-receipt-tax"></i> El cliente pidió factura fiscal
             <small>Al emitir, te recordará registrar también en el sistema fiscal homologado</small>
           </label>
         </div>
 
-        <!-- BOTONES DE ACCIÓN -->
         <div class="action-buttons" style="margin-top:14px">
-          <button class="btn btn-secondary" @click="store.limpiarCarrito">
+          <button class="btn btn-secondary" @click="cancelarFactura">
             <i class="ti ti-x"></i> Cancelar
           </button>
-          <button
-            class="btn btn-green"
-            id="btn-emitir"
-            :disabled="store.carrito.items.length === 0 || !store.tasasConfirmadasHoy || (store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05)"
-            @click="confirmarEmitir"
-          >
-            <i class="ti ti-printer"></i> Emitir e Imprimir
+          <button class="btn btn-green" id="btn-emitir" :disabled="!!motivoBloqueo || store.procesando" @click="confirmarEmitir">
+            <i class="ti ti-printer"></i> {{ store.procesando ? 'Emitiendo...' : 'Emitir e Imprimir' }}
           </button>
         </div>
-        <div
-          v-if="!store.tasasConfirmadasHoy"
-          style="margin-top:6px;font-size:11.5px;color:var(--red);text-align:right;font-weight:600"
-        >
-          <i class="ti ti-lock"></i> Bloqueado: Debe confirmar las tasas del día en el panel superior antes de facturar
-        </div>
-        <div
-          v-else-if="store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05 && store.totalCarritoUSD > 0"
-          style="margin-top:6px;font-size:11.5px;color:var(--red);text-align:right;font-weight:600"
-        >
-          <i class="ti ti-lock"></i> Bloqueado: Falta pagar {{ fmtUSD(store.faltaPorPagarUSD) }}
+        <div v-if="motivoBloqueo && store.carrito.items.length > 0" style="margin-top:6px;font-size:11.5px;color:var(--red);text-align:right;font-weight:600">
+          <i class="ti ti-lock"></i> {{ motivoBloqueo }}
         </div>
       </div>
     </div>
@@ -660,7 +630,8 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBs, precioConTier, costoLanded, sinFob, verdeABcv } from '../services/pricing.js';
+import { fmtUSD, precioConTier, costoLanded, sinFob, MARGEN_MINIMO } from '../services/pricing.js';
+import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada } from '../services/cobros.js';
 
 const store = useArjStore();
 const tabBusqueda = ref('normal');
@@ -671,76 +642,59 @@ const ultimoEscaneado = ref('');
 const textoImportar = ref('');
 const mostrarResultados = ref(false);
 
+const t = computed(() => store.totales);
+
+// ── Pagos ──
 const mostrarFormPago = ref(false);
-const nuevoMetodo = ref('Divisas Efectivo');
-const nuevoMontoIngresado = ref(0);
+const nuevoMetodo = ref(METODOS_PAGO[0]);
+const nuevoMontoTexto = ref('');
 const nuevaRef = ref('');
 const errorsPago = ref({});
+const monedaNueva = computed(() => monedaDeMetodo(nuevoMetodo.value));
 
-const esPagoBs = computed(() => {
-  return nuevoMetodo.value === 'Pago Móvil (Bs)' || nuevoMetodo.value === 'Transferencia Bancaria';
-});
+function fmtBsMonto(n) {
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
+  return 'Bs. ' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
-const esPagoVerde = computed(() => {
-  return nuevoMetodo.value === 'Divisas Efectivo';
-});
+// Fracción de la factura que cubre un pago (contra el total en SU moneda)
+function fraccionDe(p) {
+  return fraccionPagada([p], t.value);
+}
 
-function onMetodoChange() {
+// "Completar": llena el monto exacto que falta en la moneda del método
+function completarMonto() {
   errorsPago.value = {};
-  const faltaUSD = store.faltaPorPagarUSD;
-  if (faltaUSD <= 0) {
-    nuevoMontoIngresado.value = 0;
-    return;
-  }
-  if (esPagoBs.value) {
-    const tasa = store.tasa_par > 0 ? store.tasa_par : store.tasa_bcv;
-    nuevoMontoIngresado.value = Number((faltaUSD * tasa).toFixed(2));
-  } else if (esPagoVerde.value) {
-    const dto = (store.dto_divisa || 0) / 100;
-    nuevoMontoIngresado.value = Number((faltaUSD * (1 - dto)).toFixed(2));
-  } else {
-    nuevoMontoIngresado.value = Number(faltaUSD.toFixed(2));
-  }
+  const falta = Math.max(0, 1 - fraccionPagada(store.carrito.pagos, t.value));
+  const monto = monedaNueva.value === 'USD' ? falta * t.value.totalUsd : falta * t.value.totalBs;
+  nuevoMontoTexto.value = monto > 0 ? (Math.round(monto * 100) / 100).toFixed(2).replace('.', ',') : '';
 }
 
 function abrirFormPago() {
   mostrarFormPago.value = true;
-  nuevoMetodo.value = 'Divisas Efectivo';
-  errorsPago.value = {};
+  nuevoMetodo.value = METODOS_PAGO[0];
   nuevaRef.value = '';
-  onMetodoChange();
+  completarMonto();
 }
 
 function agregarPago() {
   errorsPago.value = {};
-  const monto = parseFloat(nuevoMontoIngresado.value) || 0;
-  if (monto <= 0) {
-    errorsPago.value = { monto: 'Ingrese un monto válido mayor a 0' };
-    return;
+  const monto = parseMontoVE(nuevoMontoTexto.value);
+  if (!(monto > 0)) errorsPago.value.monto = 'Ingresa un monto válido mayor a 0';
+  if (requiereReferencia(nuevoMetodo.value) && !nuevaRef.value.trim()) {
+    errorsPago.value.ref = 'La referencia es obligatoria para ' + nuevoMetodo.value;
   }
-
-  let moneda = 'USD';
-  if (esPagoBs.value) {
-    moneda = 'Bs';
-  } else if (esPagoVerde.value) {
-    moneda = 'USD_VERDE';
+  if (Object.keys(errorsPago.value).length) return;
+  if (store.agregarPagoCarrito({ metodo: nuevoMetodo.value, monto, ref: nuevaRef.value })) {
+    mostrarFormPago.value = false;
+    nuevoMontoTexto.value = '';
+    nuevaRef.value = '';
   }
-
-  store.agregarPagoCarrito({
-    metodo: nuevoMetodo.value,
-    monto: monto,
-    moneda: moneda,
-    ref: (nuevaRef.value || '').trim()
-  });
-
-  mostrarFormPago.value = false;
-  nuevoMontoIngresado.value = 0;
-  nuevaRef.value = '';
 }
 
-const fechaHoy = computed(() => {
-  return new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
-});
+const motivoBloqueo = computed(() => store.validarEmision());
+
+const fechaHoy = computed(() => new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }));
 
 const clienteSeleccionado = computed(() => {
   if (!store.carrito.cliente_id) return null;
@@ -752,27 +706,26 @@ const brechaCambiaria = computed(() => {
   return (((store.tasa_par - store.tasa_bcv) / store.tasa_bcv) * 100).toFixed(2);
 });
 
-const busquedaCliente = ref('');
+const busquedaCliente = ref(store.carrito.cliente_nombre || '');
 const mostrarClientes = ref(false);
 
 const clientesFiltrados = computed(() => {
   const query = busquedaCliente.value.trim().toLowerCase();
   if (!query) return store.clientes.slice(0, 50);
-  return store.clientes.filter(c => {
-    return (c.nombre || '').toLowerCase().includes(query) || (c.rif || '').toLowerCase().includes(query);
-  }).slice(0, 50);
+  return store.clientes.filter(c =>
+    (c.nombre || '').toLowerCase().includes(query) || (c.rif || '').toLowerCase().includes(query)
+  ).slice(0, 50);
 });
 
 const productosFiltrados = computed(() => {
   const query = busquedaTexto.value.trim().toLowerCase();
   if (!query) return [];
-  return store.productos.filter(p => {
-    const matchCod = (p.cod_alt || '').toLowerCase().includes(query);
-    const matchOrig = (p.cod_orig || '').toLowerCase().includes(query);
-    const matchDesc = (p.desc || '').toLowerCase().includes(query);
-    const matchMarca = (p.marca || '').toLowerCase().includes(query);
-    return matchCod || matchOrig || matchDesc || matchMarca;
-  }).slice(0, 10);
+  return store.productos.filter(p =>
+    (p.cod_alt || '').toLowerCase().includes(query) ||
+    (p.cod_orig || '').toLowerCase().includes(query) ||
+    (p.desc || '').toLowerCase().includes(query) ||
+    (p.marca || '').toLowerCase().includes(query)
+  ).slice(0, 10);
 });
 
 const productosPorAplicacion = computed(() => {
@@ -785,12 +738,11 @@ const productosPorAplicacion = computed(() => {
   ).slice(0, 15);
 });
 
-const productosFavoritos = computed(() => {
-  return store.productos.filter(p => store.favoritos.includes(p.cod_alt)).slice(0, 8);
-});
+const productosFavoritos = computed(() => store.productos.filter(p => store.favoritos.includes(p.cod_alt)).slice(0, 8));
 
 function stockDe(p) {
-  return store.empresa === 'directa' ? (p.stock_vd || 0) : (p.stock_dist || 0);
+  const prod = store.productos.find(x => x.id === p.id) || p;
+  return store.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0);
 }
 
 function margenItem(it) {
@@ -801,12 +753,17 @@ function margenItem(it) {
 
 function seleccionarCliente(cli) {
   store.seleccionarCliente(cli);
-  if (cli) {
-    busquedaCliente.value = cli.nombre;
-  } else {
-    busquedaCliente.value = '';
-  }
+  busquedaCliente.value = cli ? cli.nombre : '';
   mostrarClientes.value = false;
+}
+
+function seleccionarConsumidorFinal() {
+  const cf = store.clientes.find(c => /consumidor final/i.test(c.nombre || ''));
+  if (!cf) {
+    store.notif('No existe el cliente "CONSUMIDOR FINAL" en la base de datos. Regístralo primero.', 'error');
+    return;
+  }
+  seleccionarCliente(cf);
 }
 
 function seleccionarProducto(p) {
@@ -823,119 +780,52 @@ function escanearBarras() {
     store.agregarAlCarrito(prod, 1);
     ultimoEscaneado.value = `${prod.cod_alt} - ${prod.desc}`;
     codigoBarrasInput.value = '';
-    store.notif(`Escaneado: ${prod.desc}`, 'success');
   } else {
     store.notif(`Código '${code}' no encontrado`, 'warning');
   }
 }
 
 function procesarImportacion() {
-  const lines = textoImportar.value.split('\n');
   let procesados = 0;
-  lines.forEach(line => {
-    const parts = line.trim().split(/\s+/);
-    if (parts.length >= 1 && parts[0]) {
-      const code = parts[0].trim();
-      const cant = parseInt(parts[1]) || 1;
-      const prod = store.productos.find(p => p.cod_alt === code || p.cod_orig === code);
-      if (prod) {
-        store.agregarAlCarrito(prod, cant);
-        procesados++;
-      }
-    }
+  const noEncontrados = [];
+  textoImportar.value.split('\n').forEach(line => {
+    const parts = line.trim().split(/[\s,;]+/);
+    if (!parts[0]) return;
+    const code = parts[0].trim();
+    const cant = parseInt(parts[1]) || 1;
+    const prod = store.productos.find(p => p.cod_alt === code || p.cod_orig === code);
+    if (prod) { store.agregarAlCarrito(prod, cant); procesados++; } else noEncontrados.push(code);
   });
   if (procesados > 0) {
-    store.notif(`Se importaron ${procesados} productos al carrito`, 'success');
+    store.notif(`Se importaron ${procesados} productos` + (noEncontrados.length ? ` · no encontrados: ${noEncontrados.join(', ')}` : ''), noEncontrados.length ? 'warning' : 'success');
     textoImportar.value = '';
   } else {
     store.notif('No se encontraron códigos coincidentes para importar', 'warning');
   }
 }
 
+function cancelarFactura() {
+  if (store.carrito.items.length && !confirm('¿Descartar la factura en curso?')) return;
+  store.limpiarCarrito();
+  busquedaCliente.value = '';
+}
+
 async function confirmarEmitir() {
-  // 1. Validar que el carrito no esté vacío
-  if (store.carrito.items.length === 0) {
-    store.notif('El carrito está vacío. Agrega productos antes de facturar.', 'warning');
+  const err = store.validarEmision();
+  if (err) {
+    alert('No se puede emitir:\n\n' + err);
     return;
   }
-
-  // 2. Validación estricta de pagos para ventas de Contado (Prioritaria)
-  if (store.carrito.tipo_pago === 'contado' && store.faltaPorPagarUSD > 0.05) {
-    const total = store.totalCarritoUSD;
-    const pagado = store.totalPagadoCarritoUSD;
-    const falta = store.faltaPorPagarUSD;
-    alert(`BLOQUEO DE EMISIÓN — VENTA DE CONTADO:\n\nLa factura es a CONTADO pero los pagos no cubren el total de la venta.\n\n• Total de la venta: ${fmtUSD(total)}\n• Total pagado: ${fmtUSD(pagado)}\n• FALTA POR PAGAR: ${fmtUSD(falta)}\n\nEn facturas de contado es obligatorio saldar el monto completo antes de emitir.`);
-    store.notif(`Emisión bloqueada: Faltan ${fmtUSD(falta)} por pagar`, 'error');
-    return;
-  }
-
-  // 3. Validación de cliente
-  if (!store.carrito.cliente_id && (!store.carrito.cliente_nombre || !store.carrito.cliente_nombre.trim())) {
-    store.notif('Selecciona un cliente antes de emitir la factura', 'error');
-    return;
-  }
-
-  // 4. Validación de tasas cambiarias
-  if (!store.tasa_bcv || store.tasa_bcv <= 0 || !store.tasa_par || store.tasa_par <= 0) {
-    store.notif('Las tasas de cambio (BCV y Paralelo) deben estar configuradas para emitir la factura', 'error');
-    return;
-  }
-
-  // 4b. Validación de confirmación de tasas hoy (M1)
-  if (!store.tasasConfirmadasHoy) {
-    store.notif('Debe confirmar las tasas de cambio de hoy antes de emitir la factura', 'error');
-    alert('⚠ BLOQUEO DE SEGURIDAD (M1):\nLas tasas cambiarias no han sido confirmadas para el día de hoy.\nPor favor confírmelas en el panel superior antes de emitir facturas.');
-    return;
-  }
-
-  // 5. Bloqueo estricto v13.17: FOB <= 0
-  const sinCosto = store.carrito.items.filter(sinFob);
-  if (sinCosto.length > 0) {
-    const lista = sinCosto.map(it => '• ' + (it.cod_alt || it.cod) + ' — ' + (it.desc || 'sin descripción')).join('\n');
-    alert('No se puede emitir: ' + sinCosto.length + (sinCosto.length === 1 ? ' producto no tiene' : ' productos no tienen') + ' costo cargado (FOB en 0).\n\n' + lista + '\n\nSin FOB el margen es falso y el precio público sale en cero. Corrige el FOB en Inventario y vuelve a intentar.\n\nSi no lo necesitas en esta factura, quítalo del carrito.');
-    store.notif('Emisión bloqueada: ' + sinCosto.length + ' producto(s) sin FOB', 'error');
-    return;
-  }
-
-  // 6. Red de seguridad v13.3: Ningún renglón sin descripción
-  const sinDesc = store.carrito.items.filter(it => !it.desc || !String(it.desc).trim());
-  if (sinDesc.length > 0) {
-    store.notif('Hay ' + sinDesc.length + ' renglón(es) sin descripción (' + sinDesc.map(i => i.cod_alt || i.cod).join(', ') + '). Corrige el producto en Inventario antes de facturar.', 'error');
-    return;
-  }
-
-  // 7. Descuento manual solo permitido a gerente
-  if (store.carrito.descuento_manual > 0 && store.rol !== 'gerente') {
-    store.notif('Solo el gerente puede aplicar descuentos manuales', 'error');
-    return;
-  }
-
-  // 8. Alerta de préstamo inter-empresarial / Stock insuficiente
-  const negativos = store.carrito.items.filter(it => {
-    const s = stockDe(it);
-    return it.cant > s;
-  });
+  const negativos = store.carrito.items.filter(it => it.cant > stockDe(it));
   if (negativos.length > 0) {
-    const detalleNegativos = negativos.map(it => `• ${it.cod_alt} (Solicitado: ${it.cant}, Disponible: ${stockDe(it)})`).join('\n');
-    const continuar = confirm(`⚠ AVISO DE STOCK (PRÉSTAMO INTER-EMPRESARIAL):\n${negativos.length} producto(s) superan el stock disponible en ${store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'}:\n\n${detalleNegativos}\n\n¿Desea continuar y emitir la factura?`);
-    if (!continuar) return;
+    const detalle = negativos.map(it => `• ${it.cod_alt} (Solicitado: ${it.cant}, Disponible: ${stockDe(it)})`).join('\n');
+    if (!confirm(`⚠ PRÉSTAMO INTER-EMPRESA:\n${negativos.length} producto(s) superan el stock en ${store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'}:\n\n${detalle}\n\n¿Emitir de todas formas?`)) return;
   }
-
-  // 9. Recordatorio de factura fiscal si fue solicitada
-  if (store.carrito.pidio_fiscal) {
-    alert('RECORDATORIO:\nEl cliente pidió factura fiscal. Recuerde registrarla también en el sistema fiscal homologado / impresora fiscal.');
-  }
-
-  // 10. Confirmación final
-  if (confirm('¿Está seguro de que desea emitir e imprimir esta factura?')) {
-    const resultado = await store.emitirFactura();
-    // Si el store retornó error, no hacer nada más (el store ya mostró la notif)
-    if (resultado && !resultado.ok) {
-      // El error ya fue notificado por el store; si hay info adicional, alertar
-      if (resultado.error && resultado.error.includes('base de datos')) {
-        alert(`⚠ La factura no pudo guardarse en la base de datos.\n\nError: ${resultado.error}\n\nEl carrito ha sido restaurado. Verifique la conexión e intente de nuevo.`);
-      }
-    }
-  }
+  const resumen = `Cliente: ${store.carrito.cliente_nombre}\nTotal: ${fmtUSD(t.value.subtotal)} ($BCV)\n` +
+    (store.carrito.tipo_pago === 'credito' ? `Crédito ${store.carrito.dias_credito} días · queda debiendo ${fmtUSD(store.faltaPorPagarUSD)}` : 'Contado');
+  if (!confirm('¿Emitir e imprimir esta factura?\n\n' + resumen)) return;
+  const r = await store.emitirFactura();
+  if (r && r.ok) busquedaCliente.value = '';
+  else if (r && r.error) alert('La factura NO se emitió.\n\n' + r.error);
 }
 </script>
