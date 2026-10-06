@@ -3,7 +3,7 @@
 // Permite que la app cargue y funcione sin conexión a internet
 // =====================================================================
 
-const CACHE_NAME = 'arj-pwa-v1';
+const CACHE_NAME = 'arj-pwa-v2'; // subir al cambiar la estrategia: borra cachés viejas
 
 // Recursos críticos a precachear inmediatamente
 const PRECACHE_ASSETS = [
@@ -77,7 +77,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Para assets estáticos (scripts, estilos, fuentes, iconos)
+  // Caché primero SOLO para archivos inmutables: los de /assets/ llevan hash en el
+  // nombre y las fuentes/iconos externos no cambian. Todo lo demás va a la red
+  // primero, para no servir código viejo después de un despliegue.
+  const inmutable = url.pathname.startsWith('/assets/') || url.origin !== self.location.origin;
+  if (!inmutable) {
+    event.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
+
   event.respondWith(
     caches.match(req).then((cachedRes) => {
       if (cachedRes) {

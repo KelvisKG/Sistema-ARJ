@@ -48,7 +48,11 @@ pinia.use(({ store }) => {
 app.mount('#app');
 
 // Registro del Service Worker para funcionamiento Offline y PWA instalable
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+// En desarrollo NO se usa: serviría módulos viejos y rompería la recarga en caliente.
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !import.meta.env.PROD) {
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+} else if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
       .then((reg) => {
