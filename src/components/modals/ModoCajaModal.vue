@@ -46,7 +46,7 @@
                 <div style="font-size:12px;color:var(--text-muted);margin-top:6px;height:34px;overflow:hidden;line-height:1.4">{{ p.desc }}</div>
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">
-                <span style="font-size:16px;font-weight:800;color:var(--green)">{{ fmtUSD(precioPublico(p.fob)) }}</span>
+                <span style="font-size:16px;font-weight:800;color:var(--green)">{{ fmtUSD(precioConTier(p.fob, store.carrito.tier, p)) }}</span>
                 <span class="badge badge-info" style="font-size:11px">Stock: {{ stockDe(p) }}</span>
               </div>
             </div>
@@ -96,17 +96,21 @@
               <strong style="font-size:24px;font-weight:800;color:var(--green)">{{ fmtUSD(store.totalCarritoUSD) }}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--text-muted);margin-bottom:16px;padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
-              <span>Tasa BCV (Bs. {{ store.tasa_bcv }}):</span>
+              <span>En Bs (tasa BCV {{ store.tasa_bcv }}):</span>
               <strong style="color:var(--text);font-size:14px">{{ fmtBs(store.totalCarritoUSD, store.tasa_bcv) }}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#5D4037;margin:-8px 0 16px;padding:8px 12px;background:#FDF6E3;border-radius:8px">
+              <span>En efectivo $:</span>
+              <strong style="font-size:14px">{{ fmtUSD(store.totalCarritoEfectivoVerde) }}</strong>
             </div>
 
             <button
               class="btn btn-success btn-lg"
               style="width:100%;padding:14px;font-size:15px;font-weight:700;border-radius:10px;justify-content:center;box-shadow:var(--shadow-md)"
               :disabled="store.carrito.items.length === 0"
-              @click="emitirDesdeCaja"
+              @click="irACobrar"
             >
-              <i class="ti ti-check"></i> COBRAR E IMPRIMIR FACTURA
+              <i class="ti ti-cash"></i> COBRAR (registrar pagos y emitir)
             </button>
           </div>
         </div>
@@ -118,7 +122,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD, fmtBs, precioPublico } from '../../services/pricing.js';
+import { fmtUSD, fmtBs, precioConTier } from '../../services/pricing.js';
 
 const store = useArjStore();
 const busquedaCaja = ref('');
@@ -136,10 +140,10 @@ function stockDe(p) {
   return store.empresa === 'directa' ? p.stock_vd : p.stock_dist;
 }
 
-async function emitirDesdeCaja() {
-  const res = await store.emitirFactura();
-  if (res.ok) {
-    store.modoCajaActivo = false;
-  }
+// El cobro se registra en la pantalla de Facturación: allí están los pagos por
+// moneda, la referencia obligatoria y todas las validaciones de emisión
+function irACobrar() {
+  store.modoCajaActivo = false;
+  store.cambiarVista('facturacion');
 }
 </script>

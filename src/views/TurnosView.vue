@@ -16,7 +16,8 @@
         <button
           v-else
           class="btn btn-danger"
-          @click="mostrarModalCerrar = true"
+          :disabled="cargandoEsperado"
+          @click="abrirCierre"
         >
           <i class="ti ti-lock"></i> Cerrar Turno Actual
         </button>
@@ -71,6 +72,7 @@
             <th>Cierre</th>
             <th class="num">Fondo Inicial ($)</th>
             <th class="num">Arqueo Cierre ($)</th>
+            <th class="num">Diferencia</th>
             <th class="center">Estado</th>
           </tr>
         </thead>
@@ -80,10 +82,11 @@
             <td style="font-size:12px">{{ t.fecha_apertura }}</td>
             <td style="font-size:12px;color:var(--dgray)">{{ t.fecha_cierre || 'En curso' }}</td>
             <td class="num">{{ fmtUSD(t.inicial_usd) }}</td>
-            <td class="num" style="font-weight:700">{{ t.arqueo_usd ? fmtUSD(t.arqueo_usd) : '—' }}</td>
+            <td class="num" style="font-weight:700">{{ t.arqueo_usd != null ? fmtUSD(t.arqueo_usd) : '—' }}</td>
+            <td class="num" :style="{ color: Math.abs(t.diferencia_usd || 0) < 0.5 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }">{{ t.diferencia_usd != null ? fmtUSD(t.diferencia_usd) : '—' }}</td>
             <td class="center">
-              <span :class="['badge', t.estado === 'abierto' ? 'badge-success' : 'badge-secondary']">
-                {{ t.estado.toUpperCase() }}
+              <span :class="['badge', t.estado === 'abierto' ? 'badge-success' : (t.estado === 'cerrado_dif' ? 'badge-danger' : 'badge-secondary')]">
+                {{ t.estado === 'cerrado_dif' ? 'CON DIFERENCIA' : t.estado.toUpperCase() }}
               </span>
             </td>
           </tr>
@@ -129,6 +132,11 @@
           <button class="btn btn-secondary btn-sm" @click="mostrarModalCerrar = false"><i class="ti ti-x"></i></button>
         </div>
 
+        <div v-if="esperado" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px">
+          Fondo: {{ fmtUSD(store.turnoActual.inicial_usd) }} + Bs. {{ store.turnoActual.inicial_bs.toLocaleString('es-VE') }}<br>
+          Cobrado en efectivo en el turno: {{ fmtUSD(esperado.ventas_usd) }} + Bs. {{ esperado.ventas_bs.toLocaleString('es-VE') }}<br>
+          <strong style="color:var(--green)">Deberías tener: {{ fmtUSD(esperado.esperado_usd) }} + Bs. {{ esperado.esperado_bs.toLocaleString('es-VE') }}</strong>
+        </div>
         <div class="field-col" style="margin-bottom:12px">
           <label>Efectivo Físico en Caja ($ USD) *</label>
           <input v-model.number="cierreUSD" type="number" step="1" placeholder="0.00" class="val-input" style="font-weight:700"
@@ -143,6 +151,11 @@
           <span v-if="errorsCerrar.bs" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsCerrar.bs }}</span>
         </div>
 
+        <div v-if="esperado" :style="{ padding: '8px 12px', borderRadius: '6px', marginBottom: '12px', fontSize: '12.5px', background: Math.abs(diferencia) < 0.5 ? '#E8F5E9' : (diferencia < 0 ? '#FCEBEB' : '#FFF8E1'), color: Math.abs(diferencia) < 0.5 ? '#1B5E20' : (diferencia < 0 ? 'var(--red)' : '#5D4037') }">
+          <template v-if="Math.abs(diferencia) < 0.5">✓ Cuadra. Diferencia: {{ fmtUSD(diferencia) }}</template>
+          <template v-else-if="diferencia < 0">FALTA dinero: {{ fmtUSD(Math.abs(diferencia)) }}. Revisa antes de cerrar.</template>
+          <template v-else>SOBRA dinero: {{ fmtUSD(diferencia) }}</template>
+        </div>
         <div class="field-col" style="margin-bottom:16px">
           <label>Observaciones o Novedades del Arqueo</label>
           <textarea v-model="notasCierre" placeholder="Notas de diferencias, billetes deteriorados..." class="val-input" style="min-height:70px"></textarea>
@@ -158,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
 import { generarActaCierrePDF } from '../services/exportService.js';
@@ -167,64 +180,60 @@ const store = useArjStore();
 const mostrarModalAbrir = ref(false);
 const mostrarModalCerrar = ref(false);
 
-const fondoUSD = ref(100);
-const fondoBs = ref(2000);
+const fondoUSD = ref(0);
+const fondoBs = ref(0);
 const cierreUSD = ref(0);
 const cierreBs = ref(0);
 const notasCierre = ref('');
 const errorsAbrir = ref({});
 const errorsCerrar = ref({});
+const esperado = ref(null);
+const cargandoEsperado = ref(false);
+
+// Diferencia total en $ (lo de Bs se lleva a $ con la tasa BCV)
+const diferencia = computed(() => {
+  if (!esperado.value) return 0;
+  const difUsd = (parseFloat(cierreUSD.value) || 0) - esperado.value.esperado_usd;
+  const difBs = (parseFloat(cierreBs.value) || 0) - esperado.value.esperado_bs;
+  return difUsd + (store.tasa_bcv > 0 ? difBs / store.tasa_bcv : 0);
+});
 
 function confirmarApertura() {
   errorsAbrir.value = {};
-
-  if (fondoUSD.value < 0) {
-    errorsAbrir.value.fondoUSD = 'El fondo no puede ser negativo';
-  }
-  if (fondoBs.value < 0) {
-    errorsAbrir.value.fondoBs = 'El fondo no puede ser negativo';
-  }
-  if (fondoUSD.value <= 0 && fondoBs.value <= 0) {
-    errorsAbrir.value.fondoUSD = 'Indica al menos un fondo inicial';
-  }
-
-  if (Object.keys(errorsAbrir.value).length > 0) {
-    store.notif('Corrige los campos marcados en rojo', 'warning');
-    return;
-  }
-
+  if (fondoUSD.value < 0) errorsAbrir.value.fondoUSD = 'El fondo no puede ser negativo';
+  if (fondoBs.value < 0) errorsAbrir.value.fondoBs = 'El fondo no puede ser negativo';
+  if (Object.keys(errorsAbrir.value).length > 0) return;
   store.abrirTurno(fondoUSD.value, fondoBs.value);
   mostrarModalAbrir.value = false;
 }
 
+// M-07: lo esperado sale de los pagos en efectivo que este usuario registró en la BD
+async function abrirCierre() {
+  cargandoEsperado.value = true;
+  try {
+    esperado.value = await store.esperadoTurno();
+    cierreUSD.value = esperado.value ? esperado.value.esperado_usd : 0;
+    cierreBs.value = esperado.value ? esperado.value.esperado_bs : 0;
+    notasCierre.value = '';
+    mostrarModalCerrar.value = true;
+  } catch (e) {
+    store.notif('No se pudo calcular lo cobrado en el turno: ' + e.message, 'error');
+  } finally {
+    cargandoEsperado.value = false;
+  }
+}
+
 function confirmarCierre() {
   errorsCerrar.value = {};
-
-  if (cierreUSD.value < 0) {
-    errorsCerrar.value.usd = 'El monto no puede ser negativo';
-  }
-  if (cierreBs.value < 0) {
-    errorsCerrar.value.bs = 'El monto no puede ser negativo';
-  }
-
-  if (Object.keys(errorsCerrar.value).length > 0) {
-    store.notif('Corrige los campos marcados en rojo', 'warning');
+  if (cierreUSD.value < 0) errorsCerrar.value.usd = 'El monto no puede ser negativo';
+  if (cierreBs.value < 0) errorsCerrar.value.bs = 'El monto no puede ser negativo';
+  if (Object.keys(errorsCerrar.value).length > 0) return;
+  if (Math.abs(diferencia.value) >= 0.5 && !notasCierre.value.trim()) {
+    errorsCerrar.value.usd = 'Hay diferencia: explica la novedad en observaciones antes de cerrar';
     return;
   }
-
-  // Capturar datos del turno antes de que el store lo limpie
-  const turnoParaPDF = {
-    ...store.turnoActual,
-    arqueo_usd: cierreUSD.value,
-    arqueo_bs: cierreBs.value,
-    notas_cierre: notasCierre.value,
-    fecha_cierre: new Date().toLocaleString('es-VE')
-  };
-
-  store.cerrarTurno(cierreUSD.value, cierreBs.value, notasCierre.value);
+  const t = store.cerrarTurno(cierreUSD.value, cierreBs.value, notasCierre.value, esperado.value);
   mostrarModalCerrar.value = false;
-
-  // Generar el acta PDF automáticamente
-  generarActaCierrePDF(turnoParaPDF, store.empresa);
+  if (t) generarActaCierrePDF({ ...t }, store.empresa);
 }
 </script>

@@ -129,7 +129,7 @@
             <select v-model="productoSel" class="val-input" style="flex:1">
               <option value="">-- Elige un repuesto --</option>
               <option v-for="p in store.productos" :key="p.id" :value="p.id">
-                {{ p.cod_alt }} - {{ p.desc }} (${{ precioPublico(p.fob) }})
+                {{ p.cod_alt }} - {{ p.desc }} ({{ fmtUSD(precioDe(p)) }})
               </option>
             </select>
             <input v-model.number="cantSel" type="number" min="1" placeholder="Cant" class="val-input" style="width:75px;text-align:center;font-weight:700">
@@ -170,7 +170,7 @@
 
         <div class="actions" style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
           <button class="btn btn-secondary" @click="mostrarModalNuevo = false">Cancelar</button>
-          <button class="btn btn-primary" :disabled="itemsTemp.length === 0" @click="guardarCotizacion">
+          <button class="btn btn-primary" :disabled="itemsTemp.length === 0 || guardando" @click="guardarCotizacion">
             <i class="ti ti-check"></i> Emitir Presupuesto
           </button>
         </div>
@@ -183,7 +183,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, precioPublico } from '../services/pricing.js';
+import { fmtUSD, precioConTier } from '../services/pricing.js';
 
 const store = useArjStore();
 const verRechazados = ref(false);
@@ -270,10 +270,24 @@ const totalTemp = computed(() => {
   return itemsTemp.value.reduce((acc, it) => acc + (it.cant * it.precio), 0);
 });
 
+// Mismo precio que la factura: precio manual o fórmula, con el nivel del cliente en Distribuidora
+const tierCotizacion = computed(() => {
+  if (store.empresa === 'directa') return 'Publico';
+  const cli = store.clientes.find(c => c.id === clienteSel.value);
+  return (cli && cli.nivel) || 'Publico';
+});
+function precioDe(p) {
+  return precioConTier(p.fob, tierCotizacion.value, p);
+}
+
 function agregarItemTemp() {
   const prod = store.productos.find(p => p.id === productoSel.value);
   if (!prod) return;
-  const precio = precioPublico(prod.fob);
+  if (!(prod.fob > 0) && !(prod.precio_manual > 0)) {
+    store.notif(`${prod.cod_alt} no tiene costo ni precio cargado`, 'error');
+    return;
+  }
+  const precio = precioDe(prod);
   itemsTemp.value.push({
     id: prod.id,
     cod_alt: prod.cod_alt,
@@ -286,23 +300,33 @@ function agregarItemTemp() {
   cantSel.value = 1;
 }
 
-function guardarCotizacion() {
+const guardando = ref(false);
+async function guardarCotizacion() {
   const cli = store.clientes.find(c => c.id === clienteSel.value);
-  store.guardarPresupuesto({
-    cliente: cli ? cli.nombre : 'CLIENTE GENERAL',
-    cliente_id: cli ? cli.id : null,
-    total: totalTemp.value,
-    items: itemsTemp.value
-  });
-  itemsTemp.value = [];
-  clienteSel.value = '';
-  mostrarModalNuevo.value = false;
+  guardando.value = true;
+  try {
+    // C-01: la cotización se guarda en la BD con correlativo de la BD
+    const pre = await store.guardarPresupuesto({
+      cliente: cli ? cli.nombre : 'CLIENTE MOSTRADOR',
+      cliente_id: cli ? cli.id : null,
+      items: itemsTemp.value,
+      tier: tierCotizacion.value
+    });
+    if (!pre) return;
+    itemsTemp.value = [];
+    clienteSel.value = '';
+    mostrarModalNuevo.value = false;
+  } finally {
+    guardando.value = false;
+  }
 }
 
-function marcarRechazado(pre) {
-  pre.estado = 'rechazada';
-  store.logBitacora('presupuesto', `Cotización ${pre.num} marcada como rechazada/archivada`);
-  store.notif(`Presupuesto ${pre.num} archivado`, 'info');
+async function marcarRechazado(pre) {
+  if (!confirm(`¿Marcar ${pre.num} como RECHAZADA?\n\nNo se borra: se archiva y deja de aparecer en la lista.`)) return;
+  if (await store.rechazarPresupuesto(pre.id)) {
+    store.logBitacora('presupuesto', `Cotización ${pre.num} marcada como rechazada`);
+    store.notif(`Presupuesto ${pre.num} archivado`, 'info');
+  }
 }
 
 function abrirPreview(pre) {

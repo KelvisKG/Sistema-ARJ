@@ -163,7 +163,7 @@ const todasLasAlertas = computed(() => {
   }
 
   // 2. Alertas de inventario crítico
-  const stockDirectaCritico = store.productos.filter(p => p.stock_vd <= 3);
+  const stockDirectaCritico = store.productos.filter(p => (p.stock_vd || 0) <= 3);
   if (stockDirectaCritico.length > 0 && !resueltasIds.value.has('alerta-stock')) {
     list.push({
       id: 'alerta-stock',
@@ -178,7 +178,8 @@ const todasLasAlertas = computed(() => {
   }
 
   // 3. Alertas de cuentas por cobrar vencidas
-  const facturasVencidas = store.facturasCobrar.filter(f => f.dias > 30);
+  // f.dias = días que FALTAN para vencer (negativo = vencida)
+  const facturasVencidas = store.facturasCobrar.filter(f => f.dias !== null && f.dias < -30);
   if (facturasVencidas.length > 0 && !resueltasIds.value.has('alerta-cxc')) {
     list.push({
       id: 'alerta-cxc',
@@ -199,23 +200,23 @@ const todasLasAlertas = computed(() => {
       tipo: 'info',
       icono: 'ti ti-clock-play',
       modulo: 'Caja Chica',
-      titulo: `Turno de caja ${store.turnoActual.id} abierto`,
-      descripcion: `El turno actual de caja fue abierto por ${store.turnoActual.cajero} y mantiene ventas en curso.`,
+      titulo: `Turno de caja abierto desde ${store.turnoActual.fecha_apertura}`,
+      descripcion: `Turno de ${store.turnoActual.cajero}. Recuerda cerrarlo con el arqueo al final de la jornada.`,
       textoAccion: 'Ver Turnos',
       ruta: 'turnos'
     });
   }
 
   // 5. Alerta de cotizaciones por vencer
-  const cotizacionesActivas = store.presupuestos.filter(p => p.estado === 'activo');
+  const cotizacionesActivas = store.presupuestos.filter(p => p.empresa === store.empresa && p.estado === 'por_vencer');
   if (cotizacionesActivas.length > 0 && !resueltasIds.value.has('alerta-presupuestos')) {
     list.push({
       id: 'alerta-presupuestos',
       tipo: 'info',
       icono: 'ti ti-file-certificate',
       modulo: 'Ventas',
-      titulo: `${cotizacionesActivas.length} presupuestos con vigencia abierta`,
-      descripcion: `Hay cotizaciones emitidas listas para ser convertidas en facturas de venta antes de su vencimiento legal de 45 días.`,
+      titulo: `${cotizacionesActivas.length} presupuestos vencen en 5 días o menos`,
+      descripcion: `Haz seguimiento para convertirlos en factura antes de que venzan (vigencia de 45 días).`,
       textoAccion: 'Ver Presupuestos',
       ruta: 'presupuestos'
     });

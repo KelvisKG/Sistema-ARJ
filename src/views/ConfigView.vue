@@ -1,564 +1,251 @@
 <template>
   <div class="page active" id="page-config">
     <h1 class="page-title"><i class="ti ti-settings"></i> Configuración</h1>
-    <p class="page-sub">Tasas · Parámetros ARJ · Datos de empresa · Usuarios · Backups</p>
+    <p class="page-sub">Todo lo que se guarda aquí queda en la base de datos y lo ven todas las terminales.</p>
 
-    <!-- GRID 1: TASAS Y PARÁMETROS -->
-    <div class="config-grid">
-      <!-- CARD 1: TASAS DE CAMBIO -->
-      <div class="config-card">
+    <div class="config-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+      <!-- TASAS -->
+      <div class="config-card card">
         <h3><i class="ti ti-currency-dollar" style="color:var(--blue)"></i> Tasas de cambio</h3>
-        
-        <div class="config-row">
-          <label>Dólar paralelo (Bs/$)</label>
-          <input
-            v-model.number="store.tasa_par"
-            class="val-input"
-            id="cfg-par"
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            @change="alCambiarTasas"
-          >
+        <div class="field-col" style="margin-bottom:10px">
+          <label>Tasa paralelo (Bs por $)</label>
+          <input v-model="tasaPar" type="text" inputmode="decimal" class="val-input" style="font-weight:700">
         </div>
-
-        <div class="config-row">
-          <label>Dólar BCV (Bs/$)</label>
-          <input
-            v-model.number="store.tasa_bcv"
-            class="val-input"
-            id="cfg-bcv"
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            @change="alCambiarTasas"
-          >
+        <div class="field-col" style="margin-bottom:10px">
+          <label>Tasa BCV oficial (Bs por $)</label>
+          <input v-model="tasaBcv" type="text" inputmode="decimal" class="val-input" style="font-weight:700">
         </div>
-
-        <div class="config-row">
-          <label>Euro (Bs/€)</label>
-          <input
-            v-model.number="tasaEuro"
-            class="val-input"
-            type="number"
-            step="0.01"
-          >
-        </div>
-
-        <div class="config-row" style="border:none;padding-top:14px;flex-direction:column;align-items:stretch;gap:8px">
-          <div id="cfg-tasas-estado" style="font-size:11.5px;text-align:center;line-height:1.5">
-            <span v-if="store.tasasConfirmadasHoy" style="color:var(--green);font-weight:600">
-              <i class="ti ti-check"></i> Tasas confirmadas para hoy · Brecha: {{ brechaPct }}% (Dto verde: {{ dtoVerdePct }}%)
-            </span>
-            <span v-else style="color:var(--red);font-weight:600">
-              <i class="ti ti-alert-triangle"></i> Tasas pendientes de confirmar hoy
-            </span>
-          </div>
-
-          <button class="btn btn-primary btn-sm" style="margin:0 auto" @click="confirmarTasasHoy">
-            <i class="ti ti-check"></i> Confirmar tasas de hoy
-          </button>
-
-          <button class="btn btn-secondary btn-sm" style="margin:0 auto" @click="avisoTasaAuto">
-            <i class="ti ti-refresh"></i> Traer desde BCV.org.ve
-          </button>
-        </div>
-      </div>
-
-      <!-- CARD 2: PARÁMETROS ARJ -->
-      <div class="config-card">
-        <h3><i class="ti ti-adjustments" style="color:var(--blue)"></i> Parámetros ARJ</h3>
-        
-        <div class="config-row">
-          <label>Factor landed por defecto</label>
-          <input
-            v-model.number="factorLandedDefault"
-            class="val-input"
-            id="cfg-factor"
-            type="number"
-            step="0.001"
-            min="1"
-            max="5"
-            @change="guardarParametros"
-          >
-        </div>
-
-        <div class="config-row">
-          <label style="font-size:11px;color:var(--dgray)">Solo aplica a productos NUEVOS</label>
-          <label style="font-size:11px;color:var(--dgray)">No toca los ya cargados</label>
-        </div>
-
-        <div class="config-row">
-          <label>Costos fijos — mes</label>
-          <input
-            v-model="mesCostosFijos"
-            class="val-input"
-            id="cfg-fijos-mes"
-            type="month"
-            @change="cambiarPeriodoFijos"
-          >
-        </div>
-
-        <div class="config-row">
-          <label>Monto del mes USD</label>
-          <input
-            v-model.number="montoMesFijos"
-            class="val-input"
-            id="cfg-fijos"
-            type="number"
-            step="0.01"
-            min="0"
-            @change="actualizarCostosFijos"
-          >
-        </div>
-
-        <div class="config-row" style="border:none;padding-top:4px">
-          <label style="font-size:11px;color:var(--dgray)">Cada mes guarda su propio monto</label>
-        </div>
-
-        <div id="cfg-fijos-lista" style="font-size:11px;color:var(--dgray);padding:0 0 8px">
-          <span v-for="(f, i) in listaCostosFijos" :key="i" style="display:inline-block;margin-right:8px">
-            • {{ f.mes }}: <strong>${{ f.monto.toFixed(2) }}</strong>
+        <div style="font-size:12px;color:var(--dgray);margin-bottom:10px">
+          Brecha: <strong>{{ brechaPct }}%</strong> · Descuento neutro en efectivo: <strong>{{ store.dtoDivisaNeutro.toFixed(2) }}%</strong><br>
+          <span :style="{ color: store.tasasConfirmadasHoy ? 'var(--green)' : 'var(--red)' }">
+            {{ store.tasasConfirmadasHoy ? '✓ Confirmadas hoy' : '✗ Sin confirmar hoy' }}
           </span>
+          <span v-if="store.tasas_actualizadas"> · última: {{ new Date(store.tasas_actualizadas).toLocaleString('es-VE') }}</span>
         </div>
-
-        <div class="config-row">
-          <label>Costos fijos / mes (base)</label>
-          <input
-            v-model.number="costosFijosBase"
-            class="val-input"
-            type="number"
-            step="50"
-            @change="guardarParametros"
-          >
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" :disabled="store.procesando" @click="confirmarTasasHoy">
+            <i class="ti ti-check"></i> Guardar y confirmar tasas de hoy
+          </button>
+          <button class="btn btn-secondary btn-sm" @click="consultarBCV">
+            <i class="ti ti-world-download"></i> Consultar BCV en línea
+          </button>
         </div>
-
-        <div class="config-row">
-          <label>IVA Venezuela</label>
-          <input
-            class="val-input"
-            value="0"
-            type="number"
-            step="0.1"
-            style="background:#FCE4D6;border-color:var(--red);color:var(--red)"
-            disabled
-          >
-        </div>
-
-        <div class="config-row">
-          <label style="font-size:11px;color:var(--gold)">⚠ IVA bloqueado en 0%</label>
-          <label style="font-size:11px;color:var(--dgray)">Repuestos agrícolas exentos</label>
+        <div style="font-size:11px;color:var(--dgray);margin-top:8px">
+          Confirmar sin cambiar el valor también cuenta: queda registrado que hoy se revisaron.
         </div>
       </div>
-    </div>
 
-    <!-- GRID 2: BACKUP Y USUARIOS -->
-    <div class="config-grid" style="margin-top:14px">
-      <!-- CARD 3: BACKUP Y DATOS LOCALSTORAGE -->
-      <div class="config-card">
-        <h3><i class="ti ti-database" style="color:var(--green)"></i> Backup y datos guardados</h3>
-
-        <div class="config-row">
-          <label>Persistencia local</label>
-          <span style="color:var(--green);font-weight:600"><i class="ti ti-circle-check"></i> Activa · localStorage</span>
+      <!-- PARÁMETROS -->
+      <div class="config-card card">
+        <h3><i class="ti ti-adjustments" style="color:var(--blue)"></i> Parámetros ARJ</h3>
+        <div class="field-col" style="margin-bottom:10px">
+          <label>Factor landed por defecto (productos nuevos importados)</label>
+          <div style="display:flex;gap:8px">
+            <input v-model.number="factorDefault" type="number" step="0.001" min="1" class="val-input" style="flex:1">
+            <button class="btn btn-secondary btn-sm" @click="guardarFactor">Guardar</button>
+          </div>
         </div>
-
-        <div class="config-row">
-          <label>Auto-guardado</label>
-          <span style="font-size:11px">Cada cambio + cada 60 seg.</span>
+        <div class="field-col" style="margin-bottom:6px">
+          <label>Costos fijos del mes (USD)</label>
+          <div style="display:flex;gap:8px">
+            <input v-model="mesCostos" type="month" class="val-input" style="width:150px" @change="cargarMes">
+            <input v-model.number="montoCostos" type="number" step="10" min="0" class="val-input" style="flex:1">
+            <button class="btn btn-secondary btn-sm" @click="guardarCostosFijos">Guardar</button>
+          </div>
         </div>
-
-        <div class="config-row">
-          <label>Último guardado</label>
-          <span style="font-size:11px" id="cfg-ultimo-guardado">{{ ultimoGuardado }}</span>
+        <div style="font-size:11.5px;color:var(--dgray)">
+          <span v-if="!Object.keys(historialCostos).length">Sin meses registrados. </span>
+          <span v-for="(v, k) in historialCostos" :key="k" style="display:inline-block;margin-right:10px">{{ k }}: <strong>{{ fmtUSD(v) }}</strong></span>
+          <div>Un mes sin valor hereda el último registrado.</div>
         </div>
-
-        <div class="config-row">
-          <label>Tamaño en localStorage</label>
-          <span style="font-size:11px" id="cfg-tam-storage">{{ tamStorage }} KB</span>
-        </div>
-
-        <div class="help-box" style="margin:12px 0">
-          <i class="ti ti-info-circle"></i>
-          <span><strong>Importante:</strong> los datos se guardan en este equipo y este navegador. Si cambias de PC o limpias historial, se pierden. <strong>Exporta un respaldo en JSON periódicamente.</strong></span>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
-          <button class="btn btn-primary btn-sm" @click="exportarDatosJSON">
-            <i class="ti ti-download"></i> Exportar JSON
-          </button>
-          <button class="btn btn-secondary btn-sm" @click="triggerInputImport">
-            <i class="ti ti-upload"></i> Importar JSON
-          </button>
-        </div>
-
-        <div style="margin-top:8px">
-          <button
-            class="btn btn-secondary btn-sm"
-            style="width:100%;color:var(--red);border-color:var(--red)"
-            @click="resetearDatosDemo"
-          >
-            <i class="ti ti-refresh-alert"></i> Resetear a datos demo
-          </button>
-        </div>
-
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept=".json,application/json"
-          style="display:none"
-          @change="procesarArchivoImport"
-        >
       </div>
 
-      <!-- CARD 4: USUARIOS DEL SISTEMA -->
-      <div class="config-card">
-        <h3><i class="ti ti-users" style="color:var(--blue)"></i> Usuarios del sistema</h3>
-        
-        <div style="font-size:11.5px;color:var(--dgray);margin-bottom:10px">
-          Cada vendedor está asignado a UNA empresa. Solo el gerente puede ver y operar en ambas.
-        </div>
-
-        <table class="simple-tbl" style="font-size:11.5px;width:100%">
-          <thead>
-            <tr>
-              <th>Usuario</th>
-              <th>Rol</th>
-              <th>Empresa</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
+      <!-- NIVELES DE PRECIO -->
+      <div class="config-card card">
+        <h3><i class="ti ti-list" style="color:var(--blue)"></i> Niveles de precio</h3>
+        <table class="tbl" style="font-size:12.5px">
           <tbody>
-            <tr v-for="(u, idx) in usuarios" :key="idx">
-              <td><strong>{{ u.nombre }}</strong></td>
-              <td>
-                <span :class="['badge', u.rol === 'gerente' ? 'badge-primary' : 'badge-secondary']">
-                  {{ u.rol.toUpperCase() }}
-                </span>
-              </td>
-              <td>{{ u.empresa }}</td>
-              <td>
-                <span style="color:var(--green);font-weight:600">● Activo</span>
-              </td>
+            <tr><td><strong>Público</strong></td><td>Sin descuento — todos los clientes nuevos</td></tr>
+            <tr><td><strong>Aliado T1</strong></td><td>–5% — compras de $2.500 a $4.999</td></tr>
+            <tr><td><strong>Aliado T2</strong></td><td>–10% — compras de $5.000 a $14.999</td></tr>
+            <tr><td><strong>Aliado T3</strong></td><td>–20% — compras desde $15.000</td></tr>
+          </tbody>
+        </table>
+        <div style="font-size:11px;color:var(--dgray);margin-top:6px">El nivel se asigna en la ficha del cliente (solo gerente) y aplica en Distribuidora.</div>
+      </div>
+
+      <!-- USUARIOS -->
+      <div class="config-card card">
+        <h3><i class="ti ti-users" style="color:var(--blue)"></i> Usuarios del sistema</h3>
+        <table class="tbl" style="font-size:12.5px">
+          <thead><tr><th>Nombre</th><th>Rol</th><th>Empresa</th><th>Estado</th></tr></thead>
+          <tbody>
+            <tr v-if="cargandoUsuarios"><td colspan="4" style="text-align:center;color:var(--dgray)">Cargando...</td></tr>
+            <tr v-for="u in usuarios" :key="u.id">
+              <td>{{ u.nombre_display }}</td>
+              <td>{{ u.rol }}</td>
+              <td>{{ u.empresa === 'dist' ? 'Distribuidora' : (u.empresa === 'directa' ? 'Venta Directa' : 'Ambas') }}</td>
+              <td><span :class="['badge', u.activo ? 'badge-success' : 'badge-secondary']">{{ u.activo ? 'Activo' : 'Inactivo' }}</span></td>
             </tr>
           </tbody>
         </table>
-
-        <div style="margin-top:12px;text-align:right">
-          <button class="btn btn-secondary btn-sm" @click="abrirNuevoUsuario">
-            <i class="ti ti-user-plus"></i> Agregar usuario
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- GRID 3: LISTAS PERSONALIZADAS Y RESPALDO SUPABASE -->
-    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      <!-- CARD 5: LISTAS DE PRECIOS PERSONALIZADAS -->
-      <div class="config-card">
-        <h3><i class="ti ti-list" style="color:var(--blue)"></i> Listas de precios personalizadas</h3>
-        <p style="font-size:12px;color:var(--dgray);margin-bottom:12px">
-          Más allá de los 4 tramos fijos (Público, T1, T2, T3), puedes crear listas especiales para casos puntuales: familiares, clientes VIP, precio costo, etc.
-        </p>
-
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div
-            v-for="(l, idx) in listasPreciosPersonalizadas"
-            :key="idx"
-            style="border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center"
-          >
-            <div>
-              <strong style="font-size:13px">{{ l.nombre }}</strong>
-              <div style="font-size:11px;color:var(--dgray)">{{ l.descripcion }} · {{ l.descuento }}% sobre base</div>
-            </div>
-            <span class="badge badge-success">Activa</span>
-          </div>
-        </div>
-
-        <div style="margin-top:12px;text-align:right">
-          <button class="btn btn-primary btn-sm" @click="crearListaPersonalizada">
-            <i class="ti ti-plus"></i> Crear lista personalizada
-          </button>
+        <div style="font-size:11px;color:var(--dgray);margin-top:6px">
+          Las cuentas se crean en el panel de Supabase (Authentication) y se activan en la tabla <code>perfiles</code>.
         </div>
       </div>
 
-      <!-- CARD 6: RESPALDO DE BASE DE DATOS (SUPABASE) -->
-      <div class="config-card" id="card-respaldo">
+      <!-- RESPALDO -->
+      <div class="config-card card">
         <h3><i class="ti ti-database-export" style="color:var(--green)"></i> Respaldo de la base de datos</h3>
-        <p style="font-size:12px;color:var(--dgray);margin-bottom:10px;line-height:1.55">
-          Descarga <strong>todo</strong> lo que hay en Supabase a un solo archivo en tu computadora: productos, facturas, renglones, pagos, clientes, embarques, movimientos y bitácora.
-          El plan Free de Supabase <strong>no hace respaldos automáticos</strong>, así que este archivo es tu única copia de seguridad externa.
+        <p style="font-size:12.5px;color:var(--dgray)">
+          Descarga un archivo JSON con todas las tablas del sistema, leídas directamente de la base de datos.
+          Es un respaldo de lectura: guárdalo fuera de esta computadora.
         </p>
-
-        <div class="help-box" style="margin-bottom:14px">
-          <i class="ti ti-calendar"></i>
-          <span><strong>Recomendación:</strong> Respaldar cada viernes y guardar el archivo en almacenamiento seguro (como OneDrive o Google Drive), no solo en la PC local.</span>
-        </div>
-
-        <div id="resp-estado" style="font-size:12.5px;margin-bottom:10px">
-          <span v-if="store.supabaseConectado" style="color:var(--green);font-weight:600">
-            <i class="ti ti-circle-check"></i> Supabase sincronizado y en línea.
-          </span>
-          <span v-else style="color:var(--gold);font-weight:600">
-            <i class="ti ti-info-circle"></i> Supabase desconectado · Los datos se respaldan desde la memoria local.
-          </span>
-        </div>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-primary" id="btn-respaldar" @click="respaldarTodo">
-            <i class="ti ti-download"></i> Respaldar todo ahora
-          </button>
-          <span style="font-size:11.5px;color:var(--dgray)" id="resp-ultimo">
-            Último respaldo: {{ ultimoRespaldoNube }}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL AGREGAR USUARIO -->
-    <div v-if="mostrarModalUsuario" class="modal show">
-      <div class="modal-content" style="max-width:460px;text-align:left">
-        <div class="modal-header">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div class="modal-icon" style="background:rgba(37,99,235,0.12);color:var(--primary);margin:0;width:38px;height:38px;font-size:18px">
-              <i class="ti ti-user-plus"></i>
-            </div>
-            <h3 style="margin:0;font-size:17px;color:var(--text);font-weight:700">Nuevo Usuario</h3>
-          </div>
-          <button class="btn btn-secondary btn-sm" @click="mostrarModalUsuario = false"><i class="ti ti-x"></i></button>
-        </div>
-
-        <div class="field-col" style="margin-bottom:14px">
-          <label>Nombre completo *</label>
-          <input v-model="nuevoUsuario.nombre" type="text" class="val-input" placeholder="Ej: Carlos Rojas"
-            :class="{ 'is-invalid': errorsUsuario.nombre }" @input="errorsUsuario.nombre = null">
-          <span v-if="errorsUsuario.nombre" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsUsuario.nombre }}</span>
-        </div>
-
-        <div class="field-col" style="margin-bottom:14px">
-          <label>Rol en el sistema</label>
-          <select v-model="nuevoUsuario.rol" class="val-input">
-            <option value="vendedor">Vendedor</option>
-            <option value="gerente">Gerente</option>
-          </select>
-        </div>
-
-        <div class="field-col" style="margin-bottom:18px">
-          <label>Empresa asignada</label>
-          <select v-model="nuevoUsuario.empresa" class="val-input">
-            <option value="Venta Directa">Venta Directa</option>
-            <option value="Distribuidora">Distribuidora</option>
-            <option value="Ambas">Ambas (Solo Gerencia)</option>
-          </select>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="mostrarModalUsuario = false">Cancelar</button>
-          <button class="btn btn-primary" @click="guardarUsuario">
-            <i class="ti ti-check"></i> Guardar Usuario
-          </button>
-        </div>
+        <div v-if="estadoRespaldo" style="font-size:12px;margin-bottom:8px" v-html="estadoRespaldo"></div>
+        <button class="btn btn-primary" :disabled="respaldando" @click="respaldarTodo">
+          <i class="ti ti-download"></i> {{ respaldando ? 'Respaldando...' : 'Descargar respaldo completo' }}
+        </button>
+        <div style="font-size:11px;color:var(--dgray);margin-top:6px">Último respaldo en este equipo: {{ ultimoRespaldo }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
+import { fmtUSD } from '../services/pricing.js';
+import { parseMontoVE } from '../services/cobros.js';
+import { supabase, cargarPerfiles } from '../services/supabase.js';
+import { periodoDe } from '../services/fechas.js';
 
 const store = useArjStore();
-const fileInputRef = ref(null);
 
-const tasaEuro = ref(232.40);
-const factorLandedDefault = ref(1.471);
-const mesCostosFijos = ref('2026-03');
-const montoMesFijos = ref(6148.00);
-const costosFijosBase = ref(6148);
-
-const ultimoGuardado = ref('Hoy, en tiempo real');
-const tamStorage = ref('124.5');
-const ultimoRespaldoNube = ref(localStorage.getItem('arj_ultimo_respaldo') || 'No realizado aún');
-
-const mostrarModalUsuario = ref(false);
-const nuevoUsuario = ref({
-  nombre: '',
-  rol: 'vendedor',
-  empresa: 'Venta Directa'
-});
-const errorsUsuario = ref({});
-
-const usuarios = ref([
-  { nombre: 'JJ (Gerente General)', rol: 'gerente', empresa: 'Ambas (Directa y Dist)' },
-  { nombre: 'Vendedor Mostrador', rol: 'vendedor', empresa: 'Venta Directa' },
-  { nombre: 'Vendedor Mayorista', rol: 'vendedor', empresa: 'Distribuidora ARJ' }
-]);
-
-const listasPreciosPersonalizadas = ref([
-  { nombre: 'Clientes VIP Agro', descripcion: 'Descuento especial del 5% sobre Mostrador', descuento: 5 },
-  { nombre: 'Talleres Mecánicos Aliados', descripcion: 'Tarifa preferencial mayorista T2', descuento: 12 },
-  { nombre: 'Precio Costo Landed', descripcion: 'Margen cero para inventario interno', descuento: 25 }
-]);
-
-const listaCostosFijos = ref([
-  { mes: 'Enero 2026', monto: 5980.00 },
-  { mes: 'Febrero 2026', monto: 6100.00 },
-  { mes: 'Marzo 2026', monto: 6148.00 }
-]);
+// ── Tasas ──
+const tasaPar = ref(String(store.tasa_par || ''));
+const tasaBcv = ref(String(store.tasa_bcv || ''));
+watch(() => [store.tasa_par, store.tasa_bcv], ([p, b]) => { tasaPar.value = String(p || ''); tasaBcv.value = String(b || ''); });
 
 const brechaPct = computed(() => {
-  if (!store.tasa_bcv || store.tasa_bcv <= 0) return '0.0';
-  return ((store.tasa_par / store.tasa_bcv - 1) * 100).toFixed(1);
+  const p = parseMontoVE(tasaPar.value), b = parseMontoVE(tasaBcv.value);
+  return b > 0 ? ((p / b - 1) * 100).toFixed(1) : '0.0';
 });
 
-const dtoVerdePct = computed(() => {
-  if (!store.tasa_par || store.tasa_par <= 0) return '0.00';
-  return ((1 - store.tasa_bcv / store.tasa_par) * 100).toFixed(2);
-});
-
-function alCambiarTasas() {
-  store.tasasConfirmadasHoy = false;
-  store.calcularBrecha();
+async function confirmarTasasHoy() {
+  await store.confirmarTasas(parseMontoVE(tasaBcv.value), parseMontoVE(tasaPar.value));
 }
 
-function confirmarTasasHoy() {
-  store.confirmarTasas();
-  store.notif('Tasas de cambio confirmadas formalmente para la jornada de hoy', 'success');
-}
-
-async function avisoTasaAuto() {
-  store.notif('Consultando tipo de cambio oficial del BCV...', 'info');
+async function consultarBCV() {
   try {
     const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
     if (!res.ok) throw new Error('Error en la API');
     const data = await res.json();
     if (data && data.promedio) {
-      store.tasa_bcv = data.promedio;
-      store.calcularBrecha();
-      store.tasasConfirmadasHoy = false;
-      store.notif(`Tasa BCV verificada: ${data.promedio} Bs/$ (Fecha valor vigente)`, 'success');
+      tasaBcv.value = String(data.promedio);
+      store.notif(`BCV consultado: ${data.promedio}. Revisa y pulsa "Guardar y confirmar".`, 'info');
     }
-  } catch (error) {
-    store.notif('Error consultando BCV. Verifica tu conexión a internet.', 'error');
+  } catch (e) {
+    store.notif('No se pudo consultar el BCV. Escribe la tasa a mano.', 'error');
   }
 }
 
-function cambiarPeriodoFijos() {
-  const match = listaCostosFijos.value.find(f => f.mes.includes(mesCostosFijos.value));
-  if (match) {
-    montoMesFijos.value = match.monto;
+// ── Parámetros ──
+const factorDefault = ref((store.configuracion && store.configuracion.factor_default) || 1.471);
+const mesCostos = ref(periodoDe(new Date()));
+const montoCostos = ref(0);
+const historialCostos = computed(() => (store.configuracion && store.configuracion.costos_fijos_hist) || {});
+
+function cargarMes() {
+  montoCostos.value = store.costosFijosDe(mesCostos.value);
+}
+watch(() => store.configuracion, (c) => {
+  if (c) { factorDefault.value = c.factor_default; cargarMes(); }
+}, { immediate: true });
+
+async function guardarFactor() {
+  const f = parseFloat(factorDefault.value);
+  if (!(f >= 1)) { store.notif('El factor debe ser mayor o igual a 1', 'error'); return; }
+  if (await store.actualizarConfiguracion({ factor_landed_default: f }, `Factor landed por defecto: ${f}`)) {
+    store.notif('Factor por defecto guardado', 'success');
   }
 }
 
-function actualizarCostosFijos() {
-  store.notif(`Costos fijos actualizados a $${montoMesFijos.value.toFixed(2)} para ${mesCostosFijos.value}`, 'success');
-}
-
-function guardarParametros() {
-  store.notif('Parámetros ARJ guardados correctamente', 'success');
-}
-
-function exportarDatosJSON() {
-  const data = {
-    empresa: store.empresa,
-    tasas: { bcv: store.tasa_bcv, par: store.tasa_par, dto_divisa: store.dto_divisa },
-    productos: store.productos,
-    clientes: store.clientes,
-    facturasCobrar: store.facturasCobrar,
-    todasFacturas: store.todasFacturas,
-    presupuestos: store.presupuestos,
-    movimientos: store.movimientos,
-    embarques: store.embarques,
-    turnos: store.turnos,
-    bitacora: store.bitacora,
-    fechaExportacion: new Date().toISOString()
-  };
-
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `ARJ_Backup_Completo_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  store.notif('Respaldo en JSON descargado exitosamente', 'success');
-}
-
-function triggerInputImport() {
-  if (fileInputRef.value) fileInputRef.value.click();
-}
-
-function procesarArchivoImport(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    try {
-      const data = JSON.parse(event.target.result);
-      if (data.productos) store.productos = data.productos;
-      if (data.clientes) store.clientes = data.clientes;
-      if (data.todasFacturas) store.todasFacturas = data.todasFacturas;
-      if (data.tasas) {
-        store.tasa_bcv = data.tasas.bcv || store.tasa_bcv;
-        store.tasa_par = data.tasas.par || store.tasa_par;
-      }
-      store.notif('Datos importados y restaurados correctamente', 'success');
-    } catch (err) {
-      store.notif('Error al procesar el archivo JSON: ' + err.message, 'error');
-    }
-  };
-  reader.readAsText(file);
-}
-
-function resetearDatosDemo() {
-  if (confirm('¿Estás seguro de resetear a los datos demo de catálogo agrícola?')) {
-    store.initApp();
-    store.notif('Sistema restablecido al catálogo semilla original', 'success');
+async function guardarCostosFijos() {
+  const m = parseFloat(montoCostos.value);
+  if (!(m >= 0)) { store.notif('Monto inválido', 'error'); return; }
+  const hist = { ...historialCostos.value, [mesCostos.value]: m };
+  const campos = { costos_fijos_hist: hist };
+  if (mesCostos.value === periodoDe(new Date())) campos.costos_fijos_mes = m;
+  if (await store.actualizarConfiguracion(campos, `Costos fijos ${mesCostos.value}: ${fmtUSD(m)}`)) {
+    store.notif(`Costos fijos de ${mesCostos.value} guardados`, 'success');
   }
 }
 
-function abrirNuevoUsuario() {
-  nuevoUsuario.value = { nombre: '', rol: 'vendedor', empresa: 'Venta Directa' };
-  errorsUsuario.value = {};
-  mostrarModalUsuario.value = true;
-}
-
-function guardarUsuario() {
-  errorsUsuario.value = {};
-
-  if (!nuevoUsuario.value.nombre.trim() || nuevoUsuario.value.nombre.trim().length < 3) {
-    errorsUsuario.value.nombre = 'El nombre es obligatorio (mín. 3 caracteres)';
-    store.notif('Indica el nombre del usuario', 'warning');
-    return;
-  }
-
-  usuarios.value.push({ ...nuevoUsuario.value });
-  mostrarModalUsuario.value = false;
-  store.notif(`Usuario ${nuevoUsuario.value.nombre} agregado al sistema`, 'success');
-}
-
-function crearListaPersonalizada() {
-  const nombre = prompt('Nombre de la nueva lista personalizada:');
-  if (!nombre) return;
-  listasPreciosPersonalizadas.value.push({
-    nombre,
-    descripcion: 'Lista especial creada por gerencia',
-    descuento: 7
-  });
-  store.notif(`Lista de precios "${nombre}" creada`, 'success');
-}
-
-function respaldarTodo() {
-  exportarDatosJSON();
-  const now = new Date().toLocaleString();
-  ultimoRespaldoNube.value = now;
-  localStorage.setItem('arj_ultimo_respaldo', now);
-  store.notif('Respaldo consolidado completado exitosamente', 'success');
-}
-
-onMounted(() => {
-  const storageStr = JSON.stringify(localStorage);
-  tamStorage.value = (storageStr.length / 1024).toFixed(1);
+// ── Usuarios (solo lectura) ──
+const usuarios = ref([]);
+const cargandoUsuarios = ref(false);
+onMounted(async () => {
+  cargandoUsuarios.value = true;
+  try { usuarios.value = await cargarPerfiles(); } catch (e) { store.notif('No se pudieron leer los usuarios: ' + e.message, 'error'); }
+  cargandoUsuarios.value = false;
 });
+
+// ── Respaldo real desde la BD ──
+const TABLAS_RESPALDO = ['configuracion', 'productos', 'clientes', 'contactos_cliente', 'facturas', 'factura_items', 'pagos',
+  'cotizaciones', 'cotizacion_items', 'embarques', 'traspasos', 'traspaso_items', 'recepciones', 'recepcion_items',
+  'movimientos_caja', 'contadores', 'sistemas', 'bitacora'];
+const respaldando = ref(false);
+const estadoRespaldo = ref('');
+const ultimoRespaldo = ref(localStorage.getItem('arj_ultimo_respaldo') || 'nunca');
+
+async function leerTabla(t) {
+  const filas = [];
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await supabase.from(t).select('*').range(desde, desde + 999);
+    if (error) return { error: error.message };
+    filas.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return { filas };
+}
+
+async function respaldarTodo() {
+  if (!store._exigirConexion('Respaldo')) return;
+  respaldando.value = true;
+  const datos = {}, conteo = {}, errores = {};
+  try {
+    for (let i = 0; i < TABLAS_RESPALDO.length; i++) {
+      const t = TABLAS_RESPALDO[i];
+      estadoRespaldo.value = `Leyendo <strong>${t}</strong> (${i + 1} de ${TABLAS_RESPALDO.length})...`;
+      const r = await leerTabla(t);
+      if (r.error) { errores[t] = r.error; continue; }
+      datos[t] = r.filas;
+      conteo[t] = r.filas.length;
+    }
+    const paquete = {
+      _meta: {
+        sistema: 'ARJ', generado: new Date().toISOString(), usuario: store.usuarioNombre,
+        conteo_por_tabla: conteo, errores,
+        nota: 'Respaldo de lectura. Para restaurar: productos y clientes primero, luego facturas, luego factura_items y pagos.'
+      },
+      datos
+    };
+    const blob = new Blob([JSON.stringify(paquete)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ARJ_RESPALDO_${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    const n = Object.values(conteo).reduce((x, y) => x + y, 0);
+    const nErr = Object.keys(errores).length;
+    estadoRespaldo.value = nErr
+      ? `<span style="color:var(--red)">Respaldo con ${nErr} tabla(s) sin leer: ${Object.keys(errores).join(', ')}</span>`
+      : `<span style="color:var(--green)">✓ ${n} filas de ${Object.keys(conteo).length} tablas</span>`;
+    ultimoRespaldo.value = new Date().toLocaleString('es-VE');
+    localStorage.setItem('arj_ultimo_respaldo', ultimoRespaldo.value);
+    store.logBitacora('config', `Descargó respaldo completo (${n} filas${nErr ? ', ' + nErr + ' tablas con error' : ''})`, true);
+  } finally {
+    respaldando.value = false;
+  }
+}
 </script>

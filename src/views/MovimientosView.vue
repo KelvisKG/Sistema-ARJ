@@ -9,7 +9,8 @@
         </p>
       </div>
 
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <input v-model="periodo" type="month" class="val-input" title="Período" style="width:150px">
         <button class="btn btn-secondary" @click="abrirModalMovDinero('entrada')">
           <i class="ti ti-arrow-down-left"></i> Entrada de Dinero
         </button>
@@ -115,6 +116,7 @@
               <th class="num" style="width:12%">Monto</th>
               <th style="width:12%">Método</th>
               <th style="width:10%">Empresa</th>
+              <th style="width:4%"></th>
             </tr>
           </thead>
           <tbody>
@@ -124,11 +126,11 @@
               </td>
             </tr>
             <tr v-else-if="movimientosDinero.length === 0">
-              <td colspan="7" style="text-align:center;padding:24px;color:var(--dgray)">
-                Sin movimientos de dinero registrados.
+              <td colspan="8" style="text-align:center;padding:24px;color:var(--dgray)">
+                Sin movimientos de dinero registrados en el período.
               </td>
             </tr>
-            <tr v-for="m in movimientosDinero" :key="m.id">
+            <tr v-for="m in movimientosDinero" :key="m.id" :style="m.estado === 'anulado' ? 'opacity:.45;text-decoration:line-through' : ''" :title="m.estado === 'anulado' ? 'Anulado: ' + (m.anulado_motivo || '') : ''">
               <td style="font-size:11.5px;color:var(--dgray)">{{ m.fecha }}</td>
               <td>
                 <span :class="['badge', m.tipo === 'entrada' ? 'badge-success' : 'badge-danger']">
@@ -144,6 +146,9 @@
               <td style="font-size:11.5px">{{ m.metodo }}</td>
               <td>
                 <span class="badge badge-secondary">{{ m.empresa }}</span>
+              </td>
+              <td>
+                <button v-if="m.manual && m.estado !== 'anulado'" class="btn btn-danger btn-sm" style="padding:2px 6px" title="Anular movimiento" @click="anularMovimiento(m)"><i class="ti ti-ban"></i></button>
               </td>
             </tr>
           </tbody>
@@ -312,12 +317,12 @@
           <div class="field-col">
             <label>Forma de pago:</label>
             <select v-model="metodoDinero" class="val-input">
-              <option>Efectivo Bs</option>
               <option>Efectivo USD</option>
-              <option>Pago móvil</option>
-              <option>Transferencia Bs</option>
-              <option>Transferencia USD</option>
-              <option>Zelle</option>
+              <option>Efectivo Bs.</option>
+              <option>Pago móvil Bs.</option>
+              <option>Transferencia Bs.</option>
+              <option>Zelle USD</option>
+              <option>Punto de venta</option>
               <option>Otro</option>
             </select>
           </div>
@@ -333,7 +338,7 @@
 
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="mostrarModalDinero = false">Cancelar</button>
-          <button :class="['btn', tipoDineroModal === 'salida' ? 'btn-danger' : 'btn-success']" @click="guardarMovimientoDinero">
+          <button :class="['btn', tipoDineroModal === 'salida' ? 'btn-danger' : 'btn-success']" :disabled="guardandoMov" @click="guardarMovimientoDinero">
             <i class="ti ti-device-floppy"></i> Guardar Movimiento
           </button>
         </div>
@@ -400,7 +405,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+import { periodoDe } from '../services/fechas.js';
 import { useArjStore } from '../stores/useArjStore.js';
 import { cargarFlujoCajaBD } from '../services/supabase.js';
 
@@ -408,20 +414,26 @@ const store = useArjStore();
 const tabActivo = ref('dinero');
 const cargandoMovimientos = ref(false);
 
-onMounted(async () => {
-  // Solo cargar si hay internet y la lista está vacía (o forzar carga cada vez que entramos)
-  if (navigator.onLine) {
-    cargandoMovimientos.value = true;
-    const movs = await cargarFlujoCajaBD();
-    if (movs && movs.length > 0) {
-      store.movimientosDinero = movs;
-    }
+// Período visible: el mes actual (hora de Venezuela) por defecto
+const periodo = ref(periodoDe(new Date()));
+async function cargarMovimientos() {
+  cargandoMovimientos.value = true;
+  try {
+    const [y, m] = periodo.value.split('-').map(Number);
+    const desde = new Date(`${periodo.value}-01T00:00:00-04:00`);
+    const hasta = new Date(Date.UTC(y, m, 1, 4)); // 1ro del mes siguiente, 00:00 VET
+    store.movimientosDinero = await cargarFlujoCajaBD(desde.toISOString(), hasta.toISOString());
+  } finally {
     cargandoMovimientos.value = false;
   }
-});
+}
+onMounted(cargarMovimientos);
+watch(periodo, cargarMovimientos);
 
 // Movimientos de dinero (Flujo de caja) - Vinculado al Store
 const movimientosDinero = computed(() => store.movimientosDinero);
+// Los anulados se muestran tachados pero no suman
+const activos = computed(() => movimientosDinero.value.filter(m => m.estado !== 'anulado'));
 
 const mostrarModalDinero = ref(false);
 const tipoDineroModal = ref('salida');
@@ -456,29 +468,29 @@ const errorsAjuste = ref({});
 
 // Computed Dinero
 const totalEntradasDinero = computed(() => {
-  return movimientosDinero.value.filter(m => m.tipo === 'entrada').reduce((a, b) => a + b.montoUSD, 0);
+  return activos.value.filter(m => m.tipo === 'entrada').reduce((a, b) => a + b.montoUSD, 0);
 });
 
 const totalSalidasDinero = computed(() => {
-  return movimientosDinero.value.filter(m => m.tipo === 'salida').reduce((a, b) => a + b.montoUSD, 0);
+  return activos.value.filter(m => m.tipo === 'salida').reduce((a, b) => a + b.montoUSD, 0);
 });
 
 const saldoPeriodo = computed(() => totalEntradasDinero.value - totalSalidasDinero.value);
 
 const totalOpex = computed(() => {
-  return movimientosDinero.value.filter(m => m.clase === 'opex').reduce((a, b) => a + b.montoUSD, 0);
+  return activos.value.filter(m => m.clase === 'opex').reduce((a, b) => a + b.montoUSD, 0);
 });
 
 const totalMercancia = computed(() => {
-  return movimientosDinero.value.filter(m => m.clase === 'inventario').reduce((a, b) => a + b.montoUSD, 0);
+  return activos.value.filter(m => m.clase === 'inventario').reduce((a, b) => a + b.montoUSD, 0);
 });
 
 const totalCapex = computed(() => {
-  return movimientosDinero.value.filter(m => m.clase === 'capex').reduce((a, b) => a + b.montoUSD, 0);
+  return activos.value.filter(m => m.clase === 'capex').reduce((a, b) => a + b.montoUSD, 0);
 });
 
 const totalCapital = computed(() => {
-  return movimientosDinero.value.filter(m => m.clase === 'capital').reduce((a, b) => a + b.montoUSD, 0);
+  return activos.value.filter(m => m.clase === 'capital').reduce((a, b) => a + b.montoUSD, 0);
 });
 
 // Computed Kardex
@@ -506,90 +518,79 @@ function abrirModalMovDinero(tipo) {
   mostrarModalDinero.value = true;
 }
 
-function guardarMovimientoDinero() {
+const guardandoMov = ref(false);
+async function guardarMovimientoDinero() {
   errorsDinero.value = {};
-
-  if (montoDinero.value <= 0) {
-    errorsDinero.value.monto = 'Indica un monto mayor a 0';
-  }
-  if (!conceptoDinero.value.trim()) {
-    errorsDinero.value.concepto = 'Indica el concepto o destinatario';
-  }
-
+  const monto = parseFloat(montoDinero.value) || 0;
+  if (monto <= 0) errorsDinero.value.monto = 'Indica un monto mayor a 0';
+  if (!conceptoDinero.value.trim()) errorsDinero.value.concepto = 'Indica el concepto o destinatario';
+  if (monedaDinero.value === 'Bs' && !(store.tasa_bcv > 0)) errorsDinero.value.monto = 'Falta la tasa BCV para convertir';
   if (Object.keys(errorsDinero.value).length > 0) {
     store.notif('Corrige los campos marcados en rojo', 'warning');
     return;
   }
+  if (!store._exigirConexion('Registrar movimiento')) return;
 
-  const usd = monedaDinero.value === 'USD' ? montoDinero.value : montoDinero.value / store.tasa_bcv;
-  const bs = monedaDinero.value === 'Bs' ? montoDinero.value : montoDinero.value * store.tasa_bcv;
-
+  const usd = monedaDinero.value === 'USD' ? monto : monto / store.tasa_bcv;
+  const bs = monedaDinero.value === 'Bs' ? monto : monto * store.tasa_bcv;
   const catObj = categoriasDinero.find(c => c.nombre === categoriaDinero.value);
   const clase = catObj ? catObj.clase : (tipoDineroModal.value === 'entrada' ? 'ingreso' : 'opex');
 
-  store.movimientosDinero.unshift({
-    id: Date.now(),
-    fecha: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
-    tipo: tipoDineroModal.value,
-    categoria: categoriaDinero.value,
-    concepto: conceptoDinero.value,
-    montoUSD: usd,
-    montoBs: bs,
-    metodo: metodoDinero.value,
-    empresa: empresaDinero.value === 'directa' ? 'Venta Directa' : empresaDinero.value === 'distribuidora' ? 'Distribuidora' : 'Ambas',
-    clase
-  });
-  
-  // Forzar guardado para persistencia (import persistence.js en store, o usar action)
-  import('../services/persistence.js').then(m => m.guardarDatosLocal(store.$state));
-
-  store.notif(`Movimiento de ${tipoDineroModal.value} guardado por $${usd.toFixed(2)}`, 'success');
-  mostrarModalDinero.value = false;
+  guardandoMov.value = true;
+  try {
+    // C-01: el movimiento se guarda en movimientos_caja
+    const { registrarMovimientoCajaBD } = await import('../services/supabase.js');
+    const r = await registrarMovimientoCajaBD({
+      tipo: tipoDineroModal.value,
+      empresa: empresaDinero.value,
+      categoria: categoriaDinero.value,
+      clasificacion: clase,
+      concepto: conceptoDinero.value.trim(),
+      monto_usd: Math.round(usd * 100) / 100,
+      monto_bs: Math.round(bs * 100) / 100,
+      tasa_usada: store.tasa_bcv,
+      moneda_origen: monedaDinero.value,
+      metodo: metodoDinero.value,
+      tasa_bcv_ref: store.tasa_bcv
+    });
+    if (!r.ok) { store.notif('❌ No se guardó el movimiento: ' + r.error, 'error'); return; }
+    store.logBitacora('caja', `Registró ${tipoDineroModal.value} de $${usd.toFixed(2)} — ${categoriaDinero.value}: ${conceptoDinero.value}`, true);
+    store.notif(`Movimiento de ${tipoDineroModal.value} guardado por $${usd.toFixed(2)}`, 'success');
+    mostrarModalDinero.value = false;
+    await cargarMovimientos();
+  } finally {
+    guardandoMov.value = false;
+  }
 }
 
-function aplicarAjusteStock() {
+async function anularMovimiento(m) {
+  const motivo = prompt(`Motivo para anular "${m.concepto}" ($${m.montoUSD.toFixed(2)}):`);
+  if (!motivo || !motivo.trim()) return;
+  const { anularMovimientoCajaBD } = await import('../services/supabase.js');
+  const r = await anularMovimientoCajaBD(m.idBD, motivo.trim());
+  if (!r.ok) { store.notif('No se anuló: ' + r.error, 'error'); return; }
+  store.logBitacora('caja', `Anuló movimiento "${m.concepto}" ($${m.montoUSD.toFixed(2)}). Motivo: ${motivo}`, true);
+  store.notif('Movimiento anulado', 'success');
+  await cargarMovimientos();
+}
+
+async function aplicarAjusteStock() {
   errorsAjuste.value = {};
-
-  if (!ajusteProdId.value) {
-    errorsAjuste.value.producto = 'Selecciona un repuesto';
-  }
-  if (!ajusteCant.value || ajusteCant.value <= 0) {
-    errorsAjuste.value.cant = 'La cantidad debe ser mayor a 0';
-  }
-  if (!ajusteMotivo.value.trim()) {
-    errorsAjuste.value.motivo = 'Indica el motivo del ajuste';
-  }
-
+  if (!ajusteProdId.value) errorsAjuste.value.producto = 'Selecciona un repuesto';
+  if (!ajusteCant.value || ajusteCant.value <= 0) errorsAjuste.value.cant = 'La cantidad debe ser mayor a 0';
+  if (!ajusteMotivo.value.trim()) errorsAjuste.value.motivo = 'Indica el motivo del ajuste';
   if (Object.keys(errorsAjuste.value).length > 0) {
     store.notif('Corrige los campos marcados en rojo', 'warning');
     return;
   }
-
   const p = store.productos.find(x => x.id === parseInt(ajusteProdId.value));
   if (!p) return;
-
-  if (ajusteTipo.value === 'entrada') {
-    if (store.empresa === 'directa') p.stock_vd += ajusteCant.value;
-    else p.stock_dist += ajusteCant.value;
-  } else {
-    if (store.empresa === 'directa') p.stock_vd = Math.max(0, p.stock_vd - ajusteCant.value);
-    else p.stock_dist = Math.max(0, p.stock_dist - ajusteCant.value);
+  // C-01: queda registrado como conteo (REC-...) con stock antes/después
+  const r = await store.ajustarStock(p, ajusteTipo.value, parseInt(ajusteCant.value), ajusteMotivo.value.trim());
+  if (r) {
+    store.notif(`Ajuste ${r.numero} aplicado a ${p.cod_alt}`, 'success');
+    mostrarModalAjusteStock.value = false;
   }
-
-  store.movimientos.unshift({
-    id: Date.now(),
-    fecha: new Date().toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' }),
-    tipo: ajusteTipo.value === 'entrada' ? 'entrada' : 'ajuste',
-    producto: p.desc,
-    cod_alt: p.cod_alt,
-    cant: ajusteCant.value,
-    empresa: store.empresa === 'directa' ? 'directa' : 'distribuidora',
-    motivo: ajusteMotivo.value || 'Ajuste manual de inventario',
-    usuario: store.usuarioNombre
-  });
-
-  store.notif(`Ajuste de ${ajusteCant.value} ud aplicado a ${p.cod_alt}`, 'success');
-  mostrarModalAjusteStock.value = false;
 }
 </script>
 

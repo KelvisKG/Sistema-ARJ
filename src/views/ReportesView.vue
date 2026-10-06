@@ -283,8 +283,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { cargarItemsVentasMes } from '../services/supabase.js';
-import { guardarDatosLocal } from '../services/persistence.js';
-import { fmtUSD, costoLanded, precioPublico } from '../services/pricing.js';
+import { fmtUSD, costoLanded, precioPublico, FACTOR_LANDED_FALLBACK } from '../services/pricing.js';
 
 const store = useArjStore();
 const subRep = ref('resumen');
@@ -295,7 +294,7 @@ const nuevoTrabajador = ref('');
 // LÓGICA DE FECHAS
 // ==========================================
 const hoy = new Date();
-const currMonthKey = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+const currMonthKey = store.periodoActual();
 const currDateStr = hoy.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
 const mesActualLbl = hoy.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' });
 
@@ -379,8 +378,8 @@ const utilidadMes = computed(() => {
       if (prod) {
         costo = costoLanded(prod, store.productos);
       } else {
-        const precioUnit = (parseFloat(it.total_linea) / (parseFloat(it.cantidad) || 1)) || parseFloat(it.precio_unitario) || 0;
-        costo = precioUnit * 0.6; // fallback 60% costo
+        // Producto ya fuera del catálogo: FOB congelado × factor de respaldo
+        costo = (parseFloat(it.fob_unitario) || 0) * FACTOR_LANDED_FALLBACK;
       }
     }
     const precioUnitario = (parseFloat(it.total_linea) / (parseFloat(it.cantidad) || 1)) || parseFloat(it.precio_unitario) || 0;
@@ -391,11 +390,11 @@ const utilidadMes = computed(() => {
 
 const margenRealMes = computed(() => ventasMes.value > 0 ? Math.round((utilidadMes.value / ventasMes.value) * 100) : 0);
 
-// Costos Fijos hardcodeado a 2500 como en el legacy por defecto
-const costosFijos = 2500;
+// A-08: costos fijos del mes desde configuracion.costos_fijos_hist
+const costosFijos = computed(() => store.costosFijosDe(currMonthKey));
 const puntoEquilibrio = computed(() => {
   const m = margenRealMes.value / 100;
-  return m > 0 ? (costosFijos / m) : 0;
+  return m > 0 ? (costosFijos.value / m) : 0;
 });
 
 // ==========================================
@@ -404,7 +403,7 @@ const puntoEquilibrio = computed(() => {
 const origenData = computed(() => {
   let impV = 0, impC = 0, impU = 0, impR = 0;
   let locV = 0, locC = 0, locU = 0, locR = 0;
-  const brecha = (store.configuracion?.tasa_par || 1) / (store.configuracion?.tasa_bcv || 1);
+  const brecha = store.brechaParaleloBCV;
   const brechaEfectiva = brecha > 0 ? brecha : 1;
 
   itemsVentasMes.value.forEach(it => {
@@ -433,8 +432,8 @@ const origenData = computed(() => {
       if (prod) {
         costo = costoLanded(prod, store.productos);
       } else {
-        const precioUnit = (parseFloat(it.total_linea) / (parseFloat(it.cantidad) || 1)) || parseFloat(it.precio_unitario) || 0;
-        costo = precioUnit * 0.6;
+        // Producto ya fuera del catálogo: FOB congelado × factor de respaldo
+        costo = (parseFloat(it.fob_unitario) || 0) * FACTOR_LANDED_FALLBACK;
       }
     }
 
@@ -461,14 +460,15 @@ const origenData = computed(() => {
 // ==========================================
 // METAS DE VENTA
 // ==========================================
-// Inicializar
-if (!store.metas_hist[currMonthKey]) {
-  store.metas_hist[currMonthKey] = { directa: 0, dist: 0, vendedores: {} };
-}
+// Metas y equipo viven en configuracion (metas_hist / equipo), compartidas por todas las terminales
 const mObj = computed(() => store.metas_hist[currMonthKey] || { directa: 0, dist: 0, vendedores: {} });
 
 const metaEmpresa = ref(store.empresa === 'directa' ? (mObj.value.directa || 0) : (mObj.value.dist || 0));
-const metasVendedores = ref(mObj.value.vendedores || {});
+const metasVendedores = ref({ ...(mObj.value.vendedores || {}) });
+watch(mObj, (m) => {
+  metasVendedores.value = { ...(m.vendedores || {}) };
+  metaEmpresa.value = store.empresa === 'directa' ? (m.directa || 0) : (m.dist || 0);
+});
 
 const equipoActivo = computed(() => {
   const keys = Object.keys(metasVendedores.value);
@@ -480,19 +480,20 @@ watch(() => store.empresa, (nv) => {
   metaEmpresa.value = nv === 'directa' ? (mObj.value.directa || 0) : (mObj.value.dist || 0);
 });
 
-const guardarMetas = () => {
-  const base = store.metas_hist[currMonthKey] || { directa: 0, dist: 0, vendedores: {} };
-  if (store.empresa === 'directa') base.directa = metaEmpresa.value;
-  else base.dist = metaEmpresa.value;
-  
-  // Limpiar vacios
+const guardarMetas = async () => {
+  const base = { directa: 0, dist: 0, vendedores: {}, ...(store.metas_hist[currMonthKey] || {}) };
+  if (store.empresa === 'directa') base.directa = parseFloat(metaEmpresa.value) || 0;
+  else base.dist = parseFloat(metaEmpresa.value) || 0;
+  const vend = {};
   Object.keys(metasVendedores.value).forEach(k => {
-    if (!metasVendedores.value[k]) delete metasVendedores.value[k];
+    const v = parseFloat(metasVendedores.value[k]) || 0;
+    if (v > 0) vend[k] = v;
   });
-  base.vendedores = { ...metasVendedores.value };
-  
-  store.metas_hist[currMonthKey] = base;
-  guardarDatosLocal(store.$state);
+  base.vendedores = vend;
+  const hist = { ...store.metas_hist, [currMonthKey]: base };
+  if (await store.actualizarConfiguracion({ metas_hist: hist }, `Metas de ${currMonthKey} actualizadas`)) {
+    store.notif('Metas guardadas', 'success');
+  }
 };
 
 const ventasMesEmpresa = computed(() => {
@@ -524,18 +525,19 @@ const esCumplida = (vend) => (metasVendedores.value[vend] > 0) && (ventasVendedo
 function abrirModalEquipo() {
   modalEquipo.value = true;
 }
-function agregarTrabajador() {
-  if (nuevoTrabajador.value.trim() && !store.equipo_ventas.includes(nuevoTrabajador.value.trim())) {
-    store.equipo_ventas.push(nuevoTrabajador.value.trim());
-    if (!metasVendedores.value[nuevoTrabajador.value.trim()]) metasVendedores.value[nuevoTrabajador.value.trim()] = 0;
+async function agregarTrabajador() {
+  const n = nuevoTrabajador.value.trim();
+  if (!n || store.equipo_ventas.includes(n)) return;
+  if (await store.actualizarConfiguracion({ equipo: [...store.equipo_ventas, n] }, `Agregó ${n} al equipo de ventas`)) {
     nuevoTrabajador.value = '';
-    guardarDatosLocal(store.$state);
   }
 }
-function eliminarTrabajador(t) {
-  store.equipo_ventas = store.equipo_ventas.filter(x => x !== t);
+async function eliminarTrabajador(t) {
+  if (!confirm(`¿Quitar a ${t} del equipo?`)) return;
   delete metasVendedores.value[t];
-  guardarMetas();
+  if (await store.actualizarConfiguracion({ equipo: store.equipo_ventas.filter(x => x !== t) }, `Quitó a ${t} del equipo de ventas`)) {
+    await guardarMetas();
+  }
 }
 
 // ==========================================
