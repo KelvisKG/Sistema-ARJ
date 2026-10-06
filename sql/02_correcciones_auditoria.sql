@@ -901,3 +901,6 @@ END $$;
 --
 -- e) Contadores:
 -- SELECT * FROM contadores ORDER BY tipo;
+
+-- Refresca la caché de PostgREST para que la API vea las funciones nuevas
+NOTIFY pgrst, 'reload schema';
