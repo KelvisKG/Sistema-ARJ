@@ -1,7 +1,7 @@
 // =====================================================================
 // ARJ - Cola de Sincronización Offline (Vue 3 / ES Module)
 // =====================================================================
-import { supabase } from './supabase.js';
+import { insertarBitacora } from './supabase.js';
 
 const ARJ_SYNC_QUEUE_KEY = 'ARJ_SYNC_QUEUE';
 const SYNC_SCHEMA_VERSION = 2; // Incrementar cuando cambie el esquema de payloads
@@ -74,7 +74,7 @@ export async function procesarColaSincronizacion() {
       // Solo la bitácora admite cola offline. Clientes, facturas, pagos e
       // inventario se guardan en línea o fallan en voz alta (C-02).
       if (tarea.tipo === 'BITACORA') {
-        const { error } = await supabase.from('bitacora').insert([tarea.payload]);
+        const error = await insertarBitacora(tarea.payload);
         exito = !error;
         if (error) console.error('[ARJ Sync] Error bitácora:', error.message);
       }

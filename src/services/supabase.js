@@ -578,6 +578,20 @@ export async function cargarItemsVentasMes(facturaIds) {
 // ═══════════════════════════════════════════════════════════════
 // BITÁCORA (única acción que sí admite cola offline)
 // ═══════════════════════════════════════════════════════════════
+// La escribe el servidor (sql/04): el usuario sale del perfil, no del navegador.
+// Si la función aún no existe en esa base, cae al insert directo.
+export async function insertarBitacora(payload) {
+  const { data, error } = await supabase.rpc('registrar_bitacora', {
+    p_empresa: payload.empresa, p_accion: payload.accion, p_descripcion: payload.descripcion, p_critico: payload.critico
+  });
+  if (!error) return data && data.ok === false ? { message: data.error } : null;
+  if (error.code === 'PGRST202') {
+    const r = await supabase.from('bitacora').insert([payload]);
+    return r.error;
+  }
+  return error;
+}
+
 export async function guardarBitacoraEnSupabase(log) {
   const payload = {
     usuario: log.usuario,
@@ -587,10 +601,7 @@ export async function guardarBitacoraEnSupabase(log) {
     critico: !!log.esAlerta
   };
   try {
-    if (enLinea()) {
-      const { error } = await supabase.from('bitacora').insert([payload]);
-      if (!error) return;
-    }
+    if (enLinea() && !(await insertarBitacora(payload))) return;
     encolarAccion('BITACORA', payload);
   } catch (e) {
     encolarAccion('BITACORA', payload);
