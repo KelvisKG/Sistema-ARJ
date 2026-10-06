@@ -51,7 +51,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { exportarListaPreciosExcel } from '../../services/exportService.js';
+import { exportarListaPreciosExcel } from '../../services/exportLazy.js';
 
 const store = useArjStore();
 const tierSel = ref('Publico');

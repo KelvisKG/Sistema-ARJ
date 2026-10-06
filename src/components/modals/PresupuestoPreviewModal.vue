@@ -134,7 +134,7 @@
 import { computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD } from '../../services/pricing.js';
-import { generarPresupuestoPDF } from '../../services/exportService.js';
+import { generarPresupuestoPDF } from '../../services/exportLazy.js';
 
 const store = useArjStore();
 

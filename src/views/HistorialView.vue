@@ -143,7 +143,7 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
-import { generarFacturaPDF, generarPresupuestoPDF } from '../services/exportService.js';
+import { generarFacturaPDF, generarPresupuestoPDF } from '../services/exportLazy.js';
 import { cargarDetallesFactura } from '../services/supabase.js';
 
 const store = useArjStore();

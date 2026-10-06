@@ -174,7 +174,7 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
-import { generarActaCierrePDF } from '../services/exportService.js';
+import { generarActaCierrePDF } from '../services/exportLazy.js';
 
 const store = useArjStore();
 const mostrarModalAbrir = ref(false);

@@ -49,7 +49,7 @@ const MEMBRETE_ARJ = {
 const DATOS_EMPRESAS = { directa: MEMBRETE_ARJ, distribuidora: MEMBRETE_ARJ };
 
 // Emisor del libro de ventas (igual que el monolito v13)
-export const EMISOR_FISCAL = { nombre: 'ARJ / FINARMA C.A.', rif: 'J-29620983-9' };
+import { EMISOR_FISCAL } from './exportLazy.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS PDF

@@ -98,7 +98,7 @@ import { ref, computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD } from '../../services/pricing.js';
 import { cargarItemsNotaEntrega } from '../../services/supabase.js';
-import { generarNotaEntregaPDF } from '../../services/exportService.js';
+import { generarNotaEntregaPDF } from '../../services/exportLazy.js';
 
 const store = useArjStore();
 const productoId = ref('');

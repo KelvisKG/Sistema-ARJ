@@ -86,7 +86,7 @@ import { ref, computed, watch } from 'vue';
 import { useArjStore } from '@/stores/useArjStore';
 import { supabase } from '@/services/supabase';
 import { fmtUSD } from '@/services/pricing';
-import { generarNotaEntregaPDF } from '@/services/exportService';
+import { generarNotaEntregaPDF } from '@/services/exportLazy.js';
 
 const store = useArjStore();
 const busqueda = ref('');

@@ -94,7 +94,7 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD, fmtBs } from '../services/pricing.js';
-import { exportarLibroVentasExcel, EMISOR_FISCAL } from '../services/exportService.js';
+import { exportarLibroVentasExcel, EMISOR_FISCAL } from '../services/exportLazy.js';
 import { cargarFacturasRango, cargarItemsVentasMes } from '../services/supabase.js';
 import { fechaLocalISO } from '../services/fechas.js';
 
@@ -149,7 +149,7 @@ async function descargarExcel() {
   try {
     const items = await cargarItemsVentasMes(lista.map(f => f.id));
     const etiqueta = desde.value === hasta.value ? `del ${desde.value}` : `del ${desde.value} al ${hasta.value}`;
-    const r = exportarLibroVentasExcel(lista, items, {
+    const r = await exportarLibroVentasExcel(lista, items, {
       empresaSel: empresaSel.value, etiqueta, sufijo: `${desde.value}_a_${hasta.value}`, usuario: store.usuarioNombre
     });
     store.logBitacora('fiscal', `Exportó libro de ventas ${etiqueta}: ${r.facturas} facturas, ${fmtUSD(r.totalUSD)}`, true);
