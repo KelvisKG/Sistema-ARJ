@@ -164,7 +164,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD } from '../services/pricing.js';
+import { fmtUSD, fmtBsMonto } from '../services/pricing.js';
 import {
   METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, calcularAbono, saldoBsHoy, objetivoEfectivo
 } from '../services/cobros.js';
@@ -180,10 +180,6 @@ const errors = ref({});
 
 const moneda = computed(() => monedaDeMetodo(metodo.value));
 
-function fmtBsMonto(n) {
-  if (!Number.isFinite(Number(n))) return '—';
-  return 'Bs. ' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 const facturasEmpresa = computed(() => store.facturasCobrar.filter(f => f.empresa === store.empresa));
 

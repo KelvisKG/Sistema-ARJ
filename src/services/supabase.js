@@ -213,16 +213,22 @@ function mapConfiguracion(cfg) {
 // ═══════════════════════════════════════════════════════════════
 // CARGA INICIAL
 // ═══════════════════════════════════════════════════════════════
-export async function cargarProductos() {
-  const { data, error } = await supabase.from('productos').select('*').eq('activo', true).order('cod_alt');
+// `ids` opcional: solo esas filas (recarga puntual tras una operación)
+export async function cargarProductos(ids) {
+  let q = supabase.from('productos').select('*').eq('activo', true).order('cod_alt');
+  if (ids && ids.length) q = q.in('id', ids);
+  const { data, error } = await q;
   if (error) throw error;
   return (data || []).map(mapProducto);
 }
 
-export async function cargarClientes() {
-  const { data: clis, error } = await supabase.from('clientes').select('*').eq('activo', true).order('nombre');
+export async function cargarClientes(ids) {
+  let qc = supabase.from('clientes').select('*').eq('activo', true).order('nombre');
+  let qk = supabase.from('contactos_cliente').select('*');
+  if (ids && ids.length) { qc = qc.in('id', ids); qk = qk.in('cliente_id', ids); }
+  const { data: clis, error } = await qc;
   if (error) throw error;
-  const { data: contactos } = await supabase.from('contactos_cliente').select('*');
+  const { data: contactos } = await qk;
   const porCliente = {};
   (contactos || []).forEach(c => { (porCliente[c.cliente_id] = porCliente[c.cliente_id] || []).push(c); });
   return (clis || []).map(c => mapCliente(c, porCliente[c.id] || []));
@@ -381,8 +387,10 @@ export async function cargarDetallesFactura(facturaId) {
 }
 
 // Pagos en efectivo registrados por un usuario desde una fecha (cuadre de turno)
+// Excluye los cobros de facturas que luego se anularon (ese efectivo se devolvió)
 export async function cargarPagosDesde(desdeISO, usuario) {
-  let q = supabase.from('pagos').select('monto_usd, monto_bs, metodo, fecha, registrado_por').gte('fecha', desdeISO);
+  let q = supabase.from('pagos').select('monto_usd, monto_bs, metodo, fecha, registrado_por, facturas!inner(estado)')
+    .gte('fecha', desdeISO).neq('facturas.estado', 'anulada');
   if (usuario) q = q.eq('registrado_por', usuario);
   const { data, error } = await q;
   if (error) throw error;
@@ -422,35 +430,19 @@ export async function crearClienteBD(cli) {
   return { ok: true, cliente: mapCliente(res.data, contacto) };
 }
 
-// Edición: actualiza la fila y el contacto principal. Falla en voz alta.
-export async function actualizarClienteBD(clienteId, d) {
-  if (!enLinea()) return { ok: false, error: 'Sin conexión. El cliente no se actualizó.' };
-  const payload = {
-    nombre: (d.nombre || '').trim().toUpperCase(),
-    rif: (d.rif || '').trim().toUpperCase(),
-    telefono: d.tel || '',
-    direccion: d.direccion || '',
-    nivel: d.nivel || 'Publico',
-    tipo_pago: d.tipo || 'contado',
-    origen: d.origen || null,
-    origen_detalle: d.origen_detalle || '',
-    notas: d.notas || ''
-  };
-  const { error } = await supabase.from('clientes').update(payload).eq('id', clienteId);
-  if (error) return { ok: false, error: error.message };
-
-  const cp = d.contacto_principal;
-  if (cp && cp.nombre && cp.nombre !== '—') {
-    const { data: existente } = await supabase.from('contactos_cliente').select('id')
-      .eq('cliente_id', clienteId).eq('es_principal', true).maybeSingle();
-    const fila = { nombre: cp.nombre, cargo: cp.cargo || '', telefono: cp.tel || d.tel || '' };
-    const r = existente
-      ? await supabase.from('contactos_cliente').update(fila).eq('id', existente.id)
-      : await supabase.from('contactos_cliente').insert({ ...fila, cliente_id: clienteId, es_principal: true });
-    if (r.error) return { ok: false, error: 'Cliente guardado, pero el contacto no: ' + r.error.message };
+// Edición vía función del servidor (sql/06): valida que solo el gerente cambie
+// el nivel de precio y actualiza el contacto principal en la misma operación
+export const actualizarClienteBD = (clienteId, d) => rpc('actualizar_cliente', {
+  p_id: clienteId,
+  p: {
+    nombre: d.nombre, rif: d.rif || '', telefono: d.tel || '', direccion: d.direccion || '',
+    nivel: d.nivel || 'Publico', tipo_pago: d.tipo || 'contado', origen: d.origen || '',
+    origen_detalle: d.origen_detalle || '', notas: d.notas || '',
+    contacto: d.contacto_principal
+      ? { nombre: d.contacto_principal.nombre, cargo: d.contacto_principal.cargo || '', telefono: d.contacto_principal.tel || d.tel || '' }
+      : null
   }
-  return { ok: true };
-}
+});
 
 // ═══════════════════════════════════════════════════════════════
 // INVENTARIO (C-01)

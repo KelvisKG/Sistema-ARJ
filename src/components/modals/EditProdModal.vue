@@ -137,7 +137,8 @@ async function guardarCambios() {
   guardando.value = true;
   try {
     // C-01: se guarda en la base de datos; la pantalla se refresca desde ahí
-    const ok = await store.guardarProducto({ ...form.value, id: store.productoSeleccionado.id });
+    const sel = store.productoSeleccionado;
+    const ok = await store.guardarProducto({ ...form.value, id: sel.id, stock_vd_original: sel.stock_vd, stock_dist_original: sel.stock_dist });
     if (ok) cerrarModal();
   } finally {
     guardando.value = false;

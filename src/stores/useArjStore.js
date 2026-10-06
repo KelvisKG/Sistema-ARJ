@@ -267,11 +267,23 @@ export const useArjStore = defineStore('arj', {
       });
     },
 
-    async recargarProductos() {
-      try { this.productos = await db.cargarProductos(); } catch (e) { console.warn('[ARJ] recargar productos:', e); }
+    // Con `ids` solo se traen esas filas y se reemplazan en la lista (más liviano
+    // que bajar todo el catálogo después de cada venta)
+    async recargarProductos(ids) {
+      try {
+        if (!ids || !ids.length) { this.productos = await db.cargarProductos(); return; }
+        const nuevos = await db.cargarProductos(ids);
+        const set = new Set(ids);
+        const porId = new Map(nuevos.map(p => [p.id, p]));
+        this.productos = this.productos.filter(p => !set.has(p.id) || porId.has(p.id)).map(p => porId.get(p.id) || p);
+      } catch (e) { console.warn('[ARJ] recargar productos:', e); }
     },
-    async recargarClientes() {
-      try { this.clientes = await db.cargarClientes(); } catch (e) { console.warn('[ARJ] recargar clientes:', e); }
+    async recargarClientes(ids) {
+      try {
+        if (!ids || !ids.length) { this.clientes = await db.cargarClientes(); return; }
+        const porId = new Map((await db.cargarClientes(ids)).map(c => [c.id, c]));
+        this.clientes = this.clientes.map(c => porId.get(c.id) || c);
+      } catch (e) { console.warn('[ARJ] recargar clientes:', e); }
     },
     async recargarFacturas() {
       try { this.todasFacturas = await db.cargarFacturasRecientes(); } catch (e) { console.warn('[ARJ] recargar facturas:', e); }
@@ -513,6 +525,7 @@ export const useArjStore = defineStore('arj', {
         this.carrito.cliente_nombre = '';
         return;
       }
+      const esOtroCliente = this.carrito.cliente_id !== cli.id;
       this.carrito.cliente_id = cli.id;
       this.carrito.cliente_nombre = cli.nombre;
       if (this.empresa === 'directa') {
@@ -523,7 +536,9 @@ export const useArjStore = defineStore('arj', {
       } else {
         this.carrito.tier = cli.nivel || 'Publico';
       }
-      this.carrito.tipo_pago = cli.tipo === 'credito' ? 'credito' : 'contado';
+      // El término habitual del cliente solo se propone al cambiar de cliente; no pisa
+      // lo que el cajero ya eligió para este mismo cliente
+      if (esOtroCliente) this.carrito.tipo_pago = cli.tipo === 'credito' ? 'credito' : 'contado';
       this.actualizarPreciosCarrito();
     },
 
@@ -655,7 +670,7 @@ export const useArjStore = defineStore('arj', {
         this.modalFacturaActivo = true;
         const fiscal = c.pidio_fiscal;
         this.limpiarCarrito();
-        await Promise.all([this.recargarProductos(), this.recargarClientes()]);
+        await Promise.all([this.recargarProductos(c.items.map(i => i.id)), this.recargarClientes([cli.id])]);
         this.notif(`✓ Factura ${fac.num} emitida`, 'success');
         if (fiscal) setTimeout(() => this.notif('📋 Recordatorio: el cliente pidió factura fiscal', 'warning'), 2000);
         return { ok: true, factura: fac };
@@ -712,7 +727,7 @@ export const useArjStore = defineStore('arj', {
         fac.estado = r.estado;
         fac.estado_bd = r.estado;
         fac.abonado = Math.max(0, fac.total - r.saldo_pendiente);
-        await this.recargarClientes();
+        if (fac.cliente_id) await this.recargarClientes([fac.cliente_id]);
         this.logBitacora('cobro', `Abono ${fmtUSD(calc.acreditaUSD)} a ${fac.num} (${metodo}). Saldo: ${fmtUSD(r.saldo_pendiente)}`);
         return { ok: true, acreditaUSD: calc.acreditaUSD, saldo: r.saldo_pendiente };
       } finally {
@@ -794,13 +809,14 @@ export const useArjStore = defineStore('arj', {
 
     async actualizarCliente(id, datos) {
       if (!this._exigirConexion('Actualizar cliente')) return false;
-      if (datos.nivel && datos.nivel !== 'Publico' && this.rol !== 'gerente') {
-        this.notif('Solo el gerente puede asignar niveles T1/T2/T3', 'error');
+      const actual = this.clientes.find(c => c.id === id);
+      if (datos.nivel && actual && datos.nivel !== actual.nivel && this.rol !== 'gerente') {
+        this.notif('Solo el gerente puede cambiar el nivel de precio de un cliente', 'error');
         return false;
       }
       const r = await db.actualizarClienteBD(id, datos);
       if (!r.ok) { this.notif('❌ No se actualizó: ' + r.error, 'error'); return false; }
-      await this.recargarClientes();
+      await this.recargarClientes([id]);
       this.logBitacora('cliente', `Actualizó cliente ${datos.nombre}`);
       this.notif('Cliente actualizado', 'success');
       return true;
@@ -810,14 +826,19 @@ export const useArjStore = defineStore('arj', {
     async guardarProducto(datos) {
       if (!this._exigirGerente('editar productos')) return false;
       if (!this._exigirConexion('Guardar producto')) return false;
+      // Al editar se manda también el stock que se vio al abrir: el servidor solo lo
+      // cambia si el gerente lo modificó y nadie lo movió mientras tanto
+      const original = datos.id ? this.productos.find(p => p.id === datos.id) : null;
       const r = await db.guardarProductoBD({
         id: datos.id || null, cod_alt: datos.cod_alt, cod_orig: datos.cod_orig, cod_barras: datos.cod_barras,
         descripcion: datos.desc, marca: datos.marca, fob: datos.fob, stock_vd: datos.stock_vd, stock_dist: datos.stock_dist,
+        stock_vd_original: datos.stock_vd_original ?? (original ? original.stock_vd : null),
+        stock_dist_original: datos.stock_dist_original ?? (original ? original.stock_dist : null),
         marca_modelo: datos.marca_modelo, sistema: datos.sistema, precio_manual: datos.precio_manual || null,
         origen: datos.origen, factor_landed: datos.factor_landed, proveedor: datos.proveedor
       });
       if (!r.ok) { this.notif('❌ No se guardó el producto: ' + r.error, 'error'); return false; }
-      await this.recargarProductos();
+      await (datos.id ? this.recargarProductos([datos.id]) : this.recargarProductos());
       this.logBitacora('producto', `${datos.id ? 'Editó' : 'Creó'} producto ${datos.cod_alt}`, true);
       this.notif(`Producto ${datos.cod_alt} guardado`, 'success');
       return true;
@@ -840,7 +861,7 @@ export const useArjStore = defineStore('arj', {
       if (!this._exigirConexion('Traspaso')) return null;
       const r = await db.aplicarTraspasoBD(items, referencia);
       if (!r.ok) { this.notif('❌ Traspaso NO aplicado: ' + r.error, 'error'); return null; }
-      await this.recargarProductos();
+      await this.recargarProductos(items.map(i => i.producto_id));
       this._kardex('traspaso', `Nota ${r.numero}: ${r.renglones} renglón(es), ${r.unidades} ud Dist → VD`, r.unidades);
       this.logBitacora('traspaso', `Traspaso ${r.numero}: ${r.unidades} ud (${r.renglones} renglones) Dist → VD`, true);
       this.notif(`Traspaso aplicado · Nota ${r.numero}`, 'success');
@@ -852,7 +873,7 @@ export const useArjStore = defineStore('arj', {
       if (!this._exigirConexion('Recepción')) return null;
       const r = await db.aplicarRecepcionBD(args);
       if (!r.ok) { this.notif('❌ NO se aplicó: ' + r.error, 'error'); return null; }
-      await this.recargarProductos();
+      await this.recargarProductos((args.items || []).map(i => i.producto_id));
       this._kardex(args.tipo === 'conteo' ? 'ajuste' : 'entrada', `${r.numero}${args.referencia ? ' — ' + args.referencia : ''}`, r.unidades);
       this.logBitacora('inventario', `${args.tipo === 'conteo' ? 'Conteo físico' : 'Recepción'} ${r.numero}: ${r.renglones} productos, ${r.unidades} ud` +
         (r.sellados ? ` · ${r.sellados} sellados` : '') + (r.conflictos && r.conflictos.length ? ` · ${r.conflictos.length} en conflicto de embarque` : ''), true);
@@ -860,13 +881,13 @@ export const useArjStore = defineStore('arj', {
     },
 
     // Ajuste puntual de stock = conteo físico de un producto
+    // Ajuste relativo: el servidor suma/resta sobre el stock ACTUAL de la BD, así no
+    // se pierden ventas hechas desde otra caja mientras esta pantalla estaba abierta
     async ajustarStock(prod, tipo, cant, motivo) {
-      const actual = this.empresa === 'directa' ? prod.stock_vd : prod.stock_dist;
-      const fisico = tipo === 'entrada' ? actual + cant : actual - cant;
-      if (fisico < 0) { this.notif(`No puedes sacar ${cant}: solo hay ${actual}`, 'error'); return null; }
+      const delta = tipo === 'entrada' ? cant : -cant;
       return this.aplicarRecepcion({
         tipo: 'conteo', destino: this.empresa === 'directa' ? 'directa' : 'dist', embarqueId: null,
-        referencia: 'Ajuste manual: ' + motivo, items: [{ producto_id: prod.id, fisico }], noContados: []
+        referencia: 'Ajuste manual: ' + motivo, items: [{ producto_id: prod.id, delta }], noContados: []
       });
     },
 

@@ -630,7 +630,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, precioConTier, costoLanded, sinFob, MARGEN_MINIMO } from '../services/pricing.js';
+import { fmtUSD, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO } from '../services/pricing.js';
 import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada } from '../services/cobros.js';
 
 const store = useArjStore();
@@ -652,10 +652,6 @@ const nuevaRef = ref('');
 const errorsPago = ref({});
 const monedaNueva = computed(() => monedaDeMetodo(nuevoMetodo.value));
 
-function fmtBsMonto(n) {
-  if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
-  return 'Bs. ' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 // Fracción de la factura que cubre un pago (contra el total en SU moneda)
 function fraccionDe(p) {

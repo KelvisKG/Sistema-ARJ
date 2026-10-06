@@ -193,3 +193,10 @@ export function fmtNum(n, dec = 0) {
     maximumFractionDigits: dec
   });
 }
+
+// Monto que YA está en bolívares (sin convertir). Sin dato válido muestra una raya:
+// se ve que falta, no que valga cero (v13.20)
+export function fmtBsMonto(n) {
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
+  return 'Bs. ' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}

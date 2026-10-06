@@ -185,16 +185,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD } from '../../services/pricing.js';
+import { fmtUSD, fmtBsMonto } from '../../services/pricing.js';
 import { generarFacturaPDF } from '../../services/exportLazy.js';
 import { cargarDetallesFactura } from '../../services/supabase.js';
 
 const store = useArjStore();
 const cargandoDetalles = ref(false);
 
-function fmtBsMonto(n) {
-  return 'Bs. ' + (Number(n) || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 // Renglones y pagos se traen de la BD cuando la factura viene del historial
 watch(() => store.facturaReciente, async (f) => {
