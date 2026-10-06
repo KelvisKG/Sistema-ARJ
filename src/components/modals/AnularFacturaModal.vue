@@ -52,17 +52,18 @@ function cerrar() {
   errors.value = {};
 }
 
-function confirmarAnulacion() {
+async function confirmarAnulacion() {
   errors.value = {};
-
-  if (!store.facturaAAnular) return;
+  const f = store.facturaAAnular;
+  if (!f) return;
   if (!motivo.value.trim() || motivo.value.trim().length < 5) {
     errors.value.motivo = 'El motivo es obligatorio (mín. 5 caracteres)';
-    store.notif('Indica el motivo de la anulación', 'warning');
     return;
   }
-
-  store.anularFactura(store.facturaAAnular.num, motivo.value.trim());
-  cerrar();
+  const ok = await store.anularFactura(f.id, motivo.value.trim());
+  if (ok) {
+    if (store.facturaReciente && store.facturaReciente.id === f.id) store.modalFacturaActivo = false;
+    cerrar();
+  }
 }
 </script>

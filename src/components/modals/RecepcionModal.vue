@@ -48,7 +48,7 @@
             <select v-model="embarqueSeleccionado" class="val-input">
               <option value="">Sin embarque (costo actual)</option>
               <option v-for="emb in store.embarques" :key="emb.id" :value="emb.id">
-                {{ emb.id }} — {{ emb.proveedor }}
+                {{ emb.codigo }} — {{ emb.proveedor }} (×{{ Number(emb.factor || 0).toFixed(4) }})
               </option>
             </select>
           </div>
@@ -74,6 +74,8 @@
           <span>Modo: <strong style="color:var(--gold)">{{ modo === 'conteo' ? 'Conteo Físico' : 'Recepción de Mercancía' }}</strong></span>
           <span>Almacén: <strong>{{ almacenDestino === 'vd' ? 'Venta Directa' : 'Distribuidora' }}</strong></span>
           <span>Partidas procesadas: <strong style="color:var(--primary)">{{ itemsProcesados.length }}</strong></span>
+          <span v-if="modo === 'conteo'">No contados (no se tocan): <strong>{{ noContados.length }}</strong></span>
+          <span v-if="embarqueSel">Se sellan: <strong>{{ sello.sellar }}</strong><span v-if="sello.conflictos.length" style="color:var(--red)"> · {{ sello.conflictos.length }} en conflicto</span></span>
         </div>
 
         <div style="max-height:360px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
@@ -112,15 +114,30 @@
         </div>
       </div>
 
+      <!-- PASO 3: RESULTADO -->
+      <div v-else-if="paso === 3 && resultado" style="text-align:center;padding:20px">
+        <i class="ti ti-circle-check" style="font-size:44px;color:var(--green)"></i>
+        <div style="font-size:17px;font-weight:600;color:var(--navy);margin-top:10px">Registro {{ resultado.numero }}</div>
+        <div style="font-size:12.5px;color:var(--dgray);margin-top:4px">
+          {{ resultado.renglones }} producto(s) · {{ resultado.unidades }} unidad(es)
+          <span v-if="resultado.no_contados"> · {{ resultado.no_contados }} no contado(s)</span>
+          <span v-if="resultado.sellados"> · {{ resultado.sellados }} sellado(s)</span>
+        </div>
+        <div v-if="resultado.conflictos && resultado.conflictos.length" style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:10px;margin-top:12px;text-align:left;font-size:12px;color:#5D4037">
+          <strong>{{ resultado.conflictos.length }} NO se sellaron</strong> (ya venían de otro embarque):
+          <div v-for="c in resultado.conflictos" :key="c.cod_alt">· {{ c.cod_alt }} → {{ c.otro }}</div>
+        </div>
+      </div>
+
       <!-- BOTONES DE ACCIÓN -->
       <div class="modal-actions">
-        <button class="btn btn-secondary" @click="cerrar">Cancelar</button>
-        <button v-if="paso === 2" class="btn btn-secondary" @click="paso = 1">← Volver a Editar</button>
+        <button class="btn btn-secondary" :disabled="aplicando" @click="cerrar">{{ paso === 3 ? 'Cerrar' : 'Cancelar' }}</button>
+        <button v-if="paso === 2" class="btn btn-secondary" :disabled="aplicando" @click="paso = 1">← Volver a Editar</button>
         <button v-if="paso === 1" class="btn btn-primary" @click="revisarEntrada">
           <i class="ti ti-eye"></i> Revisar antes de aplicar
         </button>
-        <button v-if="paso === 2" class="btn btn-success" @click="aplicarRecepcion">
-          <i class="ti ti-check"></i> Aplicar al Almacén
+        <button v-if="paso === 2" class="btn btn-success" :disabled="aplicando" @click="aplicarRecepcion">
+          <i class="ti ti-check"></i> {{ aplicando ? 'Aplicando...' : 'Aplicar al Almacén' }}
         </button>
       </div>
     </div>
@@ -128,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 
 const store = useArjStore();
@@ -140,6 +157,33 @@ const embarqueSeleccionado = ref('');
 const textoEntrada = ref('');
 const itemsProcesados = ref([]);
 const errors = ref({});
+const aplicando = ref(false);
+const resultado = ref(null);
+
+const embarqueSel = computed(() => store.embarques.find(e => e.id === embarqueSeleccionado.value) || null);
+const campo = computed(() => (almacenDestino.value === 'vd' ? 'stock_vd' : 'stock_dist'));
+
+// Sellado: productos sin embarque se sellan; los de OTRO embarque no se tocan
+const sello = computed(() => {
+  const r = { sellar: 0, conflictos: [] };
+  if (!embarqueSel.value) return r;
+  itemsProcesados.value.filter(i => i.encontrado).forEach(i => {
+    const p = store.productos.find(x => x.id === i.productoId);
+    if (!p) return;
+    if (p.embarque_id && p.embarque_id !== embarqueSel.value.id) {
+      const otro = store.embarques.find(e => e.id === p.embarque_id);
+      r.conflictos.push(`${p.cod_alt} → ${otro ? otro.codigo : 'otro embarque'}`);
+    } else if (!p.embarque_id) r.sellar++;
+  });
+  return r;
+});
+
+// En un conteo: lo que tiene stock en el sistema y no apareció en la lista
+const noContados = computed(() => {
+  if (modo.value !== 'conteo') return [];
+  const contados = new Set(itemsProcesados.value.filter(i => i.encontrado).map(i => i.productoId));
+  return store.productos.filter(p => (p[campo.value] || 0) > 0 && !contados.has(p.id));
+});
 
 function cerrar() {
   store.modalRecepcionActivo = false;
@@ -147,86 +191,89 @@ function cerrar() {
   textoEntrada.value = '';
   itemsProcesados.value = [];
   errors.value = {};
+  resultado.value = null;
 }
 
 function revisarEntrada() {
   errors.value = {};
-
   if (!textoEntrada.value.trim()) {
     errors.value.texto = 'Pega al menos un código y su cantidad';
-    store.notif('Pega al menos un código y su cantidad', 'error');
     return;
   }
-
-  const lineas = textoEntrada.value.trim().split('\n');
-  const resultado = [];
-
-  lineas.forEach(l => {
-    const trimmed = l.trim();
-    if (!trimmed) return;
-
-    const parts = trimmed.split(/[\t,; ]+/);
-    if (parts.length < 2) return;
-
+  const porProducto = new Map();
+  const lista = [];
+  textoEntrada.value.trim().split('\n').forEach(l => {
+    const parts = l.trim().split(/[\t,; ]+/);
+    if (parts.length < 2 || !parts[0]) return;
     const cod = parts[0].trim();
-    const cant = parseInt(parts[1].trim()) || 0;
-
-    const p = store.productos.find(prod => prod.cod_alt.toLowerCase() === cod.toLowerCase() || (prod.cod_orig && prod.cod_orig.toLowerCase() === cod.toLowerCase()));
-
-    const stockActual = p ? (almacenDestino.value === 'vd' ? p.stock_vd : p.stock_dist) : 0;
-    const diferencia = cant - stockActual;
-
-    resultado.push({
-      codigo: cod,
-      desc: p ? p.desc : 'Producto no encontrado en catálogo',
-      productoId: p ? p.id : null,
-      stockActual,
-      cantidad: cant,
-      diferencia,
-      encontrado: !!p
-    });
+    const cant = parseInt(parts[1]);
+    if (!Number.isFinite(cant) || cant < 0) {
+      lista.push({ codigo: cod, desc: 'Cantidad inválida', productoId: null, stockActual: 0, cantidad: 0, diferencia: 0, encontrado: false });
+      return;
+    }
+    const p = store.productos.find(x => (x.cod_alt || '').toLowerCase() === cod.toLowerCase() ||
+      (x.cod_orig && x.cod_orig.toLowerCase() === cod.toLowerCase()));
+    if (!p) {
+      lista.push({ codigo: cod, desc: 'Producto no encontrado en catálogo', productoId: null, stockActual: 0, cantidad: cant, diferencia: 0, encontrado: false });
+      return;
+    }
+    // Código repetido: se suman las cantidades en una sola partida
+    if (porProducto.has(p.id)) {
+      const it = porProducto.get(p.id);
+      it.cantidad += cant;
+      it.diferencia = it.cantidad - it.stockActual;
+      return;
+    }
+    const stockActual = p[campo.value] || 0;
+    const it = { codigo: p.cod_alt, desc: p.desc, productoId: p.id, stockActual, cantidad: cant, diferencia: cant - stockActual, encontrado: true };
+    porProducto.set(p.id, it);
+    lista.push(it);
   });
-
-  if (resultado.length === 0) {
+  if (!lista.some(r => r.encontrado)) {
     store.notif('No se detectaron partidas válidas (código y cantidad)', 'error');
     return;
   }
-
-  itemsProcesados.value = resultado;
+  itemsProcesados.value = lista;
   paso.value = 2;
 }
 
-function aplicarRecepcion() {
-  let aplicados = 0;
-  itemsProcesados.value.forEach(it => {
-    if (!it.encontrado) return;
-    const p = store.productos.find(x => x.id === it.productoId);
-    if (!p) return;
+async function aplicarRecepcion() {
+  const validos = itemsProcesados.value.filter(i => i.encontrado);
+  let items;
+  if (modo.value === 'conteo') {
+    // Los que cuadran no cambian stock, pero se envían si hay embarque para sellarlos
+    items = validos.filter(i => i.diferencia !== 0 || embarqueSel.value).map(i => ({ producto_id: i.productoId, fisico: i.cantidad }));
+  } else {
+    items = validos.filter(i => i.cantidad > 0).map(i => ({ producto_id: i.productoId, cantidad: i.cantidad }));
+  }
+  if (!items.length && !noContados.value.length) {
+    store.notif('No hay cambios que aplicar', 'info');
+    return;
+  }
+  const texto = modo.value === 'conteo'
+    ? `Se ajustará el stock de ${items.length} producto(s) al conteo físico.\nLos ${noContados.value.length} no contados NO se tocan (solo se anotan).`
+    : `Se van a SUMAR las cantidades a ${items.length} producto(s).`;
+  const textoSello = embarqueSel.value
+    ? `\n\nSe sellarán ${sello.value.sellar} producto(s) con ${embarqueSel.value.codigo} (factor ${Number(embarqueSel.value.factor).toFixed(4)}).`
+    : '';
+  if (!confirm(texto + textoSello + '\n\n¿Aplicar?')) return;
 
-    if (modo.value === 'conteo') {
-      if (almacenDestino.value === 'vd') p.stock_vd = it.cantidad;
-      else p.stock_dist = it.cantidad;
-    } else {
-      if (almacenDestino.value === 'vd') p.stock_vd += it.cantidad;
-      else p.stock_dist += it.cantidad;
-    }
-
-    store.movimientos.unshift({
-      id: Date.now() + Math.random(),
-      fecha: new Date().toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' }),
-      tipo: modo.value === 'conteo' ? 'ajuste' : 'entrada',
-      producto: p.desc,
-      cod_alt: p.cod_alt,
-      cant: it.cantidad,
-      empresa: almacenDestino.value === 'vd' ? 'directa' : 'distribuidora',
-      motivo: `${modo.value === 'conteo' ? 'Ajuste por conteo físico' : 'Recepción de mercancía'} ${referencia.value ? '— ' + referencia.value : ''}`,
-      usuario: store.usuarioNombre
+  aplicando.value = true;
+  try {
+    const r = await store.aplicarRecepcion({
+      tipo: modo.value,
+      destino: almacenDestino.value === 'vd' ? 'directa' : 'dist',
+      embarqueId: embarqueSeleccionado.value || null,
+      referencia: referencia.value.trim(),
+      items,
+      noContados: noContados.value.map(p => p.id)
     });
-
-    aplicados++;
-  });
-
-  store.notif(`${aplicados} partidas actualizadas en el almacén ${almacenDestino.value === 'vd' ? 'Venta Directa' : 'Distribuidora'}`, 'success');
-  cerrar();
+    if (r) {
+      resultado.value = r;
+      paso.value = 3;
+    }
+  } finally {
+    aplicando.value = false;
+  }
 }
 </script>

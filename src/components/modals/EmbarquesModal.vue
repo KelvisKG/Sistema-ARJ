@@ -1,145 +1,133 @@
 <template>
   <div v-if="store.modalEmbarquesActivo" class="modal show" id="modal-embarques" style="display:flex">
-    <div class="modal-content" style="max-width:700px;text-align:left">
-      <div class="modal-icon" style="background:#E1F5FE;color:var(--blue)">
-        <i class="ti ti-ship"></i>
+    <div class="modal-content" style="max-width:860px;text-align:left;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 style="margin:0"><i class="ti ti-ship"></i> Embarques y Costeo Landed</h2>
+        <button class="btn btn-secondary btn-sm" @click="cerrar"><i class="ti ti-x"></i></button>
       </div>
-      <h2>Embarques de Importación y Costeo Landed</h2>
       <p class="modal-sub">
-        Gestión de fletes marítimos/aéreos, aranceles aduaneros y costeo real de repuestos puestos en almacén.
+        Factor = (1 + % flete/aduana) × (1 + % comisión) × (1 + % divisas). Lo calcula la base de datos.
+        Los productos toman el factor cuando se <strong>sellan</strong> en una recepción con este embarque.
       </p>
 
-      <div style="background:#F4F6F9;padding:12px;border-radius:8px;margin-bottom:14px;font-size:12px;line-height:1.5">
-        <i class="ti ti-info-circle"></i> <strong>Regla del Factor Landed:</strong>
-        El costo en libros de cada repuesto importado se calcula multiplicando el FOB por el factor de nacionalización y flete (por defecto <strong>1.471</strong>).
-      </div>
-
-      <!-- LISTA DE EMBARQUES -->
-      <table class="tbl" style="margin-bottom:14px">
-        <thead>
-          <tr>
-            <th>N° Embarque</th>
-            <th>Proveedor</th>
-            <th>Fecha</th>
-            <th class="num">FOB Total</th>
-            <th class="num">Factor Landed</th>
-            <th class="center">Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="e in store.embarques" :key="e.id">
-            <td><strong>{{ e.id }}</strong></td>
-            <td>{{ e.proveedor }}</td>
-            <td style="font-size:12px">{{ e.fecha }}</td>
-            <td class="num">{{ fmtUSD(e.fob_total) }}</td>
-            <td class="num" style="font-weight:700;color:var(--navy)">×{{ e.factor_landed }}</td>
-            <td class="center">
-              <span class="badge badge-success">{{ e.estado.toUpperCase() }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- FORMULARIO NUEVO EMBARQUE -->
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <i class="ti ti-ship" style="color:var(--primary);font-size:16px"></i>
-          <strong style="font-size:13px;color:var(--text)">Registrar Nuevo Embarque de Repuestos</strong>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="field-col">
-            <label>Proveedor: *</label>
-            <input v-model="nuevoEmb.proveedor" type="text" placeholder="Ej: Donaldson Latam, CNH Parts..." class="val-input"
-              :class="{ 'is-invalid': errors.proveedor }" @input="errors.proveedor = null">
-            <span v-if="errors.proveedor" class="field-error"><i class="ti ti-alert-circle"></i> {{ errors.proveedor }}</span>
-          </div>
-          <div class="field-col">
-            <label>FOB Estimado Total (USD): *</label>
-            <input v-model.number="nuevoEmb.fob" type="number" placeholder="10000.00" class="val-input"
-              :class="{ 'is-invalid': errors.fob }" @input="errors.fob = null">
-            <span v-if="errors.fob" class="field-error"><i class="ti ti-alert-circle"></i> {{ errors.fob }}</span>
+      <!-- FORMULARIO -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-tit">{{ form.id ? 'Editando: ' + form.codigo : 'Nuevo embarque' }}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <div class="field-col"><label>Código *</label><input v-model="form.codigo" class="val-input" placeholder="PROVEEDOR-2026-01"></div>
+          <div class="field-col"><label>Proveedor *</label><input v-model="form.proveedor" class="val-input"></div>
+          <div class="field-col"><label>Fecha de llegada</label><input v-model="form.fecha_llegada" type="date" class="val-input"></div>
+          <div class="field-col"><label>FOB total ($)</label><input v-model.number="form.fob_total" type="number" step="0.01" class="val-input" @input="recalcPctFlete"></div>
+          <div class="field-col"><label>Flete + aduana ($)</label><input v-model.number="form.monto_flete_aduana" type="number" step="0.01" class="val-input" @input="recalcPctFlete"></div>
+          <div class="field-col"><label>% flete/aduana</label><input v-model.number="form.pct_flete_aduana" type="number" step="0.0001" class="val-input"></div>
+          <div class="field-col"><label>% comisión</label><input v-model.number="form.pct_comision" type="number" step="0.01" class="val-input"></div>
+          <div class="field-col"><label>% compra de divisas</label><input v-model.number="form.pct_divisas" type="number" step="0.01" class="val-input"></div>
+          <div class="field-col" style="justify-content:flex-end">
+            <div v-if="form.pct_flete_aduana > 0" style="font-size:15px;font-weight:700;color:var(--navy)">Factor: {{ factorPreview.toFixed(4) }}</div>
+            <div v-if="form.pct_flete_aduana > 0" style="font-size:11px;color:var(--dgray)">FOB $10 cuesta {{ fmtUSD(10 * factorPreview) }}</div>
+            <div v-else style="font-size:11px;color:var(--dgray)">Escribe el monto o el % de flete</div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px">
-          <div class="field-col">
-            <label>Flete Internacional ($):</label>
-            <input v-model.number="nuevoEmb.flete" type="number" placeholder="1500.00" class="val-input">
-          </div>
-          <div class="field-col">
-            <label>Aduana / Aranceles ($):</label>
-            <input v-model.number="nuevoEmb.aduana" type="number" placeholder="2000.00" class="val-input">
-          </div>
-          <div class="field-col">
-            <label>% Divisas Oficial:</label>
-            <input v-model.number="nuevoEmb.pct_divisas" type="number" placeholder="25%" class="val-input">
-          </div>
-        </div>
-        <div style="margin-top:14px;text-align:right">
-          <button class="btn btn-primary btn-sm" :disabled="!nuevoEmb.proveedor" @click="agregarEmbarque">
-            <i class="ti ti-plus"></i> Guardar Embarque
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          <button v-if="form.id" class="btn btn-secondary btn-sm" @click="limpiar">Cancelar edición</button>
+          <button class="btn btn-primary btn-sm" :disabled="guardando" @click="guardar">
+            <i class="ti ti-check"></i> {{ guardando ? 'Guardando...' : (form.id ? 'Guardar cambios' : 'Crear embarque') }}
           </button>
         </div>
       </div>
 
-      <div class="modal-actions">
-        <button class="btn btn-secondary" @click="store.modalEmbarquesActivo = false">Cerrar</button>
-      </div>
+      <!-- LISTA -->
+      <table class="tbl" style="font-size:12px">
+        <thead>
+          <tr>
+            <th>Código</th><th>Proveedor</th><th>Llegada</th>
+            <th class="num">% Flete</th><th class="num">% Com.</th><th class="num">% Div.</th>
+            <th class="num">Factor</th><th class="num">Sellados</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="store.embarques.length === 0"><td colspan="9" style="text-align:center;padding:16px;color:var(--dgray)">No hay embarques registrados.</td></tr>
+          <tr v-for="e in store.embarques" :key="e.id">
+            <td><strong>{{ e.codigo }}</strong></td>
+            <td>{{ e.proveedor }}</td>
+            <td>{{ e.fecha_llegada || '—' }}</td>
+            <td class="num">{{ Number(e.pct_flete_aduana || 0).toFixed(2) }}</td>
+            <td class="num">{{ Number(e.pct_comision || 0).toFixed(2) }}</td>
+            <td class="num">{{ Number(e.pct_divisas || 0).toFixed(2) }}</td>
+            <td class="num"><strong>{{ Number(e.factor || 0).toFixed(4) }}</strong></td>
+            <td class="num">
+              {{ sellados(e).total }}
+              <span v-if="sellados(e).desfasados" style="color:var(--red)" :title="sellados(e).desfasados + ' con factor distinto al del embarque'"> ({{ sellados(e).desfasados }} ⚠)</span>
+            </td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px" title="Editar" @click="editar(e)"><i class="ti ti-pencil"></i></button>
+              <button class="btn btn-secondary btn-sm" style="padding:2px 6px" title="Llevar el factor a sus productos" :disabled="!sellados(e).desfasados" @click="recalcular(e)"><i class="ti ti-refresh"></i></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD } from '../../services/pricing.js';
 
 const store = useArjStore();
-const nuevoEmb = ref({
-  proveedor: '',
-  fob: 0,
-  flete: 0,
-  aduana: 0,
-  pct_divisas: 25
-});
+const vacio = () => ({ id: null, codigo: '', proveedor: '', fecha_llegada: '', fob_total: null, monto_flete_aduana: null, pct_flete_aduana: 0, pct_comision: 2, pct_divisas: 25 });
+const form = ref(vacio());
+const guardando = ref(false);
 
-const errors = ref({});
+// Misma fórmula que la columna generada en la BD (monolito v13.10)
+const factorPreview = computed(() =>
+  (1 + (parseFloat(form.value.pct_flete_aduana) || 0) / 100) *
+  (1 + (parseFloat(form.value.pct_comision) || 0) / 100) *
+  (1 + (parseFloat(form.value.pct_divisas) || 0) / 100)
+);
 
-function agregarEmbarque() {
-  errors.value = {};
+function recalcPctFlete() {
+  const fob = parseFloat(form.value.fob_total) || 0;
+  const fle = parseFloat(form.value.monto_flete_aduana) || 0;
+  if (fob > 0) form.value.pct_flete_aduana = Math.round(fle / fob * 100 * 10000) / 10000;
+}
 
-  if (!nuevoEmb.value.proveedor || nuevoEmb.value.proveedor.trim().length < 2) {
-    errors.value.proveedor = 'El proveedor es obligatorio (mín. 2 caracteres)';
-  }
-  if (!nuevoEmb.value.fob || nuevoEmb.value.fob <= 0) {
-    errors.value.fob = 'El FOB debe ser mayor a 0';
-  }
+function sellados(e) {
+  const prods = store.productos.filter(p => p.embarque_id === e.id);
+  const f = parseFloat(e.factor) || 0;
+  return { total: prods.length, desfasados: prods.filter(p => Math.abs((parseFloat(p.factor_landed) || 0) - f) > 0.000001).length };
+}
 
-  if (Object.keys(errors.value).length > 0) {
-    store.notif('Corrige los campos marcados en rojo', 'warning');
+function editar(e) {
+  form.value = { ...vacio(), ...e };
+}
+function limpiar() {
+  form.value = vacio();
+}
+
+async function guardar() {
+  if (!form.value.codigo.trim() || !form.value.proveedor.trim()) {
+    store.notif('Código y proveedor son obligatorios', 'error');
     return;
   }
+  guardando.value = true;
+  try {
+    const { factor, created_at, updated_at, activo, ...datos } = form.value;
+    if (await store.guardarEmbarque(datos)) limpiar();
+  } finally {
+    guardando.value = false;
+  }
+}
 
-  const numId = `EMB-2026-0${store.embarques.length + 1}`;
-  const factor = nuevoEmb.value.fob > 0
-    ? (1 + (nuevoEmb.value.flete + nuevoEmb.value.aduana) / nuevoEmb.value.fob).toFixed(3)
-    : 1.471;
+async function recalcular(e) {
+  const s = sellados(e);
+  if (!confirm(`Recalcular ${s.desfasados} producto(s) de ${e.codigo} al factor ${Number(e.factor).toFixed(4)}.\n\nLas facturas ya emitidas NO cambian. Los precios de venta no se tocan: solo cambia el costo (el margen).\n\n¿Aplicar?`)) return;
+  await store.recalcularEmbarque(e);
+}
 
-  store.embarques.unshift({
-    id: numId,
-    proveedor: nuevoEmb.value.proveedor,
-    fecha: new Date().toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }),
-    estado: 'en tránsito',
-    fob_total: nuevoEmb.value.fob,
-    flete: nuevoEmb.value.flete,
-    aduana: nuevoEmb.value.aduana,
-    pct_divisas: nuevoEmb.value.pct_divisas,
-    factor_landed: parseFloat(factor),
-    items_count: 0
-  });
-
-  store.logBitacora('embarque', `Embarque ${numId} registrado (${nuevoEmb.value.proveedor})`);
-  store.notif(`Embarque ${numId} creado con factor landed x${factor}`, 'success');
-  nuevoEmb.value = { proveedor: '', fob: 0, flete: 0, aduana: 0, pct_divisas: 25 };
-  errors.value = {};
+function cerrar() {
+  store.modalEmbarquesActivo = false;
+  limpiar();
 }
 </script>

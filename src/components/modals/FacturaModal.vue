@@ -23,7 +23,9 @@
       <div style="display:grid;grid-template-columns:3fr 1fr;gap:16px;margin-bottom:24px">
         <div style="background:#F2F5FA;padding:16px;border-radius:8px;border:1px solid #EAF0F8">
           <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;font-weight:600;margin-bottom:6px">Cliente</div>
-          <div style="font-size:14px;font-weight:700;color:var(--navy)">{{ store.facturaReciente.cliente }}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--navy)">{{ store.facturaReciente.cliente_nombre_snap || store.facturaReciente.cliente }}</div>
+          <div style="font-size:11.5px;color:var(--dgray);margin-top:4px">RIF: {{ store.facturaReciente.cliente_rif_snap || '—' }} · {{ store.facturaReciente.cliente_dir_snap || '' }}</div>
+          <div v-if="store.facturaReciente.estado === 'anulada'" style="margin-top:8px;color:var(--red);font-size:12px"><strong>Anulada:</strong> {{ store.facturaReciente.motivo_anulacion }}</div>
         </div>
         <div style="background:#FBF3E0;padding:16px;border-radius:8px;border:1px solid #F5E6C8;text-align:right;display:flex;flex-direction:column;justify-content:center;align-items:flex-end">
           <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;font-weight:600;margin-bottom:6px">Estado</div>
@@ -79,17 +81,17 @@
                 <th style="text-align:left;padding:8px">FECHA</th>
                 <th style="text-align:left;padding:8px">MÉTODO</th>
                 <th style="text-align:left;padding:8px">REF.</th>
-                <th style="text-align:right;padding:8px">COBRADO $</th>
+                <th style="text-align:right;padding:8px">RECIBIDO</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(pago, idx) in store.facturaReciente.pagos" :key="idx" style="border-bottom:1px solid #EEE">
-                <td style="padding:8px">{{ pago.fecha || store.facturaReciente.fecha }}</td>
+                <td style="padding:8px">{{ pago.fecha ? new Date(pago.fecha).toLocaleDateString('es-VE') : store.facturaReciente.fecha }}</td>
                 <td style="padding:8px">{{ pago.metodo }}</td>
-                <td style="padding:8px">{{ pago.ref || '—' }}</td>
+                <td style="padding:8px">{{ pago.referencia || pago.ref || '—' }}</td>
                 <td style="text-align:right;padding:8px;font-weight:600">
-                  {{ fmtUSD(pago.monto_usd) }}
-                  <div v-if="pago.monto_bs" style="font-size:9px;color:var(--dgray);font-weight:400;margin-top:2px">{{ fmtBs(pago.monto_bs, 1).replace('$', 'Bs.') }}</div>
+                  {{ /USD|Zelle/i.test(pago.metodo || '') ? fmtUSD(pago.monto_usd) : fmtBsMonto(pago.monto_bs) }}
+                  <div v-if="pago.notas" style="font-size:9px;color:var(--dgray);font-weight:400;margin-top:2px">{{ pago.notas }}</div>
                 </td>
               </tr>
               <tr v-if="cargandoDetalles">
@@ -132,8 +134,12 @@
           <div style="background:#FBF3E0;border:1px solid #F5E6C8;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px">
             <div style="font-size:10px;color:var(--dgray);font-weight:700;margin-bottom:8px">FORMA DE PAGO Y DESCUENTOS</div>
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-cash" style="color:var(--gold)"></i> Pagado en divisas/Bs:</span>
+              <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-cash" style="color:var(--gold)"></i> Abonado ():</span>
               <span style="font-weight:700">{{ fmtUSD(totalAbonado) }}</span>
+            </div>
+            <div v-if="store.facturaReciente.descuento_manual > 0" style="margin-top:6px;color:var(--red)">
+              Descuentos: <strong>{{ fmtUSD(store.facturaReciente.descuento_manual) }}</strong>
+              <div style="font-size:10.5px;color:var(--dgray)">{{ store.facturaReciente.motivo_descuento }}</div>
             </div>
           </div>
 
@@ -154,7 +160,7 @@
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
               <span>Total en Bs (a BCV congelado)</span>
-              <span style="font-weight:700;color:var(--navy)">Bs. {{ ((store.facturaReciente.total || 0) * (store.facturaReciente.tasa_bcv || 1)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+              <span style="font-weight:700;color:var(--navy)">{{ fmtBsMonto((store.facturaReciente.total || 0) * (store.facturaReciente.factor_bs || 1) * (store.facturaReciente.tasa_bcv || 0)) }}</span>
             </div>
             <div style="font-size:9.5px;line-height:1.4">
               El total está en $BCV. En efectivo valía <strong>{{ fmtUSD(valorEfectivo) }}</strong> ese día — por eso un pago menor puede dejar la factura en cero.
@@ -166,7 +172,7 @@
             <button class="btn btn-secondary" style="width:100%;justify-content:center;background:#FFF;border:1px solid var(--navy);color:var(--navy)" @click="imprimirPDF">
               <i class="ti ti-printer"></i> Reimprimir
             </button>
-            <button class="btn btn-secondary" style="width:100%;justify-content:center;background:#FFF;border:1px solid var(--red);color:var(--red)" @click="anularFactura" v-if="store.facturaReciente.estado !== 'anulada'">
+            <button class="btn btn-secondary" style="width:100%;justify-content:center;background:#FFF;border:1px solid var(--red);color:var(--red)" @click="anularFactura" v-if="store.facturaReciente.estado !== 'anulada' && store.rol === 'gerente'">
               <i class="ti ti-ban"></i> Anular factura
             </button>
           </div>
@@ -179,104 +185,66 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD, fmtBs } from '../../services/pricing.js';
+import { fmtUSD } from '../../services/pricing.js';
 import { generarFacturaPDF } from '../../services/exportService.js';
-import { guardarDatosLocal } from '../../services/persistence.js';
 import { cargarDetallesFactura } from '../../services/supabase.js';
 
 const store = useArjStore();
 const cargandoDetalles = ref(false);
 
+function fmtBsMonto(n) {
+  return 'Bs. ' + (Number(n) || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Renglones y pagos se traen de la BD cuando la factura viene del historial
 watch(() => store.facturaReciente, async (f) => {
-  if (f && store.modalFacturaActivo) {
-    // Solo hacer lazy-load si NO tiene items en memoria.
-    // Las facturas recién emitidas tienen items en memoria (del carrito).
-    // Las facturas abiertas desde historial/cobrar pueden no tenerlos.
-    const tieneItemsEnMemoria = f.items && Array.isArray(f.items) && f.items.length > 0;
-    const esFacturaLocal = String(f.id).startsWith('FAC-'); // ID temporal antes de Supabase
-    if (!tieneItemsEnMemoria && !esFacturaLocal) {
-      cargandoDetalles.value = true;
-      const det = await cargarDetallesFactura(f.id);
-      if (det.items) f.items = det.items;
-      if (det.pagos) f.pagos = det.pagos;
-      cargandoDetalles.value = false;
-    }
+  if (!f || !store.modalFacturaActivo) return;
+  const tieneItems = Array.isArray(f.items) && f.items.length > 0;
+  const tienePagos = Array.isArray(f.pagos) && f.pagos.length > 0 && f.pagos[0].fecha;
+  if (!tieneItems || !tienePagos) {
+    cargandoDetalles.value = true;
+    const det = await cargarDetallesFactura(f.id);
+    if (det.items && det.items.length) f.items = det.items;
+    if (det.pagos) f.pagos = det.pagos;
+    cargandoDetalles.value = false;
   }
 }, { immediate: true });
 
-const totalAbonado = computed(() => {
-  if (!store.facturaReciente || !store.facturaReciente.pagos) return 0;
-  return store.facturaReciente.pagos.reduce((acc, p) => acc + (parseFloat(p.monto_usd) || 0), 0);
-});
-
-const saldoPendiente = computed(() => {
-  if (!store.facturaReciente) return 0;
-  const saldo = parseFloat(store.facturaReciente.total || 0) - totalAbonado.value;
-  return Math.max(0, saldo);
-});
+// Saldo y abonado salen de la factura (en $BCV), no de sumar pagos: un pago en
+// efectivo entrega menos dólares de los que acredita (v13.33)
+const totalAbonado = computed(() => store.facturaReciente ? (store.facturaReciente.abonado || 0) : 0);
+const saldoPendiente = computed(() => store.facturaReciente ? (store.facturaReciente.saldo_pendiente || 0) : 0);
 
 const brecha = computed(() => {
-  if (!store.facturaReciente) return '0.00';
-  const bcv = parseFloat(store.facturaReciente.tasa_bcv) || 1;
-  const par = parseFloat(store.facturaReciente.tasa_par) || 1;
-  if (bcv === 0) return '0.00';
-  return (((par - bcv) / bcv) * 100).toFixed(2);
+  const f = store.facturaReciente;
+  if (!f || !(f.tasa_bcv > 0)) return '0.00';
+  return (((f.tasa_par - f.tasa_bcv) / f.tasa_bcv) * 100).toFixed(2);
 });
 
 const valorEfectivo = computed(() => {
-  if (!store.facturaReciente) return 0;
-  const bcv = parseFloat(store.facturaReciente.tasa_bcv) || 1;
-  const par = parseFloat(store.facturaReciente.tasa_par) || 1;
-  const tot = parseFloat(store.facturaReciente.total) || 0;
-  if (par === 0) return tot;
-  return (tot * bcv) / par;
+  const f = store.facturaReciente;
+  if (!f) return 0;
+  if (f.cobrar_verde > 0) return f.cobrar_verde;
+  return f.tasa_par > 0 ? (f.total * f.tasa_bcv) / f.tasa_par : f.total;
 });
-
-function obtenerClienteData(doc) {
-  if (!doc) return null;
-  const id = doc.cliente_id;
-  let cli = null;
-  if (id) cli = store.clientes.find(c => c.id === id || String(c.id) === String(id));
-  if (!cli && doc.cliente) {
-    cli = store.clientes.find(c => (c.nombre || '').trim().toLowerCase() === (doc.cliente || '').trim().toLowerCase());
-  }
-  if (cli) {
-    return {
-      rif: cli.rif || cli.cedula || '—',
-      direccion: cli.direccion || cli.dir || '—',
-      telefono: cli.telefono || cli.tel || '—'
-    };
-  }
-  return null;
-}
 
 function cerrarModal() {
   store.modalFacturaActivo = false;
   store.facturaReciente = null;
 }
 
-function imprimirPDF() {
-  const clienteData = obtenerClienteData(store.facturaReciente);
-  generarFacturaPDF(store.facturaReciente, store.empresa, store.tasa_bcv, clienteData, 'print');
-  store.notif('Factura PDF abierta para imprimir', 'success');
+async function imprimirPDF() {
+  const f = store.facturaReciente;
+  if (!f.items || !f.items.length) {
+    const det = await cargarDetallesFactura(f.id);
+    if (det.items) f.items = det.items;
+  }
+  // A-04: el PDF usa la empresa, la tasa y los datos del cliente CONGELADOS en la factura
+  generarFacturaPDF(f, 'print');
 }
 
-async function anularFactura() {
-  const numFac = store.facturaReciente?.num;
-  if (!numFac) return;
-  if (confirm(`¿Estás seguro de que deseas ANULAR la factura ${numFac}?\n\nEsta acción revertirá el stock y no puede deshacerse.`)) {
-    const motivo = prompt('Indica el motivo de la anulación (obligatorio):');
-    if (!motivo || motivo.trim().length < 5) {
-      store.notif('El motivo es obligatorio (mín. 5 caracteres)', 'error');
-      return;
-    }
-    // Llamar al store (que ahora persiste en BD y revierte inventario)
-    const ok = await store.anularFactura(numFac, motivo.trim());
-    if (ok) {
-      guardarDatosLocal(store.$state);
-      cerrarModal();
-    }
-    // Si no ok, store ya mostró el error vía notif
-  }
+function anularFactura() {
+  store.facturaAAnular = store.facturaReciente;
+  store.modalAnularActivo = true;
 }
 </script>

@@ -88,8 +88,9 @@
       </div>
 
       <div class="modal-actions">
+        <button class="btn btn-danger" style="margin-right:auto" :disabled="guardando" @click="darDeBaja"><i class="ti ti-archive"></i> Dar de baja</button>
         <button class="btn btn-secondary" @click="cerrarModal">Cancelar</button>
-        <button class="btn btn-primary" @click="guardarCambios">
+        <button class="btn btn-primary" :disabled="guardando" @click="guardarCambios">
           <i class="ti ti-check"></i> Guardar Cambios
         </button>
       </div>
@@ -105,6 +106,7 @@ import { isNonEmpty, isPositiveNumber } from '../../services/validators.js';
 const store = useArjStore();
 const form = ref({});
 const errors = ref({});
+const guardando = ref(false);
 
 watch(() => store.productoSeleccionado, (prod) => {
   if (prod) {
@@ -119,35 +121,33 @@ function cerrarModal() {
   errors.value = {};
 }
 
-function guardarCambios() {
+async function guardarCambios() {
   if (!store.productoSeleccionado) return;
   errors.value = {};
-
-  if (!isNonEmpty(form.value.cod_alt, 2)) {
-    errors.value.cod_alt = 'El código es obligatorio (mín. 2 caracteres)';
-  }
-  if (!isNonEmpty(form.value.desc, 3)) {
-    errors.value.desc = 'La descripción es obligatoria (mín. 3 caracteres)';
-  }
-  if (!isPositiveNumber(form.value.fob)) {
-    errors.value.fob = 'El FOB debe ser mayor a 0';
-  }
-  if (form.value.factor_landed != null && form.value.factor_landed < 1) {
-    errors.value.factor_landed = 'El factor landed debe ser ≥ 1';
-  }
-  if (form.value.stock_vd < 0) {
-    errors.value.stock_vd = 'El stock no puede ser negativo';
-  }
-  if (form.value.stock_dist < 0) {
-    errors.value.stock_dist = 'El stock no puede ser negativo';
-  }
-
+  if (!isNonEmpty(form.value.cod_alt, 2)) errors.value.cod_alt = 'El código es obligatorio (mín. 2 caracteres)';
+  if (!isNonEmpty(form.value.desc, 3)) errors.value.desc = 'La descripción es obligatoria (mín. 3 caracteres)';
+  if (!isPositiveNumber(form.value.fob)) errors.value.fob = 'El FOB debe ser mayor a 0';
+  if (form.value.factor_landed != null && form.value.factor_landed !== '' && form.value.factor_landed < 1) errors.value.factor_landed = 'El factor landed debe ser ≥ 1';
+  if (form.value.stock_vd < 0) errors.value.stock_vd = 'El stock no puede ser negativo';
+  if (form.value.stock_dist < 0) errors.value.stock_dist = 'El stock no puede ser negativo';
   if (Object.keys(errors.value).length > 0) {
     store.notif('Corrige los campos marcados en rojo', 'warning');
     return;
   }
+  guardando.value = true;
+  try {
+    // C-01: se guarda en la base de datos; la pantalla se refresca desde ahí
+    const ok = await store.guardarProducto({ ...form.value, id: store.productoSeleccionado.id });
+    if (ok) cerrarModal();
+  } finally {
+    guardando.value = false;
+  }
+}
 
-  store.guardarEdicionProducto(store.productoSeleccionado.id, form.value);
-  cerrarModal();
+async function darDeBaja() {
+  const p = store.productoSeleccionado;
+  if (!p) return;
+  if (!confirm(`¿Dar de baja ${p.cod_alt} (${p.desc})?\n\nNo se borra: deja de aparecer en el catálogo. Las facturas viejas no cambian.`)) return;
+  if (await store.desactivarProducto(p)) cerrarModal();
 }
 </script>

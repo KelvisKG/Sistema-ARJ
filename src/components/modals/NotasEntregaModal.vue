@@ -167,7 +167,7 @@ async function reimprimir(nota) {
       unidades: nota.unidades_count || 0
     };
 
-    generarNotaEntregaPDF(notaCompleta, store.usuario || 'Sistema', 'print');
+    generarNotaEntregaPDF(notaCompleta, nota.usuario || 'Sistema', 'print');
   } catch (e) {
     console.error('[ARJ] reimprimir nota:', e);
     store.notif('No se pudo cargar el detalle de la nota', 'error');

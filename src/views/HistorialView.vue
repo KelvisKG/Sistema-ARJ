@@ -122,7 +122,7 @@
                   <i class="ti ti-trash"></i>
                 </button>
                 <button
-                  v-if="vistaActual === 'cotizaciones' && f.estado === 'activo'"
+                  v-if="vistaActual === 'cotizaciones' && ['activa', 'por_vencer'].includes(f.estado)"
                   class="btn btn-green btn-sm"
                   style="padding:2px 5px;font-size:10px"
                   title="Convertir a Factura"
@@ -184,13 +184,14 @@ async function descargarFacturaPDF(f) {
     generarPresupuestoPDF(f, store.tasa_bcv, clienteData);
     store.notif(`PDF de la cotización ${f.num} generado`, 'success');
   } else {
-    if ((!f.items || f.items.length === 0) && String(f.id).indexOf('FAC-') === -1) {
-      store.notif('Cargando items para el PDF...', 'info');
+    if (!f.items || f.items.length === 0) {
+      store.notif('Cargando renglones para el PDF...', 'info');
       const det = await cargarDetallesFactura(f.id);
       if (det.items) f.items = det.items;
       if (det.pagos) f.pagos = det.pagos;
     }
-    generarFacturaPDF(f, store.empresa, store.tasa_bcv, clienteData);
+    // A-04: empresa, tasa y cliente congelados en la propia factura
+    generarFacturaPDF(f);
     store.notif(`PDF de la factura ${f.num} generado`, 'success');
   }
 }
@@ -209,7 +210,7 @@ const documentosFiltrados = computed(() => {
   }
   if (filtroEstado.value) {
     if (filtroEstado.value === 'pendiente') {
-      list = list.filter(f => f.estado === 'pendiente' || f.estado === 'parcial');
+      list = list.filter(f => ['pendiente', 'parcial', 'vencida'].includes(f.estado));
     } else {
       list = list.filter(f => f.estado === filtroEstado.value);
     }
@@ -222,7 +223,7 @@ const totalPagadas = computed(() => {
 });
 
 const totalPendientes = computed(() => {
-  return store.todasFacturas.filter(f => f.estado === 'pendiente' || f.estado === 'parcial').length;
+  return store.todasFacturas.filter(f => ['pendiente', 'parcial', 'vencida'].includes(f.estado)).length;
 });
 
 const totalAnuladas = computed(() => {

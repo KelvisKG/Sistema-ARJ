@@ -37,22 +37,19 @@ const TABLE_HEADER_BG = [21, 37, 63];
 const TABLE_ALT_ROW = [245, 247, 250];
 const GOLD = [217, 119, 6];
 
-const DATOS_EMPRESAS = {
-  directa: {
-    nombre: 'AGRO REPUESTOS Y SERVICIOS JIMENEZ, FP',
-    razon: 'Repuestos Agrícolas y Maquinaria Pesada',
-    rif: 'RIF V-162930024',
-    direccion: 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31',
-    telefono: '0255-6642208 · 0414-5750174'
-  },
-  distribuidora: {
-    nombre: 'DISTRIBUIDORA ARJ C.A.',
-    razon: 'Repuestos Agrícolas y Maquinaria Pesada',
-    rif: 'RIF J-98765432-1',
-    direccion: 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31',
-    telefono: '0255-6642208 · 0414-5750174'
-  }
+// Membrete de los documentos impresos: igual que el monolito v13, que usaba un
+// solo encabezado para ambas empresas (A-06: se eliminó el RIF de relleno).
+const MEMBRETE_ARJ = {
+  nombre: 'AGRO REPUESTOS Y SERVICIOS JIMENEZ, FP',
+  razon: 'Repuestos Agrícolas y Maquinaria Pesada',
+  rif: 'RIF V-162930024',
+  direccion: 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31',
+  telefono: '0255-6642208 · 0414-5750174'
 };
+const DATOS_EMPRESAS = { directa: MEMBRETE_ARJ, distribuidora: MEMBRETE_ARJ };
+
+// Emisor del libro de ventas (igual que el monolito v13)
+export const EMISOR_FISCAL = { nombre: 'ARJ / FINARMA C.A.', rif: 'J-29620983-9' };
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS PDF
@@ -126,7 +123,8 @@ function etiquetaValor(doc, label, valor, x, y, labelColor = GRAY, valorColor = 
 // ═══════════════════════════════════════════════════════════════════
 // 1. PDF DE FACTURA (Diseño formal idéntico a presupuesto)
 // ═══════════════════════════════════════════════════════════════════
-export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, action = 'download') {
+// A-04: todo sale de la factura (empresa, tasa, factor y copia del cliente al emitir)
+export function generarFacturaPDF(factura, action = 'download') {
   if (!factura) return;
 
   const doc = new jsPDF('p', 'mm', 'a4');
@@ -135,7 +133,7 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
   const marginR = 14;
   const contentW = pageWidth - marginL - marginR;
 
-  const empKey = empresa || factura.empresa || 'directa';
+  const empKey = factura.empresa || 'directa';
   const emp = DATOS_EMPRESAS[empKey] || DATOS_EMPRESAS.directa;
 
   // ── CABECERA EMPRESA (fondo navy) ──
@@ -193,14 +191,14 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(...NAVY);
-  doc.text(factura.cliente || 'CLIENTE GENERAL', marginL + 4, y + 13);
+  doc.text(factura.cliente_nombre_snap || factura.cliente || 'CLIENTE GENERAL', marginL + 4, y + 13);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
-  const cliRif = (clienteData && (clienteData.rif || clienteData.cedula)) ? `RIF: ${clienteData.rif || clienteData.cedula}` : (factura.rif ? `RIF: ${factura.rif}` : 'RIF: —');
-  const cliDir = (clienteData && (clienteData.direccion || clienteData.dir)) ? `Dirección: ${clienteData.direccion || clienteData.dir}` : 'Dirección: —';
-  const cliTel = (clienteData && (clienteData.telefono || clienteData.tel)) ? `Teléfono: ${clienteData.telefono || clienteData.tel}` : 'Teléfono: —';
+  const cliRif = `RIF: ${factura.cliente_rif_snap || '—'}`;
+  const cliDir = `Dirección: ${factura.cliente_dir_snap || '—'}`;
+  const cliTel = `Teléfono: ${factura.cliente_tel_snap || '—'}`;
   doc.text(cliRif, marginL + 4, y + 20);
   doc.text(cliDir, marginL + 4, y + 25.5);
   doc.text(cliTel, marginL + 4, y + 31);
@@ -304,13 +302,13 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
 
   y += 5;
 
-  // Descuento
+  // Descuentos ya incluidos en los precios (se informan, no se restan otra vez)
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GRAY);
-  doc.text('Descuento', totalBoxX, y);
+  doc.text('Descuentos aplicados', totalBoxX, y);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(51, 51, 51);
-  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
+  doc.text(factura.descuento_manual > 0 ? fmtUSD(factura.descuento_manual) : '$0,00', pageWidth - marginR, y, { align: 'right' });
 
   y += 5;
 
@@ -338,18 +336,26 @@ export function generarFacturaPDF(factura, empresa, tasa_bcv, clienteData, actio
   y += totalBarH + 4;
 
   // ── COBRAR EN BS / PAGOS (izquierda) ──
-  const tasa = tasa_bcv || factura.tasa_bcv || 47.80;
-  const totalBs = (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const tasa = factura.tasa_bcv || 0;
+  const factorBs = factura.factor_bs > 0 ? factura.factor_bs : 1;
+  const totalBs = (subtotal * factorBs * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
-  doc.text(`Total en Bs: Bs. ${totalBs} (Tasa BCV ${tasa})`, marginL, y);
+  doc.text(`Total en Bs: Bs. ${totalBs} (Tasa BCV del día de emisión: ${tasa})`, marginL, y);
 
-  // Si hay pagos registrados o saldo pendiente
-  if (factura.pagos && factura.pagos.length > 0) {
-    const totalAbonado = factura.pagos.reduce((acc, p) => acc + (parseFloat(p.monto_usd) || 0), 0);
-    const saldo = Math.max(0, subtotal - totalAbonado);
-    doc.text(`Total Abonado: ${fmtUSD(totalAbonado)}  ·  Saldo Pendiente: ${fmtUSD(saldo)}`, marginL, y + 4.5);
+  if (factura.tipo_pago === 'credito' || (factura.saldo_pendiente || 0) > 0) {
+    doc.text(`Abonado: ${fmtUSD(factura.abonado || 0)}  ·  Saldo pendiente: ${fmtUSD(factura.saldo_pendiente || 0)}` +
+      (factura.vence ? `  ·  Vence: ${factura.vence}` : ''), marginL, y + 4.5);
+  }
+  if (factura.motivo_descuento) {
+    doc.text(('Descuentos: ' + factura.motivo_descuento).slice(0, 150), marginL, y + 9);
+  }
+  if (factura.estado === 'anulada') {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(60);
+    doc.setTextColor(220, 60, 60);
+    doc.text('ANULADA', pageWidth / 2, 160, { align: 'center', angle: 30 });
   }
 
   piePagina(doc, 'Factura comercial. Repuestos agrícolas exentos de IVA según Ley de Impuesto al Valor Agregado.');
@@ -570,8 +576,9 @@ export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData, action
   y += totalBarH + 4;
 
   // ── COBRAR EN BS (izquierda, debajo de nota fiscal) ──
-  const tasa = tasa_bcv || 47.80;
-  const totalBs = (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Sin tasa válida no se inventa una (antes caía a 47,80 en duro)
+  const tasa = tasa_bcv || presupuesto.tasa_bcv || 0;
+  const totalBs = tasa > 0 ? (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
@@ -840,64 +847,85 @@ export function exportarListaPreciosExcel(productos, tierSel, tasa_bcv, sistemaS
 // ═══════════════════════════════════════════════════════════════════
 // 5. EXCEL - LIBRO DE VENTAS FISCAL
 // ═══════════════════════════════════════════════════════════════════
-export function exportarLibroVentasExcel(facturas, empresaSel, mesSel, anoSel) {
+// A-05: libro de ventas por rango de fechas, como el monolito v13: anuladas
+// listadas en cero, RIF/nombre/dirección congelados y detalle por renglón.
+export function exportarLibroVentasExcel(facturas, items, { empresaSel, etiqueta, sufijo, usuario }) {
   if (!facturas || facturas.length === 0) return;
 
-  const datos = facturas.map(f => ({
-    'FECHA': f.fecha || '',
-    'N° FACTURA': f.num || '',
-    'CLIENTE / RAZÓN SOCIAL': f.cliente || '',
-    'RIF': f.rif || 'J-V-EXENTO',
-    'MONTO EXENTO USD': parseFloat((f.total || 0).toFixed(2)),
-    'TASA BCV': parseFloat(f.tasa_bcv || 0),
-    'MONTO EXENTO Bs': parseFloat(((f.total || 0) * (f.tasa_bcv || 0)).toFixed(2)),
-    'BASE IMPONIBLE': 0.00,
-    'IVA RETENIDO': 0.00
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(datos);
-
-  ws['!cols'] = [
-    { wch: 14 },   // FECHA
-    { wch: 16 },   // N° FACTURA
-    { wch: 35 },   // CLIENTE
-    { wch: 16 },   // RIF
-    { wch: 18 },   // MONTO USD
-    { wch: 12 },   // TASA BCV
-    { wch: 18 },   // MONTO Bs
-    { wch: 16 },   // BASE IMPONIBLE
-    { wch: 14 }    // IVA
-  ];
+  let tUSD = 0, tBsCob = 0, tBsBcv = 0;
+  const filas = facturas.map(f => {
+    const anulada = f.estado === 'anulada';
+    const usd = anulada ? 0 : (f.total || 0);
+    const tbcv = f.tasa_bcv || 0;
+    const fac = f.factor_bs > 0 ? f.factor_bs : 1;
+    const bsCob = usd * fac * tbcv;
+    const bsBcv = usd * tbcv;
+    tUSD += usd; tBsCob += bsCob; tBsBcv += bsBcv;
+    return {
+      'Fecha': f.fecha || '',
+      'Número': f.num || '',
+      'Empresa': f.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora',
+      'RIF cliente': f.cliente_rif_snap || '',
+      'Cliente': f.cliente_nombre_snap || f.cliente || '',
+      'Dirección': f.cliente_dir_snap || '',
+      'Vendedor': f.vendedor || '',
+      'Tipo pago': f.tipo_pago || '',
+      'Estado': (f.estado_bd || f.estado || '').toUpperCase(),
+      'Pidió fiscal': f.pidio_fiscal ? 'SI' : 'no',
+      'Total USD': Number(usd.toFixed(2)),
+      'Tasa BCV': Number(tbcv.toFixed(2)),
+      'Factor Bs': Number(fac.toFixed(4)),
+      'Total Bs cobrado': Number(bsCob.toFixed(2)),
+      'Total Bs a BCV': Number(bsBcv.toFixed(2)),
+      'Diferencia Bs': Number((bsCob - bsBcv).toFixed(2)),
+      'Saldo pendiente USD': Number((anulada ? 0 : (f.saldo_pendiente || 0)).toFixed(2)),
+      'Motivo anulación': anulada ? (f.motivo_anulacion || '') : ''
+    };
+  });
 
   const wb = XLSX.utils.book_new();
+
+  const cabecera = [
+    [`LIBRO DE VENTAS — ${EMISOR_FISCAL.nombre}`],
+    ['RIF emisor', EMISOR_FISCAL.rif],
+    ['Período', etiqueta],
+    ['Empresa', empresaSel === 'directa' ? 'Venta Directa' : (empresaSel === 'distribuidora' ? 'Distribuidora' : 'Ambas')],
+    ['Generado', new Date().toLocaleString('es-VE'), 'por', usuario || ''],
+    ['NOTA', 'IVA exento — Decreto 126, Art. 63, Num. 02'],
+    ['NOTA', 'Las facturas anuladas se listan con monto 0. Totales sin anuladas.'],
+    []
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(cabecera);
+  XLSX.utils.sheet_add_json(ws, filas, { origin: -1 });
+  XLSX.utils.sheet_add_aoa(ws, [[], ['TOTALES (sin anuladas)', '', '', '', '', '', '', '', '', '',
+    Number(tUSD.toFixed(2)), '', '', Number(tBsCob.toFixed(2)), Number(tBsBcv.toFixed(2)), Number((tBsCob - tBsBcv).toFixed(2))]], { origin: -1 });
   XLSX.utils.book_append_sheet(wb, ws, 'Libro de Ventas');
 
-  // Hoja de resumen
-  const totalUSD = facturas.reduce((a, f) => a + (parseFloat(f.total) || 0), 0);
-  const resumen = XLSX.utils.aoa_to_sheet([
-    ['LIBRO DE VENTAS FISCAL - SISTEMA ARJ'],
-    [''],
-    ['Empresa:', empresaSel === 'directa' ? 'ARJ Venta Directa' : (empresaSel === 'distribuidora' ? 'Distribuidora ARJ C.A.' : 'Ambas empresas')],
-    ['Período:', `${mesSel}/${anoSel}`],
-    ['Fecha generación:', new Date().toLocaleString('es-VE')],
-    [''],
-    ['Total facturas:', facturas.length],
-    ['Total exento USD:', totalUSD.toFixed(2)],
-    ['Base imponible:', '0.00'],
-    ['IVA retenido:', '0.00'],
-    [''],
-    ['Nota: Repuestos agrícolas exentos de IVA según normativa tributaria venezolana para el sector primario y agropecuario.']
-  ]);
-  resumen['!cols'] = [{ wch: 22 }, { wch: 40 }];
-  XLSX.utils.book_append_sheet(wb, resumen, 'Resumen');
+  // Detalle por renglón
+  const porFactura = {};
+  (items || []).forEach(it => { (porFactura[it.factura_id] = porFactura[it.factura_id] || []).push(it); });
+  const detalle = [];
+  facturas.forEach(f => {
+    const tbcv = f.tasa_bcv || 0;
+    const fac = f.factor_bs > 0 ? f.factor_bs : 1;
+    (porFactura[f.id] || []).forEach(it => {
+      const tot = parseFloat(it.total_linea) || 0;
+      detalle.push({
+        'Fecha': f.fecha, 'Número': f.num, 'Estado factura': (f.estado_bd || f.estado || '').toUpperCase(),
+        'Código': it.cod_alt, 'Descripción': it.descripcion, 'Cantidad': it.cantidad,
+        'Precio unit USD': Number((parseFloat(it.precio_unitario) || 0).toFixed(2)),
+        'Total línea USD': Number(tot.toFixed(2)),
+        'Total línea Bs cobrado': Number((tot * fac * tbcv).toFixed(2)),
+        'Total línea Bs a BCV': Number((tot * tbcv).toFixed(2))
+      });
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle.length ? detalle : [{ 'Sin renglones': '' }]), 'Detalle');
 
-  const filename = `Libro_Ventas_${empresaSel}_${anoSel}_${mesSel}.xlsx`;
-  XLSX.writeFile(wb, filename);
+  XLSX.writeFile(wb, `ARJ_fiscal_ventas_${sufijo}.xlsx`);
+  return { facturas: facturas.length, totalUSD: tUSD };
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// NOTA DE ENTREGA (Traspasos / Despachos Internos)
-// ═══════════════════════════════════════════════════════════════════
 export function generarNotaEntregaPDF(nota, usuario, action = 'download') {
   if (!nota) return;
 

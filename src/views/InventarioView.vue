@@ -35,13 +35,6 @@
         <button
           v-if="store.rol === 'gerente'"
           class="btn btn-secondary"
-          @click="store.notif('Importador Excel en desarrollo', 'info')"
-        >
-          <i class="ti ti-upload"></i> Importar Excel
-        </button>
-        <button
-          v-if="store.rol === 'gerente'"
-          class="btn btn-secondary"
           @click="store.modalEmbarquesActivo = true"
         >
           <i class="ti ti-ship"></i> Embarques y Costeo
@@ -470,48 +463,32 @@ function abrirModalNuevo() {
     sistema: 'Motor',
     marca_modelo: '',
     origen: 'importado',
-    factor_landed: 1.471,
+    factor_landed: (store.configuracion && store.configuracion.factor_default) || 1.471,
     proveedor: ''
   };
   simuladorMargen.value = 1.5;
   mostrarModalNuevo.value = true;
 }
 
-function guardarNuevoProducto() {
+async function guardarNuevoProducto() {
   errors.value = {};
 
   if (!isNonEmpty(nuevoProd.value.cod_alt, 2)) {
     errors.value.cod_alt = 'El código es obligatorio (mínimo 2 caracteres)';
-  } else {
-    const existe = store.productos.some(p => (p.cod_alt || '').toUpperCase() === nuevoProd.value.cod_alt.trim().toUpperCase());
-    if (existe) {
-      errors.value.cod_alt = 'Ya existe un repuesto con este código en el inventario';
-    }
+  } else if (store.productos.some(p => (p.cod_alt || '').toUpperCase() === nuevoProd.value.cod_alt.trim().toUpperCase())) {
+    errors.value.cod_alt = 'Ya existe un repuesto con este código en el inventario';
   }
-
-  if (!isNonEmpty(nuevoProd.value.desc, 3)) {
-    errors.value.desc = 'La descripción debe tener al menos 3 caracteres';
-  }
-
-  if (!isPositiveNumber(nuevoProd.value.fob)) {
-    errors.value.fob = 'El costo FOB debe ser mayor a 0.00 USD';
-  }
-
-  if (nuevoProd.value.stock_vd < 0) {
-    errors.value.stock_vd = 'El stock no puede ser negativo';
-  }
-
-  if (nuevoProd.value.stock_dist < 0) {
-    errors.value.stock_dist = 'El stock no puede ser negativo';
-  }
-
+  if (!isNonEmpty(nuevoProd.value.desc, 3)) errors.value.desc = 'La descripción debe tener al menos 3 caracteres';
+  if (!isPositiveNumber(nuevoProd.value.fob)) errors.value.fob = 'El costo FOB debe ser mayor a 0.00 USD';
+  if (nuevoProd.value.stock_vd < 0) errors.value.stock_vd = 'El stock no puede ser negativo';
+  if (nuevoProd.value.stock_dist < 0) errors.value.stock_dist = 'El stock no puede ser negativo';
   if (Object.keys(errors.value).length > 0) {
     store.notif('Por favor corrige los campos obligatorios marcados en rojo', 'warning');
     return;
   }
 
-  const item = {
-    id: Date.now(),
+  // C-01: el alta se guarda en la base de datos
+  const ok = await store.guardarProducto({
     cod_alt: nuevoProd.value.cod_alt.trim().toUpperCase(),
     cod_orig: (nuevoProd.value.cod_orig || '').trim().toUpperCase(),
     desc: nuevoProd.value.desc.trim(),
@@ -519,14 +496,12 @@ function guardarNuevoProducto() {
     fob: parseFloat(nuevoProd.value.fob) || 0,
     stock_vd: parseInt(nuevoProd.value.stock_vd) || 0,
     stock_dist: parseInt(nuevoProd.value.stock_dist) || 0,
-    sistema: nuevoProd.value.sistema || 'Motor',
+    sistema: nuevoProd.value.sistema || '',
     marca_modelo: (nuevoProd.value.marca_modelo || '').trim(),
-    factor_landed: parseFloat(nuevoProd.value.factor_landed) || 1.471,
+    factor_landed: nuevoProd.value.origen === 'local' ? 1 : (parseFloat(nuevoProd.value.factor_landed) || null),
     origen: nuevoProd.value.origen || 'importado',
     proveedor: (nuevoProd.value.proveedor || '').trim()
-  };
-  store.productos.unshift(item);
-  mostrarModalNuevo.value = false;
-  store.notif(`Producto '${item.cod_alt}' agregado al inventario`, 'success');
+  });
+  if (ok) mostrarModalNuevo.value = false;
 }
 </script>
