@@ -285,3 +285,23 @@ Todo probado como gerente en desarrollo.
 
 ### Estado
 Pendiente: aplicar `sql/07` en desarrollo y repetir las escrituras directas del vendedor; luego merge de `fix/revision-codigo` a `main`.
+
+## 12. Validación de abonos en el servidor (`sql/08`, 07-oct-2026, rama `fix/abonos-servidor`)
+
+Hallazgo externo confirmado: `registrar_abono_atomico` aceptaba el monto a acreditar que mandaba el navegador (un vendedor podía entregar $10 y acreditar el saldo completo). El 08 calcula en el servidor cuánto acredita lo entregado con la misma regla de `cobros.js`, exige tasas confirmadas del día, fija `tasa_usada` y reemplaza `emitir_factura_atomica` para que el vendedor no registre descuentos ni pacte un cobro en efectivo menor al equivalente del día.
+
+Probado en desarrollo:
+
+| Caso | Usuario | Resultado |
+|---|---|---|
+| $10 en efectivo acreditando el saldo completo | vendedor | ❌ rechazado ("solo acredita $11,59") |
+| $10 en efectivo, modo convertir | vendedor | ✅ acredita $11,59 |
+| Efectivo $0,60 por debajo del equivalente, sin cobro pactado | vendedor | ✅ salda |
+| Cobro pactado de $40 en una factura de $46,50 | vendedor | ✅ salda |
+| Pago móvil por el "Cobrar HOY" completo | vendedor | ✅ salda; `tasa_usada` = paralelo |
+| $10 en efectivo acreditando $30 | gerente | ✅ permitido |
+| Emitir con `descuento_manual` | vendedor | ❌ rechazado |
+| Emitir con cobro en efectivo de $1 | vendedor | ❌ rechazado; con el equivalente del día ✅ |
+| Venta normal de contado | vendedor | ✅ |
+
+App: Cuentas por cobrar bloquea "Abonar" y muestra un aviso si las tasas de hoy no están confirmadas.
