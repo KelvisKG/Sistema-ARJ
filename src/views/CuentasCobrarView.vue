@@ -10,6 +10,10 @@
       </div>
     </div>
 
+    <div v-if="!store.tasasConfirmadasHoy" style="background:#FDECEA;border-left:4px solid var(--red);color:#842029;padding:9px 12px;border-radius:6px;font-size:12.5px;margin-bottom:12px">
+      <i class="ti ti-lock"></i> <strong>No se pueden registrar abonos:</strong> las tasas de hoy no están confirmadas. El gerente debe confirmarlas primero.
+    </div>
+
     <div class="help-box">
       <i class="ti ti-info-circle"></i>
       <div>
@@ -81,7 +85,7 @@
               <strong>{{ fmtBsMonto(saldoBsHoy(f, store.estadoTasas)) }}</strong>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:6px">
-              <button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:11px" :disabled="!store.supabaseConectado" @click="abrirModalAbono(f)">
+              <button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:11px" :disabled="!store.supabaseConectado || !store.tasasConfirmadasHoy" :title="store.tasasConfirmadasHoy ? '' : 'Las tasas de hoy no están confirmadas'" @click="abrirModalAbono(f)">
                 <i class="ti ti-cash"></i> Abonar
               </button>
             </div>

@@ -709,6 +709,8 @@ export const useArjStore = defineStore('arj', {
       if (!fac) return { ok: false, error: 'Factura no encontrada' };
       if (requiereReferencia(metodo) && !(ref || '').trim()) return { ok: false, error: 'La referencia es obligatoria para ' + metodo };
       if (!this.tasasCargadas) return { ok: false, error: 'Faltan las tasas de cambio' };
+      // Igual que al emitir: el servidor (sql/08) valora lo entregado con las tasas del día
+      if (!this.tasasConfirmadasHoy) return { ok: false, error: 'Las tasas no se han confirmado hoy. El gerente debe confirmarlas antes de cobrar.' };
 
       const calc = calcularAbono({ f: fac, montoIn, moneda, modo, estado: this.estadoTasas });
       if (!calc.ok) return calc;
