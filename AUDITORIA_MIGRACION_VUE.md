@@ -258,3 +258,30 @@ Decisiones de negocio aplicadas: **Bs a tasa BCV**, **redondeo a $0,50 hacia arr
 2. Revisar RLS (consulta *b*): ninguna tabla debería quedar sin RLS.
 3. Probar en staging: factura contado en Bs y en $, crédito con abono inicial, abono en CxC, anulación, cliente nuevo desde Facturación, traspaso, recepción con embarque, cotización → factura.
 4. Repetir el paso 1 en producción y desplegar.
+
+---
+
+## 11. Revisión de código y prueba con usuario vendedor (07-oct-2026, rama `fix/revision-codigo`)
+
+### Hallazgos de la revisión (corregidos en `sql/06_validaciones_servidor.sql` y en la app)
+| # | Problema | Corrección |
+|---|---|---|
+| 1 | La emisión confiaba en precios, totales, tasas y pagos enviados por el navegador | El servidor recalcula el total, toma las tasas de `configuracion`, exige tasas confirmadas hoy, aplica precio mínimo de lista a vendedores y valida que los pagos cubran el contado / que el crédito no subestime la deuda |
+| 2 | Editar un producto pisaba el stock con el valor que había al abrir la ficha | El stock solo cambia si el gerente lo modificó y nadie lo movió (control optimista) |
+| 3 | El ajuste de stock se calculaba con el stock de pantalla | Ajuste relativo (`delta`) sobre el stock real de la BD |
+| 4 | El nivel T1–T3 del cliente solo se validaba en el navegador | Nueva función `actualizar_cliente` |
+| 5 | Una cotización podía convertirse dos veces o en otra empresa | Se exige que esté activa y sea de la misma empresa |
+| 6 | El cuadre de turno contaba cobros de facturas anuladas | Se excluyen |
+| 7–10 | Conteos con renglones en cero, tipo de pago pisado al re‑elegir cliente, recargas completas tras cada venta, formato Bs duplicado | Corregidos |
+
+Todo probado como gerente en desarrollo.
+
+### Prueba con vendedor (`vendedor.prueba@arj.test`, solo Venta Directa)
+- **Pantalla y app:** correctas. Empresa fija, 7 secciones, sin confirmar tasas, sin tier/descuentos/anular/inventario. Su venta normal funcionó (VD-2026-00003).
+- **Funciones del servidor llamadas directamente:** todas rechazan lo indebido (precio de $1, contado sin pago, crédito con saldo 0, otra empresa, anular, tasas, productos, stock, traspasos, caja, configuración, subir nivel de cliente).
+- **🔴 Hallazgo crítico — escrituras directas a tablas:** con su sesión, el vendedor pudo modificar/borrar filas de facturas, pagos, productos, clientes, configuración y contadores, y **editar su propio perfil** (podía ponerse `rol = 'gerente'`). Esto anula todas las validaciones.
+  - **Corrección:** `sql/07_cerrar_escrituras_directas.sql` deja las tablas en solo lectura para `anon` y `authenticated`. La app ya no escribe directo en ninguna tabla.
+  - **⚠ Producción:** el monolito escribe directo. Mientras se use, aplicar en producción **solo la sección de `perfiles`** del 07; el resto, cuando se retire el monolito.
+
+### Estado
+Pendiente: aplicar `sql/07` en desarrollo y repetir las escrituras directas del vendedor; luego merge de `fix/revision-codigo` a `main`.
