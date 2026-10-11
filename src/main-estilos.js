@@ -26,3 +26,6 @@ import '../css/pages/reportes.css';
 
 // Lectura fácil (va de último: ajusta tamaños y contraste de todo lo anterior)
 import '../css/legibilidad.css';
+
+// Modo oscuro de todos los módulos (va al final: corrige colores escritos a mano)
+import '../css/modo-oscuro.css';

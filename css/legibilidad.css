@@ -13,6 +13,13 @@
 
 /* ─── 1. Contraste ─── */
 :root {
+  /* Verde, dorado y rojo un tono más profundo: sobre blanco se leían a 2,5:1 */
+  --green: #047857;
+  --green-hover: #065F46;
+  --gold: #B45309;
+  --gold-hover: #92400E;
+  --red: #C81E1E;
+  --red-hover: #A51A1A;
   --dgray: #334155;
   --text-muted: #334155;
   --border: #CBD5E1;
@@ -338,3 +345,20 @@ body.letra-grande .confirm-box {
 .fila-abre:hover td { background: #EEF4FF !important; }
 body.dark .fila-abre:hover td { background: rgba(59, 130, 246, 0.12) !important; }
 .fila-abre:hover td:first-child { box-shadow: inset 4px 0 0 var(--blue); }
+
+/* Botones dorado y verde: el blanco sobre el tono claro no se leía (2:1).
+   Mismo color, un tono más profundo. */
+.btn-gold, .btn-warning { background: linear-gradient(135deg, #C2620A 0%, #A1470A 100%); }
+.btn-gold:hover:not(:disabled), .btn-warning:hover:not(:disabled) { background: linear-gradient(135deg, #D06A0B 0%, #B0520A 100%); }
+.btn-green, .btn-success { background: linear-gradient(135deg, #059669 0%, #047857 100%); }
+.btn-green:hover:not(:disabled), .btn-success:hover:not(:disabled) { background: linear-gradient(135deg, #10A374 0%, #058262 100%); }
+/* Etiqueta GERENTE/VENDEDOR de la barra: fondo oscuro translúcido en vez de blanco */
+.user-pill .role { background: rgba(0, 0, 0, 0.28); color: #FFF; }
+/* Cuadros dorados con letra blanca (cabecera del presupuesto): un tono más profundo */
+[style*="background: rgb(217, 119, 6)"] { background: #B45309 !important; }
+/* Amarillos escritos a mano como texto (leyenda de CxC, "Por cobrar" de Reportes) */
+body:not(.dark) [style*="color: rgb(239, 159, 39)"],
+body:not(.dark) [style*="color:#EF9F27"] { color: #B45309 !important; }
+body:not(.dark) [style*="color: rgb(191, 143, 0)"] { color: #8A6200 !important; }
+/* Dorado sobre la cabecera azul del Modo Caja: ahí va el tono claro */
+[style*="linear-gradient(135deg, var(--navy)"] [style*="color: var(--gold)"] { color: #FCD34D !important; }
