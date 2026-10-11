@@ -14194,6 +14194,10 @@ GEN-3401    5"
 
       const Z = () => ({ venta: 0, costo: 0, uds: 0, lineas: 0, verde: 0 });
       const g = { importado: Z(), local: Z() };
+      g.importado.key = 'importado'; g.local.key = 'local';
+      // v13.38: el verde ya no se acumula renglon a renglon — necesita la
+      // factura completa para saber si se cobro y cuanto se descontó.
+      const VR = _calcVerdeReal(its);
       let deducidos = 0, sinCosto = 0;
       its.forEach(i => {
         const cant = parseFloat(i.cantidad) || 0;
@@ -14204,9 +14208,6 @@ GEN-3401    5"
         if (o !== 'local' && o !== 'importado') deducidos++;
         if (fob <= 0) sinCosto++;
         const k = origenDe(i);
-        // v13.37: equivalente en efectivo con la brecha congelada de la factura
-        const fv = (typeof _factorVerde === 'function') ? _factorVerde(i.factura_id) : null;
-        if (fv != null) g[k].verde += (parseFloat(i.total_linea) || 0) * fv;
         g[k].venta += parseFloat(i.total_linea) || 0;
         g[k].costo += fob * f * cant;
         g[k].uds += cant;
@@ -14231,9 +14232,27 @@ GEN-3401    5"
           + 'Utilidad <strong style="color:' + (c.util >= 0 ? '#1E7B34' : '#B00020') + '">' + fmtUSD(c.util)
           + '</strong> &middot; margen <strong>' + c.mg.toFixed(1) + '%</strong><br>'
           + '<span style="color:var(--dgray)">Aporta ' + pc(c.util, tot.util) + ' de la utilidad</span>'
-          + (c.verde > 0 ? '<br><span style="color:#1E7B34;font-weight:600">≈ ' + fmtUSD(c.verde)
-            + ' en efectivo verde</span>' : '') + '</div></div>';
+          + _bloqueVerde(VR[c.key]) + '</div></div>';
       };
+
+      // Desglose de caja. Se separa lo que YA esta de lo que falta por cobrar
+      // porque son cosas distintas: una es plata, la otra es una promesa.
+      function _bloqueVerde(v) {
+        if (!v) return '';
+        if (v.enMano <= 0 && v.porCobrar <= 0) return '';
+        let h = '<div style="margin-top:8px;padding-top:7px;border-top:1px solid rgba(0,0,0,.08)">';
+        h += '<div style="color:#1E7B34;font-weight:700;font-size:13px">✓ Ya en caja: ' + fmtUSD(v.enMano) + '</div>';
+        const partes = [];
+        if (v.efectivo > 0) partes.push(fmtUSD(v.efectivo) + ' efectivo');
+        if (v.usdt > 0) partes.push(fmtUSD(v.usdt) + ' a convertir en USDT');
+        if (partes.length) h += '<div style="font-size:11px;color:var(--dgray);margin-top:1px">' + partes.join(' · ') + '</div>';
+        if (v.porCobrar > 0) {
+          h += '<div style="color:#BF8F00;font-weight:600;font-size:12.5px;margin-top:5px">⏳ Por cobrar: '
+            + fmtUSD(v.porCobrar) + '</div>'
+            + '<div style="font-size:11px;color:var(--dgray);margin-top:1px">Aún no es plata. Sujeto a que la brecha se mueva.</div>';
+        }
+        return h + '</div>';
+      }
 
       let h = '<div style="display:flex;flex-wrap:wrap;gap:10px">'
         + bloque('Importado', g.importado, '#EAF0F8', '<i class="ti ti-ship"></i>')
@@ -14252,6 +14271,16 @@ GEN-3401    5"
       if (av.length) {
         h += '<div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:#FFF4E5;border-left:3px solid #BF8F00;font-size:11.5px;line-height:1.5">⚠ '
           + av.join('<br>⚠ ') + '</div>';
+      }
+      if (VR.nPend > 0) {
+        h += '<div style="margin-top:10px;padding:8px 10px;border-radius:6px;background:#FFF9E6;'
+          + 'border-left:3px solid #BF8F00;font-size:11.5px;line-height:1.5">'
+          + '<strong>' + VR.nPend + ' factura(s) sin cobrar del todo.</strong> Lo de "por cobrar" no está en tu caja: '
+          + 'mientras esos bolívares no entren, la brecha sigue corriendo y el objetivo en USDT baja cada día.</div>';
+      }
+      if (VR.sinTasa > 0) {
+        h += '<div style="margin-top:8px;font-size:11px;color:var(--dgray)">'
+          + VR.sinTasa + ' factura(s) sin tasas congeladas: no entran en el cálculo de caja.</div>';
       }
       h += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
         + '<button class="btn btn-sm" style="background:var(--navy);color:#FFF" onclick="toggleDetalleOrigen()">'
@@ -14296,6 +14325,82 @@ GEN-3401    5"
       const tp = parseFloat(f.tasa_par), tb = parseFloat(f.tasa_bcv);
       if (!isFinite(tp) || !isFinite(tb) || tp <= 0 || tb <= 0 || tb > tp) return null;
       return tb / tp;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // VERDE REAL (v13.38) — auditado contra las facturas de septiembre 2026
+    //
+    // La version anterior sumaba `total_linea × factor` de TODAS las facturas
+    // del rango. Eso daba un numero teorico que se leia como caja disponible.
+    // Tenia tres defectos, los tres corregidos aqui:
+    //
+    //  1. NO distinguia cobrado de pendiente. Una factura a credito emitida
+    //     ayer contaba igual que uno cobrado en efectivo.
+    //  2. Usaba el BRUTO. `descuento_manual` vive a nivel de factura y nunca
+    //     se restaba, asi que inflaba el resultado.
+    //  3. Ignoraba `cobrar_verde`. Cuando se pacta un monto redondo en
+    //     efectivo ($660 en vez de $679,58), lo que entra a la caja es el
+    //     pactado, no el teorico.
+    //
+    // PRORRATEO: una factura puede mezclar importado y local. El descuento,
+    // el saldo y el cobro en verde son de la factura completa, no de un
+    // renglon, asi que se reparten segun el peso bruto de cada origen.
+    // Caso real: VD-2026-00006 es 81,8% importado — de $135 en efectivo,
+    // solo $110,45 corresponden a importado.
+    // ═══════════════════════════════════════════════════════════════
+    function _calcVerdeReal(its) {
+      // a) agrupar el bruto por factura y por origen
+      const porFact = {};
+      its.forEach(i => {
+        const fid = i.factura_id;
+        if (!porFact[fid]) porFact[fid] = { total: 0, k: { importado: 0, local: 0 } };
+        const v = parseFloat(i.total_linea) || 0;
+        porFact[fid].total += v;
+        porFact[fid].k[origenDe(i)] += v;
+      });
+
+      const Z = () => ({ efectivo: 0, usdt: 0, enMano: 0, porCobrar: 0 });
+      const res = { importado: Z(), local: Z(), sinTasa: 0, nPend: 0 };
+
+      Object.keys(porFact).forEach(fid => {
+        const pf = porFact[fid];
+        const f = _FMAP[fid];
+        const fv = _factorVerde(fid);
+        if (!f || fv == null || pf.total <= 0) { res.sinTasa++; return; }
+
+        const dto = parseFloat(f.descuento_manual) || 0;
+        const saldo = parseFloat(f.saldo_pendiente) || 0;
+        const cv = parseFloat(f.cobrar_verde) || 0;
+
+        const netoFact = pf.total - dto;
+        // Proporcion cobrada. Contempla abonos parciales, no solo el
+        // todo-o-nada: una factura a medio pagar aporta la mitad.
+        const pctCob = netoFact > 0 ? Math.max(0, Math.min(1, (netoFact - saldo) / netoFact)) : 0;
+        if (saldo > 0) res.nPend++;
+
+        ['importado', 'local'].forEach(k => {
+          const bruto = pf.k[k];
+          if (bruto <= 0) return;
+          const share = bruto / pf.total;
+          const neto = bruto - dto * share;
+          let enMano, porCobrar, esEfectivo;
+          if (cv > 0) {
+            // Pactado en efectivo: manda el monto acordado, no el teorico.
+            esEfectivo = true;
+            enMano = cv * share * pctCob;
+            porCobrar = cv * share * (1 - pctCob);
+          } else {
+            // Entra en bolivares: hay que convertirlos a USDT.
+            esEfectivo = false;
+            enMano = neto * pctCob * fv;
+            porCobrar = neto * (1 - pctCob) * fv;
+          }
+          res[k].enMano += enMano;
+          res[k].porCobrar += porCobrar;
+          if (esEfectivo) res[k].efectivo += enMano; else res[k].usdt += enMano;
+        });
+      });
+      return res;
     }
 
     function toggleDetalleOrigen() {
@@ -14352,7 +14457,7 @@ GEN-3401    5"
           + '<th style="text-align:left;padding:5px 7px">Descripción</th>'
           + '<th style="text-align:right;padding:5px 7px">Uds</th>'
           + '<th style="text-align:right;padding:5px 7px">Venta $BCV</th>'
-          + '<th style="text-align:right;padding:5px 7px">≈ $verde</th>'
+          + '<th style="text-align:right;padding:5px 7px">$verde facturado</th>'
           + '<th style="text-align:right;padding:5px 7px">Costo</th>'
           + '<th style="text-align:right;padding:5px 7px">Utilidad</th>'
           + '<th style="text-align:right;padding:5px 7px">Margen</th></tr></thead><tbody>';
@@ -14378,8 +14483,9 @@ GEN-3401    5"
         tabla('<i class="ti ti-ship"></i> IMPORTADO', prods.filter(p => p.origen === 'importado'), '#EAF0F8')
         + tabla('<i class="ti ti-building-store"></i> COMPRA LOCAL', prods.filter(p => p.origen === 'local'), '#FBF3E0')
         + '<div style="font-size:11px;color:var(--dgray);line-height:1.5;padding:6px 2px">'
-        + 'La columna <strong>≈ $verde</strong> es un equivalente: cuánto efectivo en divisas saldaría esa venta '
-        + 'con la brecha congelada de cada factura. Si el cliente pagó en bolívares, no aplica.</div>';
+        + 'La columna <strong>$verde facturado</strong> es el equivalente de lo <em>facturado</em> con la brecha congelada '
+        + 'de cada factura, esté cobrado o no, y sin descontar. No es caja. La caja real, ya separada entre cobrado y '
+        + 'pendiente, está en el recuadro de arriba.</div>';
     }
 
     // CSV a nivel de RENGLON: una fila por producto por factura, para poder
@@ -14485,7 +14591,7 @@ GEN-3401    5"
         // brecha CONGELADA de cada factura (tasa_par / tasa_bcv), y para el
         // detalle hacen falta numero, fecha y cliente.
         const q = await _sb.from('facturas')
-          .select('id,numero,fecha,cliente_nombre,tasa_par,tasa_bcv,cobrar_verde')
+          .select('id,numero,fecha,cliente_nombre,tasa_par,tasa_bcv,cobrar_verde,descuento_manual,saldo_pendiente')
           .eq('empresa', estado.empresa).neq('estado', 'anulada')
           .gte('fecha', r.desde).lt('fecha', r.hastaExcl)
           .range(desde, desde + 999);
@@ -15334,9 +15440,33 @@ function renderHistorial(){
         return `<span style="${map[est] || ''};padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;text-transform:uppercase">${est}</span>`;
       };
 
-      let itemsHTML = items.length ? items.map((it, i) => `
-    <tr><td class="center">${i + 1}</td><td style="font-family:monospace;font-weight:600">${it.cod_alt}</td><td>${it.descripcion}</td><td class="num">${it.cantidad}</td><td class="num">${fmtUSD(it.precio_unitario)}</td><td class="num"><strong>${fmtUSD(it.total_linea)}</strong></td></tr>
-  `).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--dgray);padding:20px">Sin ítems registrados</td></tr>';
+      // v13.39: la descripción no dice si el producto es importado o local, y
+      // esa distinción decide si el cobro se convierte a USDT o no. Se muestra
+      // aquí con el mismo criterio que usa el reporte de Importado vs Local.
+      let _impBruto = 0, _locBruto = 0;
+      let itemsHTML = items.length ? items.map((it, i) => {
+        const o = origenDe(it);
+        const v = parseFloat(it.total_linea) || 0;
+        if (o === 'importado') _impBruto += v; else _locBruto += v;
+        const declarado = ['local', 'importado'].includes((it.origen || '').toString().trim().toLowerCase());
+        const badge = o === 'importado'
+          ? '<span title="' + (declarado ? 'Producto importado' : 'Sin origen guardado — deducido por el factor landed') + '" style="display:inline-block;font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:3px;background:#E3EAF5;color:#1F3864;margin-right:5px">IMP' + (declarado ? '' : '?') + '</span>'
+          : '<span title="' + (declarado ? 'Compra local' : 'Sin origen guardado — deducido por el factor landed') + '" style="display:inline-block;font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:3px;background:#F6EBD2;color:#8A6200;margin-right:5px">LOC' + (declarado ? '' : '?') + '</span>';
+        return `
+    <tr><td class="center">${i + 1}</td><td style="font-family:monospace;font-weight:600">${it.cod_alt}</td><td>${badge}${it.descripcion}</td><td class="num">${it.cantidad}</td><td class="num">${fmtUSD(it.precio_unitario)}</td><td class="num"><strong>${fmtUSD(it.total_linea)}</strong></td></tr>
+  `;
+      }).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--dgray);padding:20px">Sin ítems registrados</td></tr>';
+
+      // Resumen: qué porcentaje de esta factura es importado. Es el mismo
+      // reparto con el que se prorratean descuentos y cobros en el reporte.
+      const _mezBruto = _impBruto + _locBruto;
+      const _mezclaHTML = (items.length && _mezBruto > 0) ? `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:7px;font-size:11.5px;color:var(--dgray)">
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#1F3864;margin-right:5px"></span>
+        Importado <strong style="color:#1F3864">${fmtUSD(_impBruto)}</strong> (${(_impBruto / _mezBruto * 100).toFixed(1)}%)</span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#BF8F00;margin-right:5px"></span>
+        Local <strong style="color:#8A6200">${fmtUSD(_locBruto)}</strong> (${(_locBruto / _mezBruto * 100).toFixed(1)}%)</span>
+    </div>` : '';
 
       // v13.33 Se muestran los bolivares realmente movidos debajo del monto:
       // en un pago movil, el Bs es la cifra que aparece en el comprobante del
@@ -15384,6 +15514,7 @@ function renderHistorial(){
           <thead style="background:var(--sky)"><tr><th style="width:5%" class="center">#</th><th style="width:15%">Código</th><th>Descripción</th><th class="num" style="width:8%">Cant.</th><th class="num" style="width:12%">P.Unit</th><th class="num" style="width:13%">Total</th></tr></thead>
           <tbody>${itemsHTML}</tbody>
         </table>
+        ${_mezclaHTML}
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
