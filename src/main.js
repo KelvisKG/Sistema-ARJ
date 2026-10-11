@@ -32,6 +32,8 @@ import '../css/pages/inventario.css';
 import '../css/pages/cuentas-cobrar.css';
 import '../css/pages/config-precios.css';
 import '../css/pages/print.css';
+import '../css/pages/listas-precios.css';
+import '../css/pages/reportes.css';
 
 const app = createApp(App);
 const pinia = createPinia();

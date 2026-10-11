@@ -24,6 +24,11 @@ export const supabase = createClient(SUPABASE_URL || 'http://localhost', SUPABAS
 });
 
 const fechaCorta = d => new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
+// El monolito guarda 'dist' y las funciones del servidor 'distribuidora': en la
+// app siempre se usa 'distribuidora', si no las facturas viejas no aparecen.
+export const empresaNorm = e => ((e === 'dist' || e === 'distribuidora') ? 'distribuidora' : e);
+// Para consultar la BD por empresa hacen falta las dos formas
+export const empresasBD = e => (empresaNorm(e) === 'distribuidora' ? ['dist', 'distribuidora'] : [e]);
 const enLinea = () => typeof navigator === 'undefined' || navigator.onLine !== false;
 
 // Llama una función atómica y normaliza la respuesta a { ok, error, ...datos }
@@ -150,7 +155,7 @@ export function mapFactura(f) {
   const total = parseFloat(f.subtotal_usd) || 0;
   const saldo = parseFloat(f.saldo_pendiente) || 0;
   return {
-    id: f.id, num: f.numero, empresa: f.empresa, cliente: f.cliente_nombre,
+    id: f.id, num: f.numero, empresa: empresaNorm(f.empresa), cliente: f.cliente_nombre,
     cliente_id: f.cliente_id, vendedor: f.vendedor,
     fecha: fechaCorta(f.fecha),
     fecha_raw: f.fecha,
@@ -186,7 +191,7 @@ function mapCotizacion(c, items) {
   if (est === 'activa' && diasRest < 0) est = 'vencida';
   else if (est === 'activa' && diasRest <= 5) est = 'por_vencer';
   return {
-    id: c.id, num: c.numero, empresa: c.empresa, cliente: c.cliente_nombre,
+    id: c.id, num: c.numero, empresa: empresaNorm(c.empresa), cliente: c.cliente_nombre,
     cliente_id: c.cliente_id || null,
     fecha: fechaCorta(c.fecha),
     fecha_raw: c.fecha,
@@ -241,7 +246,9 @@ export async function cargarConfiguracion() {
 }
 
 export async function cargarEmbarques() {
-  const { data, error } = await supabase.from('embarques').select('*').eq('activo', true).order('created_at', { ascending: false });
+  // Mismo orden que el monolito: el último en llegar primero
+  const { data, error } = await supabase.from('embarques').select('*').eq('activo', true)
+    .order('fecha_llegada', { ascending: false, nullsFirst: false });
   if (error) throw error;
   return data || [];
 }
@@ -354,6 +361,98 @@ export const emitirFacturaBD = (factura, items, pagos) =>
 export const anularFacturaBD = (facturaId, motivo) =>
   rpc('anular_factura_atomica', { p_factura_id: facturaId, p_motivo: motivo });
 
+// Importado vs Local por período (monolito v13.35 / v13.37 / v13.38).
+// No usa las facturas en memoria (solo hay 500): consulta directo y pagina.
+// Devuelve { fmap: {factura_id: factura}, its: renglones, nFacts }
+export async function cargarVentasPeriodo(empresa, desde, hastaExcl) {
+  const fmap = {};
+  const ids = [];
+  for (let off = 0, v = 0; v < 30; v++, off += 1000) {
+    const { data, error } = await supabase.from('facturas')
+      .select('id,numero,fecha,cliente_nombre,tasa_par,tasa_bcv,cobrar_verde,descuento_manual,saldo_pendiente')
+      .in('empresa', empresasBD(empresa)).neq('estado', 'anulada')
+      .gte('fecha', desde).lt('fecha', hastaExcl)
+      .range(off, off + 999);
+    if (error) throw new Error('No se pudieron leer las facturas: ' + error.message);
+    if (!data || !data.length) break;
+    data.forEach(x => { ids.push(x.id); fmap[x.id] = x; });
+    if (data.length < 1000) break;
+  }
+  const its = [];
+  if (!ids.length) return { fmap, its, nFacts: 0 };
+  // Por lotes: un `in` con cientos de ids arma una URL demasiado larga
+  const LOTE = 120;
+  let sinColOrigen = false;
+  for (let i = 0; i < ids.length; i += LOTE) {
+    const trozo = ids.slice(i, i + LOTE);
+    for (let off = 0, v = 0; v < 60; v++, off += 1000) {
+      const base = 'factura_id,cod_alt,descripcion,cantidad,fob_unitario,factor_landed,total_linea';
+      let q = await supabase.from('factura_items').select(sinColOrigen ? base : base + ',origen').in('factura_id', trozo).range(off, off + 999);
+      // Si la columna `origen` no existe se reintenta sin ella: origenDe() la deduce
+      if (q.error && /origen/i.test(q.error.message || '')) {
+        sinColOrigen = true;
+        q = await supabase.from('factura_items').select(base).in('factura_id', trozo).range(off, off + 999);
+      }
+      if (q.error) throw new Error('No se pudieron leer los renglones: ' + q.error.message);
+      if (!q.data || !q.data.length) break;
+      its.push(...q.data);
+      if (q.data.length < 1000) break;
+    }
+  }
+  return { fmap, its, nFacts: ids.length };
+}
+
+// KPI "Cobrado mes ($ verde)" de CxC (monolito v13): suma pagos.monto_usd del mes en
+// curso de la empresa, sin los pagos de facturas anuladas (ese dinero se devolvió)
+export async function cargarCobradoMes(empresa) {
+  const hoy = new Date();
+  const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
+  const hasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1).toISOString();
+  const { data: pagosMes, error: e1 } = await supabase.from('pagos').select('monto_usd, factura_id')
+    .gte('fecha', desde).lt('fecha', hasta);
+  if (e1) throw e1;
+  if (!pagosMes || !pagosMes.length) return { total: 0, cuenta: 0 };
+  const ids = [...new Set(pagosMes.map(p => p.factura_id).filter(Boolean))];
+  const mapa = {};
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data: facts, error: e2 } = await supabase.from('facturas').select('id, empresa, estado').in('id', ids.slice(i, i + 150));
+    if (e2) throw e2;
+    (facts || []).forEach(f => { mapa[f.id] = f; });
+  }
+  let total = 0, cuenta = 0;
+  pagosMes.forEach(p => {
+    const f = mapa[p.factura_id];
+    if (!f || empresaNorm(f.empresa) !== empresaNorm(empresa) || f.estado === 'anulada') return;
+    total += parseFloat(p.monto_usd) || 0;
+    cuenta++;
+  });
+  return { total, cuenta };
+}
+
+// items: [{ cod_alt, cantidad }] · destino: 'favor' | 'efectivo' (sql/09)
+export const emitirNotaCreditoBD = (facturaId, items, motivo, destino) =>
+  rpc('emitir_nota_credito', { p_factura_id: facturaId, p_items: items, p_motivo: motivo, p_destino: destino || 'favor' });
+
+// Renglones de una factura y lo ya devuelto en notas de crédito anteriores
+// (la referencia del pago guarda "NC:COD=cant;COD=cant| motivo")
+export async function cargarRenglonesNotaCredito(facturaId) {
+  const [iRes, pRes] = await Promise.all([
+    supabase.from('factura_items').select('*').eq('factura_id', facturaId),
+    supabase.from('pagos').select('referencia, monto_usd').eq('factura_id', facturaId).lt('monto_usd', 0)
+  ]);
+  if (iRes.error) throw iRes.error;
+  const yaDev = {};
+  (pRes.data || []).forEach(pg => {
+    const m = /NC:([^|]+)\|/.exec(pg.referencia || '');
+    if (!m) return;
+    m[1].split(';').forEach(par => {
+      const [cod, cant] = par.split('=');
+      if (cod) yaDev[cod] = (yaDev[cod] || 0) + (parseInt(cant, 10) || 0);
+    });
+  });
+  return { items: iRes.data || [], yaDev };
+}
+
 export const registrarAbonoBD = (facturaId, acreditaUSD, pago) =>
   rpc('registrar_abono_atomico', { p_factura_id: facturaId, p_acredita: acreditaUSD, p_pago: pago });
 
@@ -377,7 +476,10 @@ export async function cargarDetallesFactura(facturaId) {
       desc: it.descripcion || '',
       cant: it.cantidad || 0,
       precio: parseFloat(it.precio_unitario) || 0,
-      total_linea: parseFloat(it.total_linea) || 0
+      total_linea: parseFloat(it.total_linea) || 0,
+      // Congelados al emitir: deciden si el renglón es importado o local (v13.39)
+      origen: it.origen || '',
+      factor_landed: it.factor_landed != null ? parseFloat(it.factor_landed) : null
     }));
     return { items, pagos: pRes.data || [] };
   } catch (e) {
@@ -457,8 +559,32 @@ export const aplicarRecepcionBD = ({ tipo, destino, embarqueId, referencia, item
   });
 export const guardarEmbarqueBD = e => rpc('guardar_embarque', { p: e });
 export const recalcularEmbarqueBD = id => rpc('recalcular_embarque', { p_id: id });
+// sql/09
+export const crearSistemaBD = nombre => rpc('crear_sistema', { p_nombre: nombre });
+export const eliminarProductoBD = (id, definitivo) => rpc('eliminar_producto', { p_id: id, p_definitivo: !!definitivo });
 
-export async function cargarNotasEntrega(limite = 100) {
+// Cuántas veces está facturado un producto (decide si se borra o se desactiva)
+export async function contarFacturasProducto(productoId) {
+  const { count, error } = await supabase.from('factura_items').select('id', { count: 'exact', head: true }).eq('producto_id', productoId);
+  if (error) throw error;
+  return count || 0;
+}
+
+// Foto de producto al bucket del monolito. Devuelve la URL pública.
+export async function subirFotoProductoBD(blob, nombre) {
+  if (!enLinea()) throw new Error('Sin conexión a internet');
+  const { error } = await supabase.storage.from('productos-img').upload(nombre, blob, { contentType: 'image/jpeg', upsert: true });
+  if (error) throw error;
+  return supabase.storage.from('productos-img').getPublicUrl(nombre).data.publicUrl;
+}
+
+export async function cargarItemsRecepcion(recepcionId) {
+  const { data, error } = await supabase.from('recepcion_items').select('*').eq('recepcion_id', recepcionId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function cargarNotasEntrega(limite = 200) {
   const { data, error } = await supabase.from('traspasos').select('*').order('fecha', { ascending: false }).limit(limite);
   if (error) throw error;
   return data || [];
@@ -468,7 +594,7 @@ export async function cargarItemsNotaEntrega(traspasoId) {
   if (error) throw error;
   return data || [];
 }
-export async function cargarRecepciones(limite = 50) {
+export async function cargarRecepciones(limite = 200) {
   const { data, error } = await supabase.from('recepciones').select('*').order('fecha', { ascending: false }).limit(limite);
   if (error) throw error;
   return data || [];

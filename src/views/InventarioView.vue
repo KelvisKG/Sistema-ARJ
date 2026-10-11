@@ -1,507 +1,233 @@
 <template>
   <div class="page active" id="page-inventario">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div>
-        <h1 class="page-title"><i class="ti ti-package"></i> Inventario de Repuestos Agrícolas</h1>
-        <p class="page-sub">
-          Empresa activa: <strong>{{ store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora ARJ' }}</strong>
-          · Total productos registrados: <strong>{{ store.productos.length }}</strong>
-        </p>
-      </div>
-
-      <!-- BOTONES SUPERIORES DEL MONOLITO -->
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button
-          v-if="store.rol === 'gerente'"
-          class="btn btn-secondary"
-          @click="store.modalTraspasoActivo = true"
-        >
-          <i class="ti ti-arrows-exchange"></i> Despachar a Directa
-        </button>
-        <button
-          v-if="store.rol === 'gerente'"
-          class="btn btn-secondary"
-          @click="store.modalNotasActivo = true"
-        >
-          <i class="ti ti-file-description"></i> Notas de Entrega
-        </button>
-        <button
-          v-if="store.rol === 'gerente'"
-          class="btn btn-secondary"
-          @click="store.modalRecepcionActivo = true"
-        >
-          <i class="ti ti-truck-delivery"></i> Recepciones / Conteo
-        </button>
-        <button
-          v-if="store.rol === 'gerente'"
-          class="btn btn-secondary"
-          @click="store.modalEmbarquesActivo = true"
-        >
-          <i class="ti ti-ship"></i> Embarques y Costeo
-        </button>
-        <button
-          v-if="store.rol === 'gerente'"
-          class="btn btn-secondary"
-          @click="store.modalListaPreciosActivo = true"
-        >
-          <i class="ti ti-download"></i> Lista de Precios
-        </button>
-        <button
-          v-if="store.rol === 'gerente'"
-          class="btn btn-primary"
-          @click="abrirModalNuevo"
-        >
-          <i class="ti ti-plus"></i> Nuevo Producto
-        </button>
-      </div>
-    </div>
+    <h1 class="page-title"><i class="ti ti-package"></i> Inventario</h1>
+    <p class="page-sub">Empresa: <strong>{{ store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora' }}</strong> · Total productos: <strong>{{ filtrados.length }}</strong></p>
 
     <div class="help-box">
       <i class="ti ti-info-circle"></i>
-      <div>
-        <strong>Catálogo agrícola multi-depósito:</strong> Muestra el stock disponible en la sede activa y en el depósito alterno. Puedes buscar por código alterno, OEM, aplicación o sistema mecánico.
-      </div>
+      <div><strong>Nuevo:</strong> Puedes buscar productos por marca de tractor y sistema. Si un cliente pregunta
+        "¿qué tienen para el motor del John Deere 6420?", usa la pestaña <strong>Por aplicación</strong>.</div>
     </div>
 
-    <!-- TABS BÚSQUEDA -->
+    <!-- v13.4: despacho, notas, recepciones y conteo (solo gerente) -->
+    <div v-if="esGerente" style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn btn-secondary" @click="abrirTraspaso"><i class="ti ti-arrows-exchange"></i> Despachar a Directa</button>
+      <button class="btn btn-secondary" @click="abrirNotas"><i class="ti ti-file-text"></i> Notas de entrega</button>
+      <button class="btn btn-secondary" @click="abrirRecepciones"><i class="ti ti-truck-delivery"></i> Recepciones</button>
+      <button class="btn btn-primary" @click="abrirRecepcion"><i class="ti ti-clipboard-check"></i> Conteo / Recepción</button>
+    </div>
+
+    <!-- Tabs búsqueda inventario -->
     <div style="display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid var(--gray)">
-      <button
-        :class="['search-tab', { active: tabInv === 'general' }]"
-        @click="tabInv = 'general'"
-      >
-        <i class="ti ti-search"></i> Búsqueda general
-      </button>
-      <button
-        :class="['search-tab', { active: tabInv === 'aplicacion' }]"
-        @click="tabInv = 'aplicacion'"
-      >
-        <i class="ti ti-tractor"></i> Por aplicación y sistema
-      </button>
+      <button :class="['search-tab', { active: tab === 'normal' }]" @click="tab = 'normal'"><i class="ti ti-search"></i> Búsqueda general</button>
+      <button :class="['search-tab', { active: tab === 'aplicacion' }]" @click="tab = 'aplicacion'"><i class="ti ti-tractor"></i> Por aplicación</button>
     </div>
 
-    <!-- CONTROLES GENERAL -->
-    <div v-if="tabInv === 'general'" class="inv-controls" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <div class="inv-search" style="flex:1;min-width:280px">
-        <i class="ti ti-search"></i>
-        <input
-          v-model="busquedaTexto"
-          type="text"
-          placeholder="Buscar por código alternativo, original OEM, descripción o marca..."
-        >
+    <!-- Tab búsqueda normal -->
+    <div v-if="tab === 'normal'" class="search-tab-content active">
+      <div class="inv-controls" style="flex-wrap:wrap">
+        <div class="inv-search">
+          <i class="ti ti-search"></i>
+          <input v-model="busqueda" type="text" placeholder="Buscar por código, descripción, marca...">
+        </div>
+        <template v-if="esGerente">
+          <button class="btn btn-secondary" @click="importarExcel"><i class="ti ti-upload"></i> Importar Excel</button>
+          <button class="btn btn-secondary" @click="abrirEmbarques"><i class="ti ti-ship"></i> Embarques</button>
+          <button class="btn btn-primary" @click="abrirNuevoProducto"><i class="ti ti-plus"></i> Nuevo producto</button>
+          <button class="btn btn-secondary" @click="store.modalListaPreciosActivo = true"><i class="ti ti-download"></i> Lista de precios</button>
+        </template>
       </div>
-      <select v-model="filtroMarca" class="val-input" style="width:200px">
-        <option value="">Todas las marcas</option>
-        <option v-for="m in marcasDisponibles" :key="m" :value="m">{{ m }}</option>
-      </select>
     </div>
 
-    <!-- CONTROLES POR APLICACIÓN -->
-    <div v-if="tabInv === 'aplicacion'" style="margin-bottom:16px">
-      <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:12px;margin-bottom:10px">
+    <!-- Tab búsqueda por aplicación -->
+    <div v-else class="search-tab-content">
+      <div style="background:#FFF8E1;border:1px solid #FFC107;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#5D4037;margin-bottom:10px">
+        <i class="ti ti-bulb"></i> Combina <strong>marca/modelo</strong> con <strong>sistema</strong> para filtrar.
+        Por ejemplo: "Ford 6610" en marca/modelo + "Motor" en sistema = solo repuestos del motor del Ford 6610.
+      </div>
+      <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:10px;margin-bottom:10px">
         <div class="inv-search">
           <i class="ti ti-tractor"></i>
-          <input
-            v-model="busquedaModelo"
-            type="text"
-            placeholder="Marca o modelo del tractor (ej: John Deere 5075, Perkins 1004, Ford 6600, Massey 290...)"
-          >
+          <input v-model="marcaModelo" type="text" placeholder="Marca y modelo del tractor (ej: John Deere 6420)">
         </div>
-        <select
-          v-model="filtroSistema"
-          class="val-input"
-        >
-          <option value="">Todos los sistemas mecánicos</option>
-          <option value="Sistema de enfriamiento">Sistema de enfriamiento</option>
-          <option value="Embrague">Embrague</option>
-          <option value="Filtros">Filtros</option>
-          <option value="Inyección Diésel">Inyección Diésel</option>
-          <option value="Hidráulico">Hidráulico</option>
-          <option value="Eléctrico">Eléctrico</option>
-          <option value="Frenos">Frenos</option>
-          <option value="Motor">Motor</option>
+        <select v-model="sistema" style="background:#FFF;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit">
+          <option value="">Todos los sistemas</option>
+          <option v-for="s in store.sistemas" :key="s" :value="s">{{ s }}</option>
         </select>
       </div>
     </div>
 
-    <!-- TABLA DE INVENTARIO -->
-    <div class="inv-table" style="overflow-x:auto;background:#FFF;border-radius:8px;border:1px solid var(--border)">
-      <table class="tbl">
+    <div class="inv-table" style="overflow-x:auto">
+      <table>
         <thead>
           <tr>
             <th class="center" style="width:3%">#</th>
-            <th style="width:12%">Cód. Alt</th>
-            <th style="width:11%">Cód. OEM</th>
-            <th style="width:23%">Descripción</th>
+            <th style="width:11%">Código alt.</th>
+            <th style="width:10%">Código orig.</th>
+            <th style="width:20%">Descripción</th>
             <th style="width:9%">Marca</th>
             <th style="width:12%">Aplicación</th>
-            <th v-if="store.rol === 'gerente'" class="num" style="width:7%">FOB</th>
-            <th class="num" style="width:8%">P. Público</th>
-            <th class="center" style="width:8%">Stock Activo</th>
-            <th class="center" style="width:8%">Otra Sede</th>
-            <th class="center" style="width:8%">Acción</th>
+            <th v-if="esGerente" class="num" style="width:8%">FOB</th>
+            <th class="num" style="width:9%">P. Público</th>
+            <th class="center" style="width:7%">Stock</th>
+            <th class="center" style="width:9%">Otra emp.</th>
+            <th v-if="esGerente" class="center" style="width:5%">Editar</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="productosFiltrados.length === 0">
-            <td :colspan="store.rol === 'gerente' ? 11 : 10" style="text-align:center;padding:24px;color:var(--dgray)">
-              No se encontraron repuestos con los criterios de búsqueda.
-            </td>
-          </tr>
-          <tr v-for="(p, idx) in productosFiltrados" :key="p.id">
-            <td class="center" style="color:var(--dgray);font-size:11px">{{ idx + 1 }}</td>
+          <tr v-for="(p, idx) in visibles" :key="p.id">
+            <td class="center" style="color:var(--dgray);font-size:11px;font-weight:600">{{ idx + 1 }}</td>
+            <td><strong>{{ p.cod_alt }}</strong></td>
+            <td><span style="color:var(--dgray)">{{ p.cod_orig }}</span></td>
             <td>
-              <strong style="color:var(--navy)">{{ p.cod_alt }}</strong>
-            </td>
-            <td style="color:#555;font-family:monospace;font-size:12px">{{ p.cod_orig || '—' }}</td>
-            <td>
-              <div>{{ p.desc }}</div>
-              <span v-if="p.sistema" style="font-size:10px;color:var(--blue);background:var(--sky);padding:1px 5px;border-radius:3px">
-                {{ p.sistema }}
-              </span>
-            </td>
-            <td>
-              <span class="badge badge-secondary" style="font-size:10px">{{ p.marca }}</span>
-            </td>
-            <td style="font-size:11px;color:var(--dgray)">{{ p.marca_modelo || 'Universal' }}</td>
-            <td v-if="store.rol === 'gerente'" class="num" style="color:var(--dgray)">
-              {{ fmtUSD(p.fob) }}
-            </td>
-            <td class="num" style="font-weight:700;color:var(--green)">
-              {{ fmtUSD(precioPublico(p.fob)) }}
-            </td>
-            <td class="center">
-              <span :class="['badge', stockActivo(p) > 5 ? 'badge-success' : (stockActivo(p) > 0 ? 'badge-warning' : 'badge-danger')]">
-                {{ stockActivo(p) }}
-              </span>
-            </td>
-            <td class="center" style="color:var(--dgray);font-size:12px">
-              {{ stockOtro(p) }}
-            </td>
-            <td class="center">
-              <div style="display:flex;gap:4px;justify-content:center">
-                <button
-                  class="btn btn-secondary btn-sm"
-                  style="padding:2px 6px"
-                  title="Agregar a Factura"
-                  :disabled="stockActivo(p) <= 0"
-                  @click="agregarAFactura(p)"
-                >
-                  <i class="ti ti-plus"></i>
-                </button>
-                <button
-                  v-if="store.rol === 'gerente'"
-                  class="btn btn-secondary btn-sm"
-                  style="padding:2px 6px"
-                  title="Editar Producto"
-                  @click="editarProducto(p)"
-                >
-                  <i class="ti ti-edit"></i>
-                </button>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div v-if="fotosDe(p).length" style="position:relative">
+                  <img :src="fotosDe(p)[0]" loading="lazy" style="width:34px;height:34px;object-fit:cover;border-radius:5px;cursor:zoom-in;border:1px solid #e0e0e0" @click="fotoAbierta = p">
+                  <span v-if="fotosDe(p).length > 1" style="position:absolute;bottom:-4px;right:-4px;background:var(--gold);color:#fff;border-radius:50%;width:14px;height:14px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700">{{ fotosDe(p).length }}</span>
+                </div>
+                <span>{{ p.desc }}</span>
               </div>
+            </td>
+            <td>{{ p.marca }}</td>
+            <td>
+              <div v-if="p.sistema || p.marca_modelo" style="font-size:10.5px">
+                <strong style="color:var(--blue)">{{ p.sistema || '—' }}</strong>
+                <div style="color:var(--dgray);font-size:10px">{{ (p.marca_modelo || '').substring(0, 32) }}{{ (p.marca_modelo || '').length > 32 ? '...' : '' }}</div>
+              </div>
+              <span v-else style="color:var(--dgray);font-size:10.5px">—</span>
+            </td>
+            <td v-if="esGerente" class="num">{{ fmtUSD(p.fob) }}</td>
+            <td class="num"><strong>{{ fmtUSD(p.precio_manual || precioPublico(p.fob)) }}</strong>
+              <div v-if="p.precio_manual" style="font-size:9px;color:var(--gold)">manual</div>
+            </td>
+            <td class="center"><span :class="['inv-stock-badge', claseStock(stockAca(p))]">{{ stockAca(p) }}</span></td>
+            <td class="center"><span class="inv-stock-other disponible" :title="`${otraEmp} tiene ${stockOtra(p)}`">{{ otraEmp }}: {{ stockOtra(p) }}</span></td>
+            <td v-if="esGerente" class="center" style="white-space:nowrap">
+              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:10px" @click="abrirEditProducto(p)"><i class="ti ti-edit"></i></button>
+              {{ ' ' }}
+              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:10px;color:var(--red)" @click="store.eliminarProducto(p)"><i class="ti ti-trash"></i></button>
             </td>
           </tr>
         </tbody>
       </table>
+      <div v-if="filtrados.length > visibles.length" style="padding:10px;text-align:center">
+        <button class="btn btn-secondary btn-sm" @click="limite += 200">Mostrar más ({{ filtrados.length - visibles.length }} restantes)</button>
+      </div>
     </div>
 
-    <!-- MODAL NUEVO PRODUCTO -->
-    <div v-if="mostrarModalNuevo" class="modal show">
-      <div class="modal-content" style="max-width:550px;text-align:left">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:10px">
-          <h3 style="margin:0"><i class="ti ti-plus"></i> Registrar Nuevo Repuesto Agrícola</h3>
-          <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false"><i class="ti ti-x"></i></button>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div class="field-col" style="margin-bottom:0">
-            <label>Código Alterno *</label>
-            <input
-              v-model="nuevoProd.cod_alt"
-              type="text"
-              placeholder="BOM-JD-5075"
-              class="val-input"
-              :class="{ 'is-invalid': errors.cod_alt }"
-              @input="errors.cod_alt = null"
-            >
-            <span v-if="errors.cod_alt" class="field-error">
-              <i class="ti ti-alert-circle"></i> {{ errors.cod_alt }}
-            </span>
-          </div>
-          <div class="field-col" style="margin-bottom:0">
-            <label>Código OEM / Original</label>
-            <input v-model="nuevoProd.cod_orig" type="text" placeholder="RE505980" class="val-input">
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div class="field-col" style="margin-bottom:0">
-            <label>Origen del Repuesto</label>
-            <select v-model="nuevoProd.origen" class="val-input">
-              <option value="importado">Importado</option>
-              <option value="local">Nacional / Compras Locales</option>
-            </select>
-          </div>
-          <div class="field-col" style="margin-bottom:0">
-            <label>Proveedor (Opcional)</label>
-            <input v-model="nuevoProd.proveedor" type="text" placeholder="Ej: John Deere Miami..." class="val-input">
-          </div>
-        </div>
-
-        <div class="field-col" style="margin-bottom:12px">
-          <label>Descripción Completa del Repuesto *</label>
-          <input
-            v-model="nuevoProd.desc"
-            type="text"
-            placeholder="Bomba de agua completa con polea..."
-            class="val-input"
-            :class="{ 'is-invalid': errors.desc }"
-            @input="errors.desc = null"
-          >
-          <span v-if="errors.desc" class="field-error">
-            <i class="ti ti-alert-circle"></i> {{ errors.desc }}
-          </span>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div class="field-col" style="margin-bottom:0">
-            <label>Marca / Fabricante</label>
-            <input v-model="nuevoProd.marca" type="text" placeholder="JOHN DEERE" class="val-input">
-          </div>
-          <div class="field-col" style="margin-bottom:0">
-            <label>Costo FOB (USD) *</label>
-            <input
-              v-model.number="nuevoProd.fob"
-              type="number"
-              step="0.5"
-              placeholder="48.50"
-              class="val-input"
-              :class="{ 'is-invalid': errors.fob }"
-              @input="errors.fob = null"
-            >
-            <span v-if="errors.fob" class="field-error">
-              <i class="ti ti-alert-circle"></i> {{ errors.fob }}
-            </span>
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px" v-if="nuevoProd.origen === 'importado'">
-          <div class="field-col" style="margin-bottom:0">
-            <label>Factor Landed (Costos de imp. y flete)</label>
-            <input
-              v-model.number="nuevoProd.factor_landed"
-              type="number"
-              step="0.001"
-              class="val-input"
-            >
-          </div>
-          <div class="field-col" style="margin-bottom:0">
-            <label>Costo Real (Landed)</label>
-            <div style="padding:8px 12px;background:#F1F5F9;border-radius:6px;border:1px solid #E2E8F0;font-weight:700;color:var(--navy)">
-              ${{ ((nuevoProd.fob || 0) * (nuevoProd.factor_landed || 1)).toFixed(2) }}
-            </div>
-          </div>
-        </div>
-
-        <div class="field-col" style="margin-bottom:16px">
-          <label>Simulador de Margen de Ganancia Rápido</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 1.30">x1.30 (+30%)</button>
-            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 1.50">x1.50 (+50%)</button>
-            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 1.70">x1.70 (+70%)</button>
-            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 2.00">x2.00 (+100%)</button>
-            <button class="btn btn-secondary btn-sm" @click.prevent="simuladorMargen = 2.50">x2.50 (+150%)</button>
-          </div>
-          <div style="font-size:11.5px;color:var(--dgray)">
-            Precio Público Sugerido: <strong style="color:var(--green);font-size:14px">${{ (((nuevoProd.fob || 0) * (nuevoProd.origen === 'importado' ? (nuevoProd.factor_landed || 1) : 1)) * simuladorMargen).toFixed(2) }}</strong>
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-          <div class="field-col" style="margin-bottom:0">
-            <label>Stock Venta Directa</label>
-            <input
-              v-model.number="nuevoProd.stock_vd"
-              type="number"
-              min="0"
-              placeholder="10"
-              class="val-input"
-              :class="{ 'is-invalid': errors.stock_vd }"
-              @input="errors.stock_vd = null"
-            >
-            <span v-if="errors.stock_vd" class="field-error">
-              <i class="ti ti-alert-circle"></i> {{ errors.stock_vd }}
-            </span>
-          </div>
-          <div class="field-col" style="margin-bottom:0">
-            <label>Stock Distribuidora</label>
-            <input
-              v-model.number="nuevoProd.stock_dist"
-              type="number"
-              min="0"
-              placeholder="25"
-              class="val-input"
-              :class="{ 'is-invalid': errors.stock_dist }"
-              @input="errors.stock_dist = null"
-            >
-            <span v-if="errors.stock_dist" class="field-error">
-              <i class="ti ti-alert-circle"></i> {{ errors.stock_dist }}
-            </span>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="mostrarModalNuevo = false">Cancelar</button>
-          <button class="btn btn-primary" @click="guardarNuevoProducto">
-            <i class="ti ti-check"></i> Guardar en Catálogo
-          </button>
-        </div>
+    <!-- Fotos del producto a pantalla completa (verFotoProducto) -->
+    <div v-if="fotoAbierta" style="position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;flex-direction:column;gap:12px"
+      @click="fotoAbierta = null">
+      <div style="display:flex;gap:14px;max-width:92vw;overflow-x:auto;align-items:center;padding:10px">
+        <img v-for="u in fotosDe(fotoAbierta)" :key="u" :src="u" style="max-height:76vh;max-width:80vw;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)">
       </div>
+      <div style="color:#fff;font-weight:600">{{ fotoAbierta.cod_alt }} — {{ fotoAbierta.desc }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, precioPublico } from '../services/pricing.js';
-import { isNonEmpty, isPositiveNumber } from '../services/validators.js';
+import { fmtUSD, precioPublico, FACTOR_LANDED_FALLBACK } from '../services/pricing.js';
+import { fotosDe } from '../services/monolito.js';
 
 const store = useArjStore();
-const tabInv = ref('general');
-const busquedaTexto = ref('');
-const filtroMarca = ref('');
-const busquedaModelo = ref('');
-const filtroSistema = ref('');
-const mostrarModalNuevo = ref(false);
-const errors = ref({});
+const esGerente = computed(() => store.rol === 'gerente');
+const tab = ref('normal');
+const busqueda = ref('');
+const marcaModelo = ref('');
+const sistema = ref('');
+const fotoAbierta = ref(null);
+// Se pinta por tandas para no trabar la pantalla con cientos de filas con foto
+const limite = ref(300);
+watch([tab, busqueda, marcaModelo, sistema], () => { limite.value = 300; });
 
-const marcasDisponibles = computed(() => {
-  const marcas = new Set();
-  store.productos.forEach(p => {
-    if (p.marca) marcas.add(p.marca.trim().toUpperCase());
-  });
-  return Array.from(marcas).sort();
-});
+// Igual que el monolito: sin acentos, sin signos, en minúsculas
+const normalize = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '');
 
-const nuevoProd = ref({
-  cod_alt: '',
-  cod_orig: '',
-  desc: '',
-  marca: '',
-  fob: 0,
-  stock_vd: 0,
-  stock_dist: 0,
-  sistema: 'Motor',
-  marca_modelo: '',
-  origen: 'importado',
-  factor_landed: 1.471,
-  proveedor: ''
-});
-
-const simuladorMargen = ref(1.5);
-
-function stockActivo(p) {
-  return store.empresa === 'directa' ? (p.stock_vd || 0) : (p.stock_dist || 0);
-}
-
-function stockOtro(p) {
-  return store.empresa === 'directa' ? (p.stock_dist || 0) : (p.stock_vd || 0);
-}
-
-const productosFiltrados = computed(() => {
-  let list = store.productos;
-
-  if (tabInv.value === 'general') {
-    const q = busquedaTexto.value.trim().toLowerCase();
-    if (q) {
-      list = list.filter(p =>
-        (p.cod_alt || '').toLowerCase().includes(q) ||
-        (p.cod_orig || '').toLowerCase().includes(q) ||
-        (p.desc || '').toLowerCase().includes(q) ||
-        (p.marca || '').toLowerCase().includes(q)
-      );
-    }
-    if (filtroMarca.value) {
-      list = list.filter(p => (p.marca || '').toUpperCase() === filtroMarca.value);
-    }
-  } else {
-    const m = busquedaModelo.value.trim().toLowerCase();
-    if (m) {
-      list = list.filter(p =>
-        (p.marca_modelo || '').toLowerCase().includes(m) ||
-        (p.marca || '').toLowerCase().includes(m)
-      );
-    }
-    if (filtroSistema.value) {
-      list = list.filter(p => p.sistema === filtroSistema.value);
-    }
+const filtrados = computed(() => {
+  if (tab.value === 'aplicacion') {
+    const qMM = marcaModelo.value.trim();
+    const words = normalize(qMM).split(/\s+/).filter(w => w.length >= 1);
+    return store.productos.filter(p => {
+      if (sistema.value && p.sistema !== sistema.value) return false;
+      if (qMM) {
+        const hay = normalize(p.marca_modelo || '');
+        return words.every(w => hay.includes(w));
+      }
+      return true;
+    });
   }
-
-  return list;
+  const q = busqueda.value.trim();
+  const palabras = normalize(q).split(/\s+/);
+  return store.productos.filter(p => {
+    if (!q) return true;
+    const hay = normalize(p.cod_alt + ' ' + p.cod_orig + ' ' + (p.cod_barras || '') + ' ' + p.desc + ' ' + p.marca);
+    return palabras.every(w => hay.includes(w));
+  });
 });
+const visibles = computed(() => filtrados.value.slice(0, limite.value));
 
-function agregarAFactura(p) {
-  store.agregarAlCarrito(p, 1);
-  store.cambiarVista('facturacion');
+const otraEmp = computed(() => (store.empresa === 'directa' ? 'Distribuidora' : 'Venta Directa'));
+const stockAca = p => (store.empresa === 'directa' ? p.stock_vd : p.stock_dist);
+const stockOtra = p => (store.empresa === 'directa' ? p.stock_dist : p.stock_vd);
+function claseStock(s) {
+  const critico = store.empresa === 'directa' ? 10 : 20;
+  const medio = store.empresa === 'directa' ? 20 : 40;
+  if (s < 0) return 'neg';
+  if (s <= critico) return 'bajo';
+  if (s <= medio) return 'medio';
+  return 'alto';
 }
 
-function editarProducto(p) {
+function soloGerente(accion) {
+  if (store.rol !== 'gerente') { store.notif('Solo el gerente puede ' + accion, 'error'); return false; }
+  return true;
+}
+
+function abrirEditProducto(p) {
+  if (!soloGerente('editar productos')) return;
   store.productoSeleccionado = p;
   store.modalEditProdActivo = true;
 }
 
-function abrirModalNuevo() {
-  errors.value = {};
-  nuevoProd.value = {
-    cod_alt: '',
-    cod_orig: '',
-    desc: '',
-    marca: '',
-    fob: null,
-    stock_vd: 0,
-    stock_dist: 0,
-    sistema: 'Motor',
-    marca_modelo: '',
-    origen: 'importado',
-    factor_landed: (store.configuracion && store.configuracion.factor_default) || 1.471,
-    proveedor: ''
+function abrirNuevoProducto() {
+  if (!soloGerente('crear productos')) return;
+  store.productoSeleccionado = {
+    _nuevo: true, cod_alt: '', cod_orig: '', cod_barras: '', desc: '', marca: '', fob: 0, stock_vd: 0, stock_dist: 0,
+    marca_modelo: '', sistema: '', precio_manual: null, origen: 'importado',
+    factor_landed: (store.configuracion && store.configuracion.factor_default) || FACTOR_LANDED_FALLBACK, proveedor: '', imagen_url: ''
   };
-  simuladorMargen.value = 1.5;
-  mostrarModalNuevo.value = true;
+  store.modalEditProdActivo = true;
 }
 
-async function guardarNuevoProducto() {
-  errors.value = {};
+function abrirEmbarques() {
+  if (!soloGerente('gestionar embarques')) return;
+  store.modalEmbarquesActivo = true;
+}
 
-  if (!isNonEmpty(nuevoProd.value.cod_alt, 2)) {
-    errors.value.cod_alt = 'El código es obligatorio (mínimo 2 caracteres)';
-  } else if (store.productos.some(p => (p.cod_alt || '').toUpperCase() === nuevoProd.value.cod_alt.trim().toUpperCase())) {
-    errors.value.cod_alt = 'Ya existe un repuesto con este código en el inventario';
-  }
-  if (!isNonEmpty(nuevoProd.value.desc, 3)) errors.value.desc = 'La descripción debe tener al menos 3 caracteres';
-  if (!isPositiveNumber(nuevoProd.value.fob)) errors.value.fob = 'El costo FOB debe ser mayor a 0.00 USD';
-  if (nuevoProd.value.stock_vd < 0) errors.value.stock_vd = 'El stock no puede ser negativo';
-  if (nuevoProd.value.stock_dist < 0) errors.value.stock_dist = 'El stock no puede ser negativo';
-  if (Object.keys(errors.value).length > 0) {
-    store.notif('Por favor corrige los campos obligatorios marcados en rojo', 'warning');
-    return;
-  }
+function abrirTraspaso() {
+  if (!soloGerente('despachar')) return;
+  // La regla de verdad: el despacho sale de Distribuidora
+  if (store.empresa !== 'distribuidora') { store.notif('El despacho sale de Distribuidora. Cambia de empresa primero.', 'error'); return; }
+  if (!store.supabaseConectado) { store.notif('Sin conexión a la base de datos', 'error'); return; }
+  if (!store.productos.length) { store.notif('No hay catálogo cargado', 'error'); return; }
+  store.modalTraspasoActivo = true;
+}
 
-  // C-01: el alta se guarda en la base de datos
-  const ok = await store.guardarProducto({
-    cod_alt: nuevoProd.value.cod_alt.trim().toUpperCase(),
-    cod_orig: (nuevoProd.value.cod_orig || '').trim().toUpperCase(),
-    desc: nuevoProd.value.desc.trim(),
-    marca: (nuevoProd.value.marca || '').trim().toUpperCase(),
-    fob: parseFloat(nuevoProd.value.fob) || 0,
-    stock_vd: parseInt(nuevoProd.value.stock_vd) || 0,
-    stock_dist: parseInt(nuevoProd.value.stock_dist) || 0,
-    sistema: nuevoProd.value.sistema || '',
-    marca_modelo: (nuevoProd.value.marca_modelo || '').trim(),
-    factor_landed: nuevoProd.value.origen === 'local' ? 1 : (parseFloat(nuevoProd.value.factor_landed) || null),
-    origen: nuevoProd.value.origen || 'importado',
-    proveedor: (nuevoProd.value.proveedor || '').trim()
-  });
-  if (ok) mostrarModalNuevo.value = false;
+function abrirNotas() { store.modalNotasActivo = true; }
+function abrirRecepciones() { store.modalRecepcionesActivo = true; }
+
+function abrirRecepcion() {
+  if (!soloGerente('hacer esto')) return;
+  if (!store.supabaseConectado) { store.notif('Sin conexión a la base de datos', 'error'); return; }
+  if (!store.productos.length) { store.notif('No hay catálogo cargado', 'error'); return; }
+  store.modalRecepcionActivo = true;
+}
+
+// En el monolito este botón no tenía acción; la carga desde Excel se hace pegando
+function importarExcel() {
+  store.notif('Para cargar cantidades desde Excel usa "Conteo / Recepción": copia las columnas código y cantidad y pégalas.', 'info');
 }
 </script>

@@ -1,0 +1,105 @@
+/* === Reportes y Dashboard (portado del monolito v13) === */
+    .dash-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-top: 16px
+    }
+
+    .chart-card {
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px
+    }
+
+    .chart-card h3 {
+      font-size: 13.5px;
+      color: var(--navy);
+      font-weight: 600;
+      margin-bottom: 12px
+    }
+
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px
+    }
+
+    .bar-label {
+      width: 90px;
+      color: var(--dgray);
+      text-align: right;
+      font-size: 11.5px
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 24px;
+      background: var(--gray);
+      border-radius: 5px;
+      position: relative;
+      overflow: hidden
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), var(--navy));
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 8px;
+      color: #FFF;
+      font-size: 11px;
+      font-weight: 600;
+      min-width: 38px
+    }
+
+    .bar-row .bar-val {
+      font-weight: 600;
+      color: var(--navy);
+      font-size: 12px;
+      min-width: 70px;
+      text-align: right
+    }
+
+    .list-card {
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px
+    }
+
+    .list-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--gray);
+      font-size: 12px
+    }
+
+    .list-row:last-child {
+      border-bottom: none
+    }
+
+    .list-row .nombre {
+      color: #222;
+      font-weight: 500
+    }
+
+    .list-row .valor {
+      color: var(--navy);
+      font-weight: 600
+    }
+
+    @media (max-width: 900px) {
+      .dash-grid { grid-template-columns: 1fr }
+    }
