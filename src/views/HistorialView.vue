@@ -76,7 +76,9 @@
               No hay {{ vistaActual === 'facturas' ? 'facturas' : 'cotizaciones' }} registradas que coincidan con la búsqueda.
             </td>
           </tr>
-          <tr v-for="f in documentosFiltrados" :key="f.id">
+          <tr v-for="f in documentosFiltrados" :key="f.id" class="fila-abre"
+            :title="vistaActual === 'facturas' ? 'Clic para ver la factura' : 'Clic para ver la cotización'"
+            @click="abrirDocumento(f)">
             <td>
               <strong style="color:var(--navy)">{{ f.num }}</strong>
             </td>
@@ -94,43 +96,25 @@
                 {{ f.estado.toUpperCase() }}
               </span>
             </td>
-            <td class="center">
-              <div style="display:flex;gap:4px;justify-content:center">
-                <button
-                  class="btn btn-secondary btn-sm"
-                  style="padding:2px 5px;font-size:10px"
-                  title="Descargar PDF"
-                  @click="descargarFacturaPDF(f)"
-                >
-                  <i class="ti ti-download"></i>
-                </button>
-                <button
-                  class="btn btn-secondary btn-sm"
-                  style="padding:2px 5px;font-size:10px"
-                  title="Ver / Reimprimir Factura"
-                  @click="verFactura(f)"
-                >
-                  <i class="ti ti-printer"></i>
-                </button>
-                <button
-                  v-if="store.rol === 'gerente' && f.estado !== 'anulada' && vistaActual === 'facturas'"
-                  class="btn btn-danger btn-sm"
-                  style="padding:2px 5px;font-size:10px"
-                  title="Anular Factura"
-                  @click="iniciarAnulacion(f)"
-                >
-                  <i class="ti ti-trash"></i>
-                </button>
-                <button
-                  v-if="vistaActual === 'cotizaciones' && ['activa', 'por_vencer'].includes(f.estado)"
-                  class="btn btn-green btn-sm"
-                  style="padding:2px 5px;font-size:10px"
-                  title="Convertir a Factura"
-                  @click="store.convertirPresupuestoEnVenta(f.id)"
-                >
-                  <i class="ti ti-arrow-right"></i>
-                </button>
-              </div>
+            <!-- La fila abre el documento (imprimir y PDF están adentro); aquí solo lo que no está allí -->
+            <td class="center" @click.stop>
+              <button
+                v-if="store.rol === 'gerente' && f.estado !== 'anulada' && vistaActual === 'facturas'"
+                class="btn btn-secondary btn-sm btn-accion"
+                style="color:var(--red)"
+                title="Anular factura"
+                @click="iniciarAnulacion(f)"
+              >
+                <i class="ti ti-x"></i> Anular
+              </button>
+              <button
+                v-if="vistaActual === 'cotizaciones' && ['activa', 'por_vencer'].includes(f.estado)"
+                class="btn btn-primary btn-sm btn-accion"
+                title="Convertir a factura"
+                @click="store.convertirPresupuestoEnVenta(f.id)"
+              >
+                <i class="ti ti-file-invoice"></i> Facturar
+              </button>
             </td>
           </tr>
         </tbody>
@@ -143,57 +127,26 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
-import { generarFacturaPDF, generarPresupuestoPDF } from '../services/exportLazy.js';
-import { cargarDetallesFactura } from '../services/supabase.js';
 
 const store = useArjStore();
 const busqueda = ref('');
 const filtroEstado = ref('');
 
-function obtenerClienteData(doc) {
-  if (!doc) return null;
-  const id = doc.cliente_id;
-  let cli = null;
-  if (id) cli = store.clientes.find(c => c.id === id || String(c.id) === String(id));
-  if (!cli && doc.cliente) {
-    cli = store.clientes.find(c => (c.nombre || '').trim().toLowerCase() === (doc.cliente || '').trim().toLowerCase());
+// Igual que el monolito: clic en la fila abre el documento con sus funciones
+// (imprimir, PDF, anular); la cotización abre su vista previa
+function abrirDocumento(f) {
+  if (vistaActual.value === 'facturas') {
+    store.facturaReciente = f;
+    store.modalFacturaActivo = true;
+  } else {
+    store.presupuestoSeleccionado = f;
+    store.modalPresupuestoActivo = true;
   }
-  if (cli) {
-    return {
-      rif: cli.rif || cli.cedula || '—',
-      direccion: cli.direccion || cli.dir || '—',
-      telefono: cli.telefono || cli.tel || '—'
-    };
-  }
-  return null;
-}
-
-function verFactura(f) {
-  store.facturaReciente = f;
-  store.modalFacturaActivo = true;
 }
 
 function iniciarAnulacion(f) {
   store.facturaAAnular = f;
   store.modalAnularActivo = true;
-}
-
-async function descargarFacturaPDF(f) {
-  const clienteData = obtenerClienteData(f);
-  if (vistaActual.value === 'cotizaciones') {
-    generarPresupuestoPDF(f, store.tasa_bcv, clienteData);
-    store.notif(`PDF de la cotización ${f.num} generado`, 'success');
-  } else {
-    if (!f.items || f.items.length === 0) {
-      store.notif('Cargando renglones para el PDF...', 'info');
-      const det = await cargarDetallesFactura(f.id);
-      if (det.items) f.items = det.items;
-      if (det.pagos) f.pagos = det.pagos;
-    }
-    // A-04: empresa, tasa y cliente congelados en la propia factura
-    generarFacturaPDF(f);
-    store.notif(`PDF de la factura ${f.num} generado`, 'success');
-  }
 }
 
 const vistaActual = ref('facturas');

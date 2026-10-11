@@ -332,3 +332,9 @@ body.letra-grande .confirm-box {
 /* Botones de acción por fila: ícono + palabra */
 .btn-accion { padding: 6px 10px; font-size: 13px; min-height: 34px; }
 .btn-accion i { font-size: 16px; }
+
+/* Filas que se abren con un clic (como en el monolito): se nota que se pueden tocar */
+.fila-abre { cursor: pointer; }
+.fila-abre:hover td { background: #EEF4FF !important; }
+body.dark .fila-abre:hover td { background: rgba(59, 130, 246, 0.12) !important; }
+.fila-abre:hover td:first-child { box-shadow: inset 4px 0 0 var(--blue); }

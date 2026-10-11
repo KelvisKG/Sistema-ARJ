@@ -188,3 +188,44 @@ describe('detalle de factura (v13.39)', () => {
     expect(filtrarAvisos()).toEqual([]);
   });
 });
+
+describe('clic en la fila abre su ventana (como el monolito)', () => {
+  test('Historial: la fila abre la factura; "Anular" no la abre', async () => {
+    const { w, store } = await montar(vistas['../src/views/HistorialView.vue'].default);
+    await w.find('tr.fila-abre').trigger('click');
+    expect(store.modalFacturaActivo).toBe(true);
+    expect(store.facturaReciente.num).toBe('VD-2026-00032');
+    store.modalFacturaActivo = false;
+    await w.find('tr.fila-abre button').trigger('click');
+    expect(store.modalAnularActivo).toBe(true);
+    expect(store.modalFacturaActivo).toBe(false);
+  });
+  test('Presupuestos: la fila abre la vista previa; "Facturar" no la abre', async () => {
+    const { w, store } = await montar(vistas['../src/views/PresupuestosView.vue'].default);
+    await w.find('tr.fila-abre').trigger('click');
+    expect(store.modalPresupuestoActivo).toBe(true);
+    store.modalPresupuestoActivo = false;
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await w.find('tr.fila-abre button').trigger('click');
+    expect(store.modalPresupuestoActivo).toBe(false);
+  });
+  test('Clientes: la fila abre la ficha y su factura pendiente abre la factura', async () => {
+    const { w, store } = await montar(vistas['../src/views/ClientesView.vue'].default);
+    await w.find('tr.fila-abre').trigger('click');
+    expect(w.find('#modal-detalle-cliente').exists()).toBe(true);
+    const filas = w.findAll('#modal-detalle-cliente tr.fila-abre');
+    if (filas.length) {
+      await filas[0].trigger('click');
+      expect(store.modalFacturaActivo).toBe(true);
+    }
+  });
+  test('Cuentas por Cobrar: la fila abre la factura; "Abonar" abre el abono', async () => {
+    const { w, store } = await montar(vistas['../src/views/CuentasCobrarView.vue'].default);
+    await w.find('.deuda-row').trigger('click');
+    expect(store.modalFacturaActivo).toBe(true);
+    store.modalFacturaActivo = false;
+    await w.find('.deuda-row .btn-primary').trigger('click');
+    expect(store.modalFacturaActivo).toBe(false);
+    expect(w.find('#modal-abono').exists()).toBe(true);
+  });
+});
