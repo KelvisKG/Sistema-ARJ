@@ -18,6 +18,7 @@ import {
   requiereReferencia, calcularAbono
 } from '../services/cobros.js';
 import { esHoyVE, periodoDe } from '../services/fechas.js';
+import { MAX_FOTOS, comprimirImagen, nombreFoto } from '../services/monolito.js';
 
 const carritoVacio = () => ({
   cliente_id: null,
@@ -97,7 +98,10 @@ export const useArjStore = defineStore('arj', {
     modalTraspasoActivo: false,
     modalNotasActivo: false,
     modalRecepcionActivo: false,
+    modalRecepcionesActivo: false,   // historial de recepciones y conteos (v13.21)
     modalEmbarquesActivo: false,
+    modalNotaCreditoActivo: false,
+    facturaNC: null,
     modalEditProdActivo: false,
     productoSeleccionado: null,
     modalDtoDivisaActivo: false,
@@ -207,8 +211,10 @@ export const useArjStore = defineStore('arj', {
       if (this.autenticado) this.logBitacora('sesion', `${this.usuarioNombre} cerró sesión`);
       await db.cerrarSesion();
       const tema = localStorage.getItem('arj_tema');
+      const letra = localStorage.getItem('arj_letra');
       localStorage.clear();
       if (tema) localStorage.setItem('arj_tema', tema);
+      if (letra) localStorage.setItem('arj_letra', letra);
       // Recargar la página borra toda la memoria del navegador (igual que el monolito)
       window.location.reload();
     },
@@ -737,6 +743,32 @@ export const useArjStore = defineStore('arj', {
       }
     },
 
+    // ═══════════════ NOTA DE CRÉDITO (monolito v13.8 / v13.33, sql/09) ═══════════════
+    // items: [{ cod_alt, cantidad, producto_id }]
+    async emitirNotaCredito(fac, items, motivo, destino) {
+      if (!this._exigirGerente('emitir notas de crédito')) return null;
+      if (!this._exigirConexion('Nota de crédito')) return null;
+      if (this.procesando) return null;
+      this.procesando = true;
+      try {
+        const r = await db.emitirNotaCreditoBD(fac.id, items.map(i => ({ cod_alt: i.cod_alt, cantidad: i.cantidad })), motivo, destino);
+        if (!r.ok) { this.notif('Error emitiendo la nota de crédito: ' + r.error, 'error'); return null; }
+        fac.saldo_pendiente = r.saldo_pendiente;
+        fac.abonado = Math.max(0, fac.total - r.saldo_pendiente);
+        if (r.saldo_pendiente < 0.01) { fac.estado = 'pagada'; fac.estado_bd = 'pagada'; }
+        await Promise.all([
+          this.recargarProductos(items.map(i => i.producto_id).filter(Boolean)),
+          fac.cliente_id ? this.recargarClientes([fac.cliente_id]) : null
+        ]);
+        this.logBitacora('anulacion', `Nota de crédito sobre ${fac.num} por ${fmtUSD(r.total)} (${r.unidades} unidades: ${r.detalle}) — ` +
+          `${r.destino === 'efectivo' ? 'efectivo devuelto' : 'a favor del cliente'} — motivo: "${motivo}"`, true);
+        this.notif(`Nota de crédito por ${fmtUSD(r.total)} emitida. Stock devuelto.`, 'success');
+        return r;
+      } finally {
+        this.procesando = false;
+      }
+    },
+
     // ═══════════════ COTIZACIONES (A-10) ═══════════════
     async guardarPresupuesto({ cliente_id, cliente, items, tier }) {
       if (!this._exigirConexion('Guardar cotización')) return null;
@@ -825,24 +857,89 @@ export const useArjStore = defineStore('arj', {
     },
 
     // ═══════════════ INVENTARIO (C-01) ═══════════════
-    async guardarProducto(datos) {
+    // `bitacora`: { texto, critico } con el mensaje del monolito; si no viene, uno genérico
+    async guardarProducto(datos, bitacora) {
       if (!this._exigirGerente('editar productos')) return false;
       if (!this._exigirConexion('Guardar producto')) return false;
       // Al editar se manda también el stock que se vio al abrir: el servidor solo lo
       // cambia si el gerente lo modificó y nadie lo movió mientras tanto
       const original = datos.id ? this.productos.find(p => p.id === datos.id) : null;
-      const r = await db.guardarProductoBD({
+      const fila = {
         id: datos.id || null, cod_alt: datos.cod_alt, cod_orig: datos.cod_orig, cod_barras: datos.cod_barras,
         descripcion: datos.desc, marca: datos.marca, fob: datos.fob, stock_vd: datos.stock_vd, stock_dist: datos.stock_dist,
         stock_vd_original: datos.stock_vd_original ?? (original ? original.stock_vd : null),
         stock_dist_original: datos.stock_dist_original ?? (original ? original.stock_dist : null),
         marca_modelo: datos.marca_modelo, sistema: datos.sistema, precio_manual: datos.precio_manual || null,
         origen: datos.origen, factor_landed: datos.factor_landed, proveedor: datos.proveedor
-      });
-      if (!r.ok) { this.notif('❌ No se guardó el producto: ' + r.error, 'error'); return false; }
+      };
+      // Fotos (sql/09): solo se mandan si la pantalla las trae, para no borrarlas
+      if (datos.imagen_url !== undefined) fila.imagen_url = datos.imagen_url || '';
+      const r = await db.guardarProductoBD(fila);
+      if (!r.ok) { this.notif('⚠ No se guardó en la base de datos: ' + r.error, 'error'); return false; }
       await (datos.id ? this.recargarProductos([datos.id]) : this.recargarProductos());
-      this.logBitacora('producto', `${datos.id ? 'Editó' : 'Creó'} producto ${datos.cod_alt}`, true);
-      this.notif(`Producto ${datos.cod_alt} guardado`, 'success');
+      if (bitacora) this.logBitacora('inventario', bitacora.texto, !!bitacora.critico);
+      else this.logBitacora('inventario', `${datos.id ? 'Editó' : 'Creó'} producto ${datos.cod_alt}`, true);
+      this.notif('Producto guardado. Los vendedores ven los cambios inmediatamente.', 'success');
+      return true;
+    },
+
+    // Sube las fotos nuevas (máx. 3 por producto) y devuelve la lista final de URLs
+    async subirFotosProducto(prod, actuales, archivos) {
+      const lista = [...actuales];
+      const espacio = MAX_FOTOS - lista.length;
+      const aSubir = Array.from(archivos || []).slice(0, Math.max(0, espacio));
+      if ((archivos || []).length > espacio) this.notif('Máximo 3 fotos por producto. Se subirán ' + aSubir.length, 'warning');
+      if (aSubir.length) this.notif('Subiendo ' + aSubir.length + ' foto(s)...', 'warning');
+      for (const f of aSubir) {
+        try {
+          const img = await comprimirImagen(f, 1280, 0.85);
+          lista.push(await db.subirFotoProductoBD(img, nombreFoto(prod)));
+        } catch (e) {
+          console.error('[foto]', e);
+          this.notif('No se pudo subir la foto: ' + (e.message || e), 'error');
+        }
+      }
+      return lista;
+    },
+
+    async crearSistema(nombre) {
+      if (!this._exigirGerente('crear sistemas')) return false;
+      if (!this._exigirConexion('Crear sistema')) return false;
+      const r = await db.crearSistemaBD(nombre);
+      if (!r.ok) { this.notif('No se pudo guardar el sistema: ' + r.error, 'error'); return false; }
+      this.sistemas = [...this.sistemas, r.nombre];
+      this.logBitacora('inventario', `Agregó nuevo sistema "${r.nombre}" a la lista`, false);
+      this.notif(`Sistema "${r.nombre}" guardado.`, 'success');
+      return r.nombre;
+    },
+
+    // Monolito eliminarProducto: nunca facturado = borrado real; facturado = desactivado
+    async eliminarProducto(p) {
+      if (!this._exigirGerente('eliminar productos')) return false;
+      if (!this._exigirConexion('Eliminar producto')) return false;
+      let veces;
+      try {
+        veces = await db.contarFacturasProducto(p.id);
+      } catch (e) {
+        console.error('[eliminarProducto]', e);
+        this.notif('No se pudo verificar en la base de datos. Intenta de nuevo.', 'error');
+        return false;
+      }
+      const definitivo = veces === 0;
+      const pregunta = definitivo
+        ? `¿Eliminar DEFINITIVAMENTE el producto "${p.desc}" (${p.cod_alt})?\n\nEste producto nunca ha sido facturado. Esta acción no se puede deshacer.`
+        : `El producto "${p.desc}" (${p.cod_alt}) aparece en ${veces} factura(s).\n\nNo se puede borrar sin dañar el histórico fiscal.\n\n¿Deseas DESACTIVARLO? Desaparecerá de la lista pero el histórico se conserva.`;
+      if (!confirm(pregunta)) return false;
+      const r = await db.eliminarProductoBD(p.id, definitivo);
+      if (!r.ok) { this.notif((definitivo ? 'Error al eliminar' : 'Error al desactivar') + ' en la base de datos: ' + r.error, 'error'); return false; }
+      this.productos = this.productos.filter(x => x.id !== p.id);
+      if (r.accion === 'eliminado') {
+        this.logBitacora('inventario', `Eliminó producto ${p.cod_alt} - ${p.desc} (borrado definitivo, sin facturas)`, true);
+        this.notif('✓ Producto eliminado', 'success');
+      } else {
+        this.logBitacora('inventario', `Desactivó producto ${p.cod_alt} - ${p.desc} (estaba en ${r.veces} factura(s))`, true);
+        this.notif('✓ Producto desactivado (histórico conservado)', 'success');
+      }
       return true;
     },
 

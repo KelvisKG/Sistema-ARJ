@@ -41,6 +41,15 @@
         </button>
 
         <button
+          :class="['letra-btn', { activo: letraGrande }]"
+          :title="letraGrande ? 'Volver a la letra normal' : 'Agrandar la letra de todo el sistema'"
+          @click="toggleLetra"
+        >
+          <span style="font-size:13px">A</span><span style="font-size:19px">A</span>
+          <span class="letra-txt">{{ letraGrande ? 'Letra normal' : 'Letra grande' }}</span>
+        </button>
+
+        <button
           class="bell-btn"
           @click="toggleModoOscuro"
           :title="modoOscuro ? 'Modo claro' : 'Modo oscuro'"
@@ -311,6 +320,18 @@ function confirmarCambioEmpresa() {
   store.cambiarEmpresa(nueva);
   mostrarModalEmpresa.value = false;
 }
+
+// Letra grande: preferencia de esta computadora (sobrevive al cerrar sesión)
+const letraGrande = ref(false);
+function aplicarLetra(on) {
+  letraGrande.value = on;
+  document.body.classList.toggle('letra-grande', on);
+}
+function toggleLetra() {
+  aplicarLetra(!letraGrande.value);
+  try { localStorage.setItem('arj_letra', letraGrande.value ? 'grande' : 'normal'); } catch (e) { /* sin almacenamiento */ }
+}
+try { aplicarLetra(localStorage.getItem('arj_letra') === 'grande'); } catch (e) { /* sin almacenamiento */ }
 
 function toggleModoOscuro() {
   modoOscuro.value = !modoOscuro.value;

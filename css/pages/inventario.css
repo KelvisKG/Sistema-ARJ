@@ -57,3 +57,45 @@
     .role-gerente .col-restricted {
       display: table-cell
     }
+
+    /* Tabla del inventario (monolito v13) */
+    .inv-table {
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden
+    }
+
+    .inv-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px
+    }
+
+    .inv-table th {
+      background: var(--navy);
+      color: #FFF;
+      text-align: left;
+      padding: 10px;
+      font-weight: 500;
+      font-size: 11px
+    }
+
+    .inv-table th.num,
+    .inv-table td.num {
+      text-align: right
+    }
+
+    .inv-table th.center,
+    .inv-table td.center {
+      text-align: center
+    }
+
+    .inv-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--gray)
+    }
+
+    .inv-table tr:hover td {
+      background: #FAFBFC
+    }

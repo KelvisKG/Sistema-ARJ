@@ -15,6 +15,10 @@ vi.mock('../src/services/supabase.js', async (original) => ({
   cargarItemsVentasMes: async () => [],
   cargarDetallesFactura: async () => ({ items: [], pagos: [] }),
   cargarFacturasRango: async () => [],
+  cargarVentasPeriodo: async () => ({ fmap: {}, its: [], nFacts: 0 }),
+  cargarCobradoMes: async () => ({ total: 0, cuenta: 0 }),
+  cargarRecepciones: async () => [],
+  cargarRenglonesNotaCredito: async () => ({ items: [{ producto_id: 1, cod_alt: 'HF6510', descripcion: 'Filtro', cantidad: 2, precio_unitario: '13' }], yaDev: {} }),
   guardarBitacoraEnSupabase: async () => {}
 }));
 
@@ -118,6 +122,8 @@ const banderas = {
   'DtoManualModal.vue': s => { s.modalDtoManualActivo = true; },
   'NuevoClienteRapidoModal.vue': s => { s.modalNuevoClienteActivo = true; },
   'ListaPreciosModal.vue': s => { s.modalListaPreciosActivo = true; },
+  'RecepcionesModal.vue': s => { s.modalRecepcionesActivo = true; },
+  'NotaCreditoModal.vue': s => { s.facturaNC = s.todasFacturas[0]; s.modalNotaCreditoActivo = true; },
   'ModoCajaModal.vue': s => { s.modoCajaActivo = true; },
   'PresupuestoPreviewModal.vue': s => { s.presupuestoSeleccionado = s.presupuestos[0]; s.modalPresupuestoActivo = true; },
   'HeaderNav.vue': s => { s.tasas_actualizadas = null; },
@@ -158,5 +164,27 @@ describe('flujo de facturación en el store', () => {
   test('sin confirmar tasas hoy no se puede emitir', async () => {
     const { store } = await montar({ template: '<div/>' }, s => { s.tasas_actualizadas = '2020-01-01T12:00:00Z'; });
     expect(store.validarEmision()).toMatch(/confirmado hoy/);
+  });
+});
+
+describe('detalle de factura (v13.39)', () => {
+  test('marca cada renglón como importado o local y muestra la mezcla', async () => {
+    const mod = modales['../src/components/modals/FacturaModal.vue'];
+    const { w } = await montar(mod.default, s => {
+      const f = s.todasFacturas[0];
+      f.items = [
+        { id: 1, cod_alt: 'HF6510', desc: 'Filtro', cant: 4, precio: 20, total_linea: 80, origen: 'importado' },
+        { id: 2, cod_alt: 'X1', desc: 'Rótula', cant: 1, precio: 20, total_linea: 20, origen: '', factor_landed: 1 }
+      ];
+      f.pagos = [{ fecha: new Date().toISOString(), monto_usd: 60, metodo: 'Efectivo USD' }];
+      s.facturaReciente = f;
+      s.modalFacturaActivo = true;
+    });
+    const t = w.text();
+    expect(t).toContain('IMP');
+    expect(t).toContain('LOC?');
+    expect(t).toContain('(80.0%)');
+    expect(t).toContain('(20.0%)');
+    expect(filtrarAvisos()).toEqual([]);
   });
 });

@@ -56,7 +56,10 @@
             <tr v-for="(it, idx) in store.facturaReciente.items" :key="it.id" style="border-bottom:1px solid #EEE">
               <td class="center" style="color:var(--dgray)">{{ idx + 1 }}</td>
               <td style="font-weight:700;font-family:monospace;font-size:11px">{{ it.cod_alt }}</td>
-              <td>{{ it.desc }}</td>
+              <td>
+                <!-- v13.39: importado o local decide si el cobro se convierte a USDT -->
+                <span :title="badge(it).titulo" :style="badge(it).estilo">{{ badge(it).txt }}</span>{{ it.desc }}
+              </td>
               <td class="center">{{ it.cant }}</td>
               <td class="num">{{ fmtUSD(it.precio) }}</td>
               <td class="num" style="font-weight:700">{{ fmtUSD(it.cant * it.precio) }}</td>
@@ -69,6 +72,13 @@
             </tr>
           </tbody>
         </table>
+        <!-- Qué porcentaje de la factura es importado: el mismo reparto con que el reporte prorratea descuentos y cobros -->
+        <div v-if="mezcla" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:7px;font-size:11.5px;color:var(--dgray)">
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#1F3864;margin-right:5px"></span>
+            Importado <strong style="color:#1F3864">{{ fmtUSD(mezcla.imp) }}</strong> ({{ (mezcla.imp / mezcla.tot * 100).toFixed(1) }}%)</span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#BF8F00;margin-right:5px"></span>
+            Local <strong style="color:#8A6200">{{ fmtUSD(mezcla.loc) }}</strong> ({{ (mezcla.loc / mezcla.tot * 100).toFixed(1) }}%)</span>
+        </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px">
@@ -185,12 +195,31 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD, fmtBsMonto } from '../../services/pricing.js';
+import { fmtUSD, fmtBsMonto, origenDe } from '../../services/pricing.js';
 import { generarFacturaPDF } from '../../services/exportLazy.js';
 import { cargarDetallesFactura } from '../../services/supabase.js';
 
 const store = useArjStore();
 const cargandoDetalles = ref(false);
+
+// v13.39: la descripción no dice si el producto es importado o local, y eso decide
+// si el cobro se convierte a USDT. Mismo criterio que el reporte Importado vs Local.
+const totalRenglon = it => (it.total_linea != null ? parseFloat(it.total_linea) || 0 : (it.cant || 0) * (it.precio || 0));
+const ESTILO_BADGE = 'display:inline-block;font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:5px;';
+function badge(it) {
+  const o = origenDe(it, store.productos);
+  const declarado = ['local', 'importado'].includes(String(it.origen || '').trim().toLowerCase());
+  const deducido = 'Sin origen guardado — deducido por el factor landed';
+  return o === 'importado'
+    ? { txt: 'IMP' + (declarado ? '' : '?'), titulo: declarado ? 'Producto importado' : deducido, estilo: ESTILO_BADGE + 'background:#E3EAF5;color:#1F3864' }
+    : { txt: 'LOC' + (declarado ? '' : '?'), titulo: declarado ? 'Compra local' : deducido, estilo: ESTILO_BADGE + 'background:#F6EBD2;color:#8A6200' };
+}
+const mezcla = computed(() => {
+  const its = (store.facturaReciente && store.facturaReciente.items) || [];
+  let imp = 0, loc = 0;
+  its.forEach(it => { if (origenDe(it, store.productos) === 'importado') imp += totalRenglon(it); else loc += totalRenglon(it); });
+  return its.length && imp + loc > 0 ? { imp, loc, tot: imp + loc } : null;
+});
 
 
 // Renglones y pagos se traen de la BD cuando la factura viene del historial

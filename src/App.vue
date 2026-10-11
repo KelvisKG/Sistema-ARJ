@@ -38,6 +38,8 @@
       <EmbarquesModal />
       <ListaPreciosModal />
       <RecepcionModal />
+      <RecepcionesModal />
+      <NotaCreditoModal />
 
       <!-- BOTÓN AYUDA FLOTANTE Y HINT DE ATAJOS -->
       <button class="help-fab" @click="mostrarModalAyuda = true" title="Ayuda y atajos">
@@ -118,6 +120,8 @@ import NuevoClienteRapidoModal from './components/modals/NuevoClienteRapidoModal
 import EmbarquesModal from './components/modals/EmbarquesModal.vue';
 import ListaPreciosModal from './components/modals/ListaPreciosModal.vue';
 import RecepcionModal from './components/modals/RecepcionModal.vue';
+import RecepcionesModal from './components/modals/RecepcionesModal.vue';
+import NotaCreditoModal from './components/modals/NotaCreditoModal.vue';
 import PresupuestoPreviewModal from './components/modals/PresupuestoPreviewModal.vue';
 import ToastNotification from './components/common/ToastNotification.vue';
 
@@ -151,6 +155,8 @@ onMounted(async () => {
   if (tema === 'dark') {
     document.body.classList.add('dark');
   }
+  // Letra grande también en la pantalla de inicio de sesión
+  if (localStorage.getItem('arj_letra') === 'grande') document.body.classList.add('letra-grande');
 
   document.body.classList.add(`empresa-${store.empresa}`);
 
