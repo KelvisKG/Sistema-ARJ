@@ -155,6 +155,8 @@ onMounted(async () => {
   if (tema === 'dark') {
     document.body.classList.add('dark');
   }
+  // Letra grande también en la pantalla de inicio de sesión
+  if (localStorage.getItem('arj_letra') === 'grande') document.body.classList.add('letra-grande');
 
   document.body.classList.add(`empresa-${store.empresa}`);
 

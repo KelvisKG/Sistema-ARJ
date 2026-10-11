@@ -211,8 +211,10 @@ export const useArjStore = defineStore('arj', {
       if (this.autenticado) this.logBitacora('sesion', `${this.usuarioNombre} cerró sesión`);
       await db.cerrarSesion();
       const tema = localStorage.getItem('arj_tema');
+      const letra = localStorage.getItem('arj_letra');
       localStorage.clear();
       if (tema) localStorage.setItem('arj_tema', tema);
+      if (letra) localStorage.setItem('arj_letra', letra);
       // Recargar la página borra toda la memoria del navegador (igual que el monolito)
       window.location.reload();
     },

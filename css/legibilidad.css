@@ -1,0 +1,334 @@
+/* =====================================================================
+   SISTEMA ARJ · LECTURA FÁCIL (pedido de JJ, oct-2026)
+   Se carga de último. No cambia colores de marca ni la distribución de
+   las pantallas: solo hace todo más grande, con más contraste y más fácil
+   de tocar, pensando en personas mayores.
+
+   1. Contraste: el gris de los textos secundarios y los bordes es más oscuro.
+   2. Letra: ningún texto baja de 12 px (muchas pantallas usaban 9–11 px).
+   3. Botones y campos más altos, con foco bien visible al usar el teclado.
+   4. Tablas con letra de 14 px y filas alternadas para seguir la línea.
+   5. "Letra grande" (botón Aa en la barra): agranda todo un 15 % más.
+   ===================================================================== */
+
+/* ─── 1. Contraste ─── */
+:root {
+  --dgray: #334155;
+  --text-muted: #334155;
+  --border: #CBD5E1;
+  --border-hover: #94A3B8;
+}
+body.dark {
+  --dgray: #CBD5E1;
+  --text-muted: #CBD5E1;
+  --border: #3A4D68;
+}
+
+body {
+  font-size: 16px;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+
+::placeholder {
+  color: #64748B;
+  opacity: 1;
+  font-size: 14.5px;
+}
+
+/* ─── 2. Piso de tamaño de letra ───
+   Las pantallas traen tamaños escritos a mano (style="font-size:10px").
+   Aquí se suben a un mínimo legible sin tocar cada pantalla. Se excluyen los
+   circulitos de contador (border-radius:50%) porque la letra no cabría. */
+[style*="font-size:9px"]:not([style*="border-radius:50%"]),
+[style*="font-size: 9px"]:not([style*="border-radius: 50%"]),
+[style*="font-size:9.5px"]:not([style*="border-radius:50%"]),
+[style*="font-size: 9.5px"]:not([style*="border-radius: 50%"]),
+[style*="font-size:10px"]:not([style*="border-radius:50%"]),
+[style*="font-size: 10px"]:not([style*="border-radius: 50%"]),
+[style*="font-size:10.5px"],
+[style*="font-size: 10.5px"] {
+  font-size: 12px !important;
+}
+[style*="font-size:11px"],
+[style*="font-size: 11px"],
+[style*="font-size:11.5px"],
+[style*="font-size: 11.5px"] {
+  font-size: 12.5px !important;
+}
+[style*="font-size:12px"],
+[style*="font-size: 12px"] {
+  font-size: 13.5px !important;
+}
+[style*="font-size:12.5px"],
+[style*="font-size: 12.5px"] {
+  font-size: 14px !important;
+}
+
+/* Mismo piso para las clases de cada hoja (generado a partir de ellas; lo que
+   viene más abajo, ajustado a mano, tiene prioridad). */
+/* css/layout.css */
+.empresa-switch { font-size: 14px; }
+.header-right { font-size: 13.5px; }
+.user-pill { font-size: 13.5px; }
+.user-pill .role { font-size: 12px; }
+.panic-btn { font-size: 13.5px; }
+#banner-tasas .bt-sub { font-size: 12.5px; }
+#banner-tasas button { font-size: 13.5px; }
+
+/* css/components/badges.css */
+.badge { font-size: 12.5px; }
+.mov-chip { font-size: 13.5px; }
+.alert-stock { font-size: 13.5px; }
+.cliente-info { font-size: 12.5px; }
+.inv-stock-badge { font-size: 12.5px; }
+.inv-stock-other { font-size: 12.5px; }
+.marca-chip { font-size: 12.5px; }
+.marca-chip i { font-size: 12.5px; }
+
+/* css/components/buttons.css */
+.btn-sm { font-size: 14px; }
+
+/* css/components/cards.css */
+.kpi-label { font-size: 13.5px; }
+.kpi-sub { font-size: 12.5px; }
+
+/* css/components/forms.css */
+.tier-btn { font-size: 13.5px; }
+.mov-chip { font-size: 13.5px; }
+.field-error { font-size: 12.5px; }
+
+/* css/components/notifications.css */
+.notif-item { font-size: 13.5px; }
+.notif-item .desc { font-size: 12.5px; }
+
+/* css/components/search.css */
+.search-item .codigo { font-size: 12.5px; }
+.search-item .stock { font-size: 12.5px; }
+.search-tab { font-size: 14px; }
+
+/* css/components/tables.css */
+.tbl, .simple-tbl { font-size: 14px; }
+.tbl th, .simple-tbl th { font-size: 12.5px; }
+.price-edit-cell { font-size: 14px; }
+.qty-cell { font-size: 14px; }
+
+/* css/pages/alertas.css */
+.filtro-alerta { font-size: 13.5px; }
+.alerta-desc { font-size: 14px; }
+.alerta-meta { font-size: 12.5px; }
+
+/* css/pages/config-precios.css */
+.btn-multi { font-size: 13.5px; }
+.btn-multi small { font-size: 12px; }
+.fiscal-check { font-size: 14px; }
+.fiscal-check small { font-size: 12.5px; }
+
+/* css/pages/cuentas-cobrar.css */
+.deuda-fecha { font-size: 12.5px; }
+.deuda-abono { font-size: 12.5px; }
+
+/* css/pages/facturacion.css */
+.total-row.small { font-size: 12.5px; }
+.pago-tit { font-size: 13.5px; }
+.pago-row select, .pago-row input { font-size: 13.5px; }
+.pago-moneda { font-size: 12px; }
+.add-pago { font-size: 12.5px; }
+
+/* css/pages/favoritos.css */
+.fav-card .fav-star { font-size: 13.5px; }
+.fav-card .fav-cod { font-size: 12.5px; }
+.fav-card .fav-desc { font-size: 12.5px; }
+.fav-card .fav-precio { font-size: 14px; }
+.fav-card .fav-delete { font-size: 12px; }
+
+/* css/pages/inventario.css */
+#banner-tasas .bt-sub { font-size: 12.5px; }
+#banner-tasas button { font-size: 14px; }
+.inv-table table { font-size: 13.5px; }
+.inv-table th { font-size: 12.5px; }
+
+/* css/pages/listas-precios.css */
+.lpa-st b { font-size: 12px; }
+.lpa-st i { font-size: 12px; }
+.lpa-det summary { font-size: 12.5px; }
+.lp-marca .n { font-size: 12.5px; }
+.lp-vacio { font-size: 14px; }
+.lp-acciones-marca button { font-size: 12.5px; }
+.lista-precio-row .lp-desc { font-size: 12.5px; }
+.lista-precio-row .lp-tag { font-size: 12px; }
+
+/* css/pages/login.css */
+.login-field label { font-size: 13.5px; }
+.login-hint { font-size: 12.5px; }
+.demo-users { font-size: 12.5px; }
+
+/* css/pages/reportes.css */
+.bar-row { font-size: 13.5px; }
+.bar-label { font-size: 12.5px; }
+.bar-fill { font-size: 12.5px; }
+.bar-row .bar-val { font-size: 13.5px; }
+.list-row { font-size: 13.5px; }
+
+/* css/pages/turnos.css */
+.turno-badge { font-size: 12px; }
+
+/* Encabezados de página */
+.page-title { font-size: 28px; }
+.page-sub { font-size: 15.5px; color: var(--dgray); }
+
+/* Cajas de ayuda: se leen completas, sin cortar */
+.help-box { font-size: 14.5px; line-height: 1.55; }
+
+/* ─── Barra superior y menú ─── */
+.brand { font-size: 18px; }
+.header-right { font-size: 13.5px; }
+.empresa-switch { font-size: 14px; }
+.user-pill { font-size: 13.5px; }
+.user-pill .role { font-size: 12px; }
+.panic-btn { font-size: 13.5px; }
+
+.nav-item {
+  font-size: 15px;
+  padding: 14px 16px;
+  color: #1E293B;
+}
+body.dark .nav-item { color: #E2E8F0; }
+.nav-item i { font-size: 18px; }
+/* La pestaña activa se distingue sin depender solo del color */
+.nav-item.active {
+  border-bottom-width: 4px;
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.10);
+}
+
+#banner-tasas { font-size: 15px; }
+#banner-tasas .bt-sub { font-size: 13.5px; }
+#banner-tasas button { font-size: 14px; padding: 9px 16px; }
+
+/* ─── 3. Botones ─── */
+.btn { font-size: 15px; min-height: 44px; }
+.btn i { font-size: 1.15em; }
+.btn-sm { font-size: 13.5px; padding: 8px 14px; min-height: 36px; }
+.btn-lg { font-size: 17px; min-height: 52px; }
+.btn:disabled { opacity: 0.45; }
+.btn-multi { font-size: 13.5px; }
+.btn-multi small { font-size: 11.5px; }
+.search-tab { font-size: 14.5px; padding-top: 10px; padding-bottom: 10px; }
+
+/* ─── Campos ─── */
+input[type="text"], input[type="number"], input[type="date"], input[type="month"],
+input[type="email"], input[type="password"], input[type="search"], select, textarea,
+.val-input, .form-input {
+  font-size: 15.5px;
+  min-height: 44px;
+  border-width: 2px;
+}
+textarea { min-height: 80px; }
+.inv-search input { font-size: 15.5px; padding-top: 11px; padding-bottom: 11px; }
+
+.field-row label { font-size: 14.5px; color: #1E293B; font-weight: 600; }
+.field-col label {
+  font-size: 14px;
+  color: #1E293B;
+  text-transform: none;
+  letter-spacing: 0;
+}
+body.dark .field-row label,
+body.dark .field-col label { color: #E2E8F0; }
+
+/* Foco bien visible al moverse con el teclado */
+:focus-visible {
+  outline: 3px solid #2563EB;
+  outline-offset: 2px;
+}
+input:focus, select:focus, textarea:focus, .val-input:focus {
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.25);
+}
+
+/* Casillas y radios más grandes y fáciles de marcar */
+input[type="checkbox"], input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  accent-color: #1E3A5F;
+  cursor: pointer;
+}
+
+/* ─── 4. Tablas ─── */
+.tbl, .simple-tbl { font-size: 14px; }
+.tbl th, .simple-tbl th { font-size: 12.5px; }
+.tbl td, .simple-tbl td { padding: 11px 14px; }
+
+.inv-table table { font-size: 14px; }
+.inv-table th { font-size: 12.5px; padding: 12px 10px; }
+.inv-table td { padding: 11px 10px; }
+.inv-table tbody tr:nth-child(even) td { background: #F8FAFC; }
+body.dark .inv-table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.inv-table tr:hover td { background: #EEF4FF !important; }
+
+/* Etiquetas de stock y estado */
+.inv-stock-badge { font-size: 13px; padding: 4px 10px; min-width: 38px; }
+.inv-stock-other { font-size: 12.5px; }
+.badge { font-size: 12.5px; }
+
+/* ─── Tarjetas de indicadores ─── */
+.kpi-label { font-size: 13px; color: var(--dgray); }
+.kpi-val { font-size: 27px; }
+.kpi-sub { font-size: 13px; }
+.card-tit { font-size: 16px; }
+.chart-card h3 { font-size: 15.5px; }
+
+/* Cuentas por cobrar */
+.deuda-cliente { font-size: 15.5px; }
+.deuda-fecha { font-size: 13.5px; }
+.deuda-monto { font-size: 18px; }
+.deuda-abono { font-size: 13px; }
+
+/* Listas */
+.list-row { font-size: 14px; }
+
+/* ─── Ventanas ─── */
+.modal-content h2 { font-size: 20px; }
+.modal-sub { font-size: 14.5px; }
+.confirm-box p { font-size: 14.5px; }
+
+/* Avisos emergentes: más grandes y más tiempo de lectura visual */
+.notif { font-size: 15px; }
+
+/* ─── 5. Letra grande (preferencia de cada computadora) ─── */
+body.letra-grande .main-content,
+body.letra-grande .nav,
+body.letra-grande #banner-tasas,
+body.letra-grande .modal-content,
+body.letra-grande .confirm-box {
+  zoom: 1.15;
+}
+
+/* Botón "Letra grande" de la barra superior: con texto, no solo ícono */
+.letra-btn {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #FFF;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 700;
+  line-height: 36px;
+  transition: all var(--trans-fast);
+}
+.letra-btn:hover { background: rgba(255, 255, 255, 0.28); }
+.letra-btn.activo { background: #FFF; color: var(--navy); }
+.letra-btn .letra-txt { font-size: 13.5px; margin-left: 7px; font-weight: 600; }
+@media (max-width: 900px) {
+  .letra-btn .letra-txt { display: none; }
+}
+
+/* Botones de acción por fila: ícono + palabra */
+.btn-accion { padding: 6px 10px; font-size: 13px; min-height: 34px; }
+.btn-accion i { font-size: 16px; }

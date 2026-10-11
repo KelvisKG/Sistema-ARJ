@@ -71,7 +71,7 @@
             <th class="num" style="width:9%">P. Público</th>
             <th class="center" style="width:7%">Stock</th>
             <th class="center" style="width:9%">Otra emp.</th>
-            <th v-if="esGerente" class="center" style="width:5%">Editar</th>
+            <th v-if="esGerente" class="center" style="width:13%">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -103,9 +103,9 @@
             <td class="center"><span :class="['inv-stock-badge', claseStock(stockAca(p))]">{{ stockAca(p) }}</span></td>
             <td class="center"><span class="inv-stock-other disponible" :title="`${otraEmp} tiene ${stockOtra(p)}`">{{ otraEmp }}: {{ stockOtra(p) }}</span></td>
             <td v-if="esGerente" class="center" style="white-space:nowrap">
-              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:10px" @click="abrirEditProducto(p)"><i class="ti ti-edit"></i></button>
+              <button class="btn btn-secondary btn-sm btn-accion" title="Editar este producto" @click="abrirEditProducto(p)"><i class="ti ti-edit"></i> Editar</button>
               {{ ' ' }}
-              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:10px;color:var(--red)" @click="store.eliminarProducto(p)"><i class="ti ti-trash"></i></button>
+              <button class="btn btn-secondary btn-sm btn-accion" style="color:var(--red)" title="Eliminar o desactivar este producto" @click="store.eliminarProducto(p)"><i class="ti ti-trash"></i> Eliminar</button>
             </td>
           </tr>
         </tbody>

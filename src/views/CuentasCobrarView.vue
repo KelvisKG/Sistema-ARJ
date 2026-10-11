@@ -61,9 +61,9 @@
           <div v-if="f.abonado > 0" class="deuda-abono">Abonado: {{ fmtUSD(f.abonado) }} de {{ fmtUSD(f.total) }}</div>
         </div>
         <div style="display:flex;gap:4px" @click.stop>
-          <button class="btn btn-primary btn-sm" title="Registrar abono" @click="abrirAbono(f)"><i class="ti ti-cash-banknote"></i></button>
-          <button class="btn btn-gold btn-sm" title="Nota de crédito" @click="abrirNotaCredito(f)"><i class="ti ti-receipt-refund"></i></button>
-          <button class="btn btn-red btn-sm" title="Anular factura" @click="abrirAnular(f)"><i class="ti ti-trash"></i></button>
+          <button class="btn btn-primary btn-sm" title="Registrar abono" @click="abrirAbono(f)"><i class="ti ti-cash-banknote"></i> Abonar</button>
+          <button class="btn btn-gold btn-sm" title="Nota de crédito" @click="abrirNotaCredito(f)"><i class="ti ti-receipt-refund"></i> Devolución</button>
+          <button class="btn btn-red btn-sm" title="Anular factura" @click="abrirAnular(f)"><i class="ti ti-trash"></i> Anular</button>
         </div>
       </div>
     </div>
