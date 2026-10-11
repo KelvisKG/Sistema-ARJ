@@ -30,7 +30,7 @@
             <th style="padding:8px 10px"></th>
           </tr></thead>
           <tbody>
-            <tr v-for="r in lista" :key="r.id" :style="{ borderTop: '1px solid var(--border)', opacity: r.anulado ? 0.5 : 1 }">
+            <tr v-for="r in lista" :key="r.id" class="fila-abre" title="Clic para ver el detalle" :style="{ borderTop: '1px solid var(--border)', opacity: r.anulado ? 0.5 : 1 }" @click="ver(r)">
               <td style="padding:7px 10px"><strong>{{ r.numero }}</strong><span v-if="r.anulado" style="color:var(--red);font-size:10px"> ANULADA</span>
                 <div v-if="r.referencia" style="font-size:10.5px;color:var(--dgray)">{{ r.referencia }}</div></td>
               <td style="padding:7px 10px;color:var(--dgray)">{{ fechaTxt(r.fecha) }}</td>
@@ -42,7 +42,7 @@
               <td style="padding:7px 8px;text-align:right">{{ r.productos_count || 0 }}</td>
               <td style="padding:7px 8px;text-align:right">{{ (r.unidades_count || 0).toLocaleString('es-VE') }}</td>
               <td style="padding:7px 10px;text-align:right;font-weight:600">{{ fmtUSD(r.total_costo || 0) }}</td>
-              <td style="padding:7px 10px;text-align:right"><button class="btn btn-secondary btn-sm" @click="ver(r)"><i class="ti ti-eye"></i></button></td>
+              <td style="padding:7px 10px;text-align:right;color:var(--blue)"><i class="ti ti-chevron-right"></i></td>
             </tr>
           </tbody>
         </table>

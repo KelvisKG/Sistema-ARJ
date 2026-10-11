@@ -49,7 +49,8 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="n in notasFiltradas" :key="n.id" :style="{ opacity: n.anulado ? '0.5' : '1' }">
+            <tr v-for="n in notasFiltradas" :key="n.id" class="fila-abre" title="Clic para ver e imprimir la nota"
+              :style="{ opacity: n.anulado ? '0.5' : '1' }" @click="imprimiendoId !== n.id && reimprimir(n)">
               <td>
                 <strong>{{ n.numero }}</strong>
                 <span v-if="n.anulado" style="color: var(--red); font-size: 10px; margin-left: 6px">ANULADA</span>
@@ -60,15 +61,9 @@
               <td class="num">{{ n.productos_count || 0 }}</td>
               <td class="num">{{ n.unidades_count?.toLocaleString('es-VE') || 0 }}</td>
               <td class="num" style="font-weight: 600">{{ fmtUSD(n.total_costo || 0) }}</td>
-              <td class="center">
-                <button
-                  class="btn btn-secondary btn-sm"
-                  title="Imprimir Nota"
-                  @click="reimprimir(n)"
-                  :disabled="imprimiendoId === n.id"
-                >
-                  <i class="ti" :class="imprimiendoId === n.id ? 'ti-loader-2' : 'ti-printer'" :style="imprimiendoId === n.id ? 'animation: spin 1s linear infinite' : ''"></i>
-                </button>
+              <!-- Toda la fila abre la nota: el ícono solo indica qué pasa (o que está cargando) -->
+              <td class="center" style="color: var(--blue)">
+                <i class="ti" :class="imprimiendoId === n.id ? 'ti-loader-2' : 'ti-printer'" :style="imprimiendoId === n.id ? 'animation: spin 1s linear infinite' : ''"></i>
               </td>
             </tr>
           </tbody>

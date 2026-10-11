@@ -64,7 +64,7 @@
               No se encontraron clientes registrados.
             </td>
           </tr>
-          <tr v-for="c in clientesFiltrados" :key="c.id" style="cursor:pointer" @click="abrirDetalleCliente(c)">
+          <tr v-for="c in clientesFiltrados" :key="c.id" class="fila-abre" title="Clic para ver la ficha del cliente" @click="abrirDetalleCliente(c)">
             <td>
               <strong style="color:var(--navy)">{{ c.nombre }}</strong>
               <div v-if="c.direccion" style="font-size:11px;color:var(--dgray)">{{ c.direccion }}</div>
@@ -275,7 +275,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="f in facturasPendientesCli" :key="f.id" style="border-bottom:1px solid #EEE">
+                <tr v-for="f in facturasPendientesCli" :key="f.id" class="fila-abre" style="border-bottom:1px solid #EEE" title="Clic para ver la factura" @click="verFacturaCli(f)">
                   <td style="padding:6px;font-weight:700">{{ f.num }}</td>
                   <td style="padding:6px;color:var(--dgray)">{{ f.fecha }}</td>
                   <td style="padding:6px;text-align:right;color:var(--red);font-weight:600">{{ fmtUSD(f.total - (f.abonado || 0)) }}</td>
@@ -549,6 +549,12 @@ function saldoDe(c) {
 function abrirDetalleCliente(c) {
   clienteSeleccionado.value = c;
   mostrarModalDetalle.value = true;
+}
+
+// Una factura pendiente de la ficha se abre igual que en Historial
+function verFacturaCli(f) {
+  store.facturaReciente = f;
+  store.modalFacturaActivo = true;
 }
 
 function abrirEditarCliente(c) {

@@ -67,7 +67,8 @@
               Sin presupuestos{{ store.empresa === 'directa' ? ' en Venta Directa' : ' en Distribuidora' }}
             </td>
           </tr>
-          <tr v-for="pre in presupuestosFiltrados" :key="pre.id" :style="pre.estado === 'rechazada' ? 'opacity:0.55' : ''">
+          <tr v-for="pre in presupuestosFiltrados" :key="pre.id" class="fila-abre" title="Clic para ver el presupuesto"
+            :style="pre.estado === 'rechazada' ? 'opacity:0.55' : ''" @click="abrirPreview(pre)">
             <td>
               <strong>{{ pre.num }}</strong>
               <div style="font-size:10.5px;color:var(--dgray)">{{ pre.items_count || 0 }} ítems · {{ pre.vendedor || '—' }}</div>
@@ -84,20 +85,21 @@
                 <i :class="badgeIcon(pre)"></i> {{ badgeText(pre) }}
               </span>
             </td>
-            <td class="center" style="white-space:nowrap">
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:11px" title="Ver presupuesto" @click="abrirPreview(pre)"><i class="ti ti-eye"></i></button>
+            <!-- La fila abre el presupuesto (ver e imprimir); aquí solo las acciones que cambian su estado -->
+            <td class="center" style="white-space:nowrap" @click.stop>
               <button
                 v-if="pre.estado === 'activa' || pre.estado === 'por_vencer'"
-                class="btn btn-sm" style="padding:2px 6px;font-size:11px;background:var(--green);color:#FFF;border:none"
+                class="btn btn-primary btn-sm btn-accion"
                 title="Convertir a factura"
                 @click="convertirAFactura(pre)"
-              ><i class="ti ti-file-invoice"></i></button>
+              ><i class="ti ti-file-invoice"></i> Facturar</button>
+              {{ ' ' }}
               <button
                 v-if="pre.estado !== 'convertida' && pre.estado !== 'rechazada'"
-                class="btn btn-sm" style="padding:2px 6px;font-size:11px;background:var(--red);color:#FFF;border:none"
+                class="btn btn-secondary btn-sm btn-accion" style="color:var(--red)"
                 title="Marcar como rechazado (se archiva, no se borra)"
                 @click="marcarRechazado(pre)"
-              ><i class="ti ti-archive"></i></button>
+              ><i class="ti ti-archive"></i> Rechazar</button>
             </td>
           </tr>
         </tbody>
