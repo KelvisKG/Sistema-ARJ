@@ -99,3 +99,37 @@ describe('empresa: el monolito guarda "dist"', () => {
     expect(empresasBD('directa')).toEqual(['directa']);
   });
 });
+
+import { parseTasa, fmtTasa } from '../src/services/pricing.js';
+import { totalesCarrito } from '../src/services/cobros.js';
+import { rifNorm, clienteConRif } from '../src/services/validators.js';
+
+describe('reportes de JJ (12-oct-2026)', () => {
+  test('25 $ a la tasa BCV 876,7976 = Bs. 21.919,94 (igual que la app "Al Cambio")', () => {
+    const t = totalesCarrito([{ cant: 1, precio: 25 }], { tasa_bcv: parseTasa('876,7976'), tasa_par: 980, dto_divisa: null, cobrar_verde: null });
+    expect(Math.round(t.totalBs * 100) / 100).toBe(21919.94);
+  });
+  test('la tasa se lee con todos sus decimales, con coma o con punto', () => {
+    expect(parseTasa('876,7976')).toBe(876.7976);
+    expect(parseTasa('876.7976')).toBe(876.7976);   // antes se leía como 8.767.976
+    expect(parseTasa('876.797')).toBe(876.797);
+    expect(parseTasa('1.050,25')).toBe(1050.25);
+    expect(parseTasa('1,050.25')).toBe(1050.25);
+    expect(parseTasa('1.050')).toBe(1050);
+    expect(parseTasa(876.7976)).toBe(876.7976);
+    expect(fmtTasa(876.7976)).toMatch(/^876,7976$/);
+    expect(fmtTasa(980)).toMatch(/^980,00$/);
+  });
+  test('un RIF escrito de otra forma es el mismo cliente; los genéricos no cuentan', () => {
+    expect(rifNorm('J-31010573-1')).toBe('J310105731');
+    expect(rifNorm('26035219')).toBe('V26035219');
+    expect(rifNorm('V- 13555256')).toBe('V13555256');
+    expect(rifNorm('V-00000000-0')).toBeNull();
+    expect(rifNorm('000000')).toBeNull();
+    expect(rifNorm('')).toBeNull();
+    const clientes = [{ id: 1, nombre: 'FRANCOIS BRUN', rif: 'V7086443' }];
+    expect(clienteConRif(clientes, 'v-7.086.443').nombre).toBe('FRANCOIS BRUN');
+    expect(clienteConRif(clientes, 'V7086443', 1)).toBeNull();   // editar su propio RIF
+    expect(clienteConRif(clientes, 'J-12345678-9')).toBeNull();
+  });
+});

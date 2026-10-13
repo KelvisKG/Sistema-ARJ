@@ -114,25 +114,26 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD } from '../services/pricing.js';
-import { parseMontoVE } from '../services/cobros.js';
+import { fmtUSD, parseTasa } from '../services/pricing.js';
 import { supabase, cargarPerfiles } from '../services/supabase.js';
 import { periodoDe } from '../services/fechas.js';
 
 const store = useArjStore();
 
 // ── Tasas ──
-const tasaPar = ref(String(store.tasa_par || ''));
-const tasaBcv = ref(String(store.tasa_bcv || ''));
-watch(() => [store.tasa_par, store.tasa_bcv], ([p, b]) => { tasaPar.value = String(p || ''); tasaBcv.value = String(b || ''); });
+// La tasa se muestra y se escribe con coma decimal y con todos sus decimales (876,7976)
+const aTexto = n => (n ? String(n).replace('.', ',') : '');
+const tasaPar = ref(aTexto(store.tasa_par));
+const tasaBcv = ref(aTexto(store.tasa_bcv));
+watch(() => [store.tasa_par, store.tasa_bcv], ([p, b]) => { tasaPar.value = aTexto(p); tasaBcv.value = aTexto(b); });
 
 const brechaPct = computed(() => {
-  const p = parseMontoVE(tasaPar.value), b = parseMontoVE(tasaBcv.value);
+  const p = parseTasa(tasaPar.value), b = parseTasa(tasaBcv.value);
   return b > 0 ? ((p / b - 1) * 100).toFixed(1) : '0.0';
 });
 
 async function confirmarTasasHoy() {
-  await store.confirmarTasas(parseMontoVE(tasaBcv.value), parseMontoVE(tasaPar.value));
+  await store.confirmarTasas(parseTasa(tasaBcv.value), parseTasa(tasaPar.value));
 }
 
 async function consultarBCV() {
@@ -141,7 +142,7 @@ async function consultarBCV() {
     if (!res.ok) throw new Error('Error en la API');
     const data = await res.json();
     if (data && data.promedio) {
-      tasaBcv.value = String(data.promedio);
+      tasaBcv.value = aTexto(data.promedio);
       store.notif(`BCV consultado: ${data.promedio}. Revisa y pulsa "Guardar y confirmar".`, 'info');
     }
   } catch (e) {

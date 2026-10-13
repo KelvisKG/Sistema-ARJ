@@ -200,3 +200,37 @@ export function fmtBsMonto(n) {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
   return 'Bs. ' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// TASAS (sql/10): el BCV publica la tasa con varios decimales (876,7976).
+// Redondearla a 876,80 hacía que 25 $ dieran Bs. 21.920,00 en vez de
+// Bs. 21.919,94 (lo que muestran el BCV y la app "Al Cambio").
+// ═══════════════════════════════════════════════════════════════
+
+// Lee una tasa escrita a mano: "876,7976", "876.7976", "1.050,25" o "1,050.25".
+// A diferencia de los montos, un solo punto con decimales es decimal (una tasa
+// nunca se escribe "876.797" queriendo decir 876 mil). Solo "1.050" (punto y
+// exactamente 3 cifras) se toma como miles.
+export function parseTasa(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  let s = String(v || '').trim().replace(/[^\d.,]/g, '');
+  if (!s) return 0;
+  const uc = s.lastIndexOf(','), up = s.lastIndexOf('.');
+  if (uc > -1 && up > -1) {
+    s = uc > up ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else if (uc > -1) {
+    s = (s.split(',').length === 2) ? s.replace(',', '.') : s.replace(/,/g, '');
+  } else if (up > -1) {
+    const p = s.split('.');
+    if (p.length > 2 || (p[1].length === 3 && p[0].length <= 2)) s = s.replace(/\./g, '');
+  }
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Muestra la tasa con sus decimales (2 a 4), en formato venezolano: 876,7976
+export function fmtTasa(n) {
+  const v = parseFloat(n);
+  if (!Number.isFinite(v) || v <= 0) return '—';
+  return v.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}

@@ -135,7 +135,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { isNonEmpty, isValidPhone, isValidRifOrCedula, isValidEmail } from '../../services/validators.js';
+import { isNonEmpty, isValidPhone, isValidRifOrCedula, isValidEmail, clienteConRif } from '../../services/validators.js';
 
 const store = useArjStore();
 const errors = ref({});
@@ -150,6 +150,8 @@ async function guardarCliente() {
   errors.value = {};
   if (!isNonEmpty(form.value.nombre, 3)) errors.value.nombre = 'El nombre o razón social debe tener al menos 3 caracteres';
   if (form.value.rif && !isValidRifOrCedula(form.value.rif)) errors.value.rif = 'El RIF o Cédula debe tener al menos 6 caracteres válidos';
+  const yaExiste = clienteConRif(store.clientes, form.value.rif);
+  if (yaExiste) errors.value.rif = `Ya existe: ${yaExiste.nombre} (RIF ${yaExiste.rif}). Búscalo en la lista de clientes.`;
   if (form.value.tel && !isValidPhone(form.value.tel)) errors.value.tel = 'Ingresa un número de teléfono válido (mínimo 7 dígitos)';
   if (form.value.correo && !isValidEmail(form.value.correo)) errors.value.correo = 'Correo inválido';
   if (Object.keys(errors.value).length > 0) {

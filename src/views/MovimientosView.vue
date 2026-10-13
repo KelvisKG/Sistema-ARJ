@@ -277,7 +277,7 @@
           </div>
           <span v-if="errorsDinero.monto" class="field-error"><i class="ti ti-alert-circle"></i> {{ errorsDinero.monto }}</span>
           <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
-            Conversión a tasa BCV ({{ store.tasa_bcv }} Bs/$):
+            Conversión a tasa BCV ({{ fmtTasa(store.tasa_bcv) }} Bs/$):
             <strong style="color:var(--text)">
               {{ monedaDinero === 'Bs' ? `$ ${(montoDinero / store.tasa_bcv || 0).toFixed(2)} USD` : `Bs. ${(montoDinero * store.tasa_bcv || 0).toFixed(2)}` }}
             </strong>
@@ -409,6 +409,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { periodoDe } from '../services/fechas.js';
 import { useArjStore } from '../stores/useArjStore.js';
 import { cargarFlujoCajaBD } from '../services/supabase.js';
+import { fmtTasa } from '../services/pricing.js';
 
 const store = useArjStore();
 const tabActivo = ref('dinero');

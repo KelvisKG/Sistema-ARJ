@@ -78,7 +78,7 @@
             <td>{{ f.cliente_nombre_snap || f.cliente }}</td>
             <td style="font-family:monospace;font-size:12px">{{ f.cliente_rif_snap || '—' }}</td>
             <td class="num">{{ fmtUSD(f.estado === 'anulada' ? 0 : f.total) }}</td>
-            <td class="num">{{ f.tasa_bcv }}</td>
+            <td class="num">{{ fmtTasa(f.tasa_bcv) }}</td>
             <td class="num" style="font-weight:700">{{ fmtBs(f.estado === 'anulada' ? 0 : f.total * (f.factor_bs || 1), f.tasa_bcv) }}</td>
             <td class="center">
               <span :class="['badge', f.estado === 'anulada' ? 'badge-danger' : 'badge-success']">{{ (f.estado_bd || f.estado).toUpperCase() }}</span>
@@ -93,7 +93,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBs } from '../services/pricing.js';
+import { fmtUSD, fmtBs, fmtTasa } from '../services/pricing.js';
 import { exportarLibroVentasExcel, EMISOR_FISCAL } from '../services/exportLazy.js';
 import { cargarFacturasRango, cargarItemsVentasMes } from '../services/supabase.js';
 import { fechaLocalISO } from '../services/fechas.js';

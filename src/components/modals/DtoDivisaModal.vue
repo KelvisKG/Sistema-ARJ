@@ -12,11 +12,11 @@
       <div style="background:var(--bg);border:1px solid var(--border);padding:12px 14px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text)">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span style="color:var(--text-muted)">Tasa BCV oficial:</span>
-          <strong>Bs. {{ store.tasa_bcv }}</strong>
+          <strong>Bs. {{ fmtTasa(store.tasa_bcv) }}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span style="color:var(--text-muted)">Tasa Paralelo del día:</span>
-          <strong>Bs. {{ store.tasa_par }}</strong>
+          <strong>Bs. {{ fmtTasa(store.tasa_par) }}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px;margin-top:6px;color:var(--primary);font-weight:600">
           <span>Descuento neutro exacto (sin regalar margen):</span>
@@ -74,7 +74,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD } from '../../services/pricing.js';
+import { fmtUSD, fmtTasa } from '../../services/pricing.js';
 
 const store = useArjStore();
 const dtoInput = ref(0);

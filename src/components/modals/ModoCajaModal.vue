@@ -96,7 +96,7 @@
               <strong style="font-size:24px;font-weight:800;color:var(--green)">{{ fmtUSD(store.totalCarritoUSD) }}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--text-muted);margin-bottom:16px;padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
-              <span>En Bs (tasa BCV {{ store.tasa_bcv }}):</span>
+              <span>En Bs (tasa BCV {{ fmtTasa(store.tasa_bcv) }}):</span>
               <strong style="color:var(--text);font-size:14px">{{ fmtBs(store.totalCarritoUSD, store.tasa_bcv) }}</strong>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#5D4037;margin:-8px 0 16px;padding:8px 12px;background:#FDF6E3;border-radius:8px">
@@ -122,7 +122,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD, fmtBs, precioConTier } from '../../services/pricing.js';
+import { fmtUSD, fmtBs, precioConTier, fmtTasa } from '../../services/pricing.js';
 
 const store = useArjStore();
 const busquedaCaja = ref('');
