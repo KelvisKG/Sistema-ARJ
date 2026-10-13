@@ -33,7 +33,8 @@
             <span :style="`background:${store.facturaReciente.estado === 'anulada' ? 'var(--lred)' : ((store.facturaReciente.estado === 'pagada' || saldoPendiente <= 0) ? '#E8F5E9' : 'var(--lgold)')};color:${store.facturaReciente.estado === 'anulada' ? 'var(--red)' : ((store.facturaReciente.estado === 'pagada' || saldoPendiente <= 0) ? '#1E7B34' : 'var(--gold)')};padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase`">
               {{ store.facturaReciente.estado === 'anulada' ? 'Anulada' : ((store.facturaReciente.estado === 'pagada' || saldoPendiente <= 0) ? 'Pagada' : 'Pendiente') }}
             </span>
-            <span style="font-size:12px;color:var(--navy)">{{ (store.facturaReciente.tipo_pago || 'contado').charAt(0).toUpperCase() + (store.facturaReciente.tipo_pago || 'contado').slice(1) }}</span>
+            <!-- Estado (arriba) y condición de la venta son cosas distintas: se rotula para no leerlo como dos estados -->
+            <span style="font-size:12px;color:var(--dgray)">Condición: <strong style="color:var(--navy)">{{ condicion }}</strong></span>
           </div>
         </div>
       </div>
@@ -158,11 +159,11 @@
             <div style="font-size:10px;font-weight:700;margin-bottom:8px">TASAS CONGELADAS · INTERNO</div>
             <div style="display:flex;justify-content:space-between;margin-bottom:4px">
               <span>BCV al emitir</span>
-              <span style="font-weight:600;color:var(--navy)">Bs. {{ (store.facturaReciente.tasa_bcv || 0).toFixed(2) }}</span>
+              <span style="font-weight:600;color:var(--navy)">Bs. {{ fmtTasa(store.facturaReciente.tasa_bcv) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:4px">
               <span>Paralelo al emitir</span>
-              <span style="font-weight:600;color:var(--navy)">Bs. {{ (store.facturaReciente.tasa_par || 0).toFixed(2) }}</span>
+              <span style="font-weight:600;color:var(--navy)">Bs. {{ fmtTasa(store.facturaReciente.tasa_par) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
               <span>Brecha de ese día</span>
@@ -195,7 +196,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD, fmtBsMonto, origenDe } from '../../services/pricing.js';
+import { fmtUSD, fmtBsMonto, origenDe, fmtTasa } from '../../services/pricing.js';
 import { generarFacturaPDF } from '../../services/exportLazy.js';
 import { cargarDetallesFactura } from '../../services/supabase.js';
 
@@ -240,6 +241,15 @@ watch(() => store.facturaReciente, async (f) => {
 // efectivo entrega menos dólares de los que acredita (v13.33)
 const totalAbonado = computed(() => store.facturaReciente ? (store.facturaReciente.abonado || 0) : 0);
 const saldoPendiente = computed(() => store.facturaReciente ? (store.facturaReciente.saldo_pendiente || 0) : 0);
+
+// Una venta a crédito que el cliente terminó de pagar con abonos sigue siendo "a crédito",
+// pero se aclara que ya está saldada
+const condicion = computed(() => {
+  const f = store.facturaReciente;
+  if (!f || f.tipo_pago !== 'credito') return 'Contado';
+  if (f.estado === 'anulada') return 'Crédito';
+  return (f.estado === 'pagada' || saldoPendiente.value <= 0) ? 'Crédito · ya saldada' : 'Crédito';
+});
 
 const brecha = computed(() => {
   const f = store.facturaReciente;

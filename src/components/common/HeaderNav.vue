@@ -23,10 +23,10 @@
       <div class="header-right">
         <div class="tasa-info" @click="irATasas" title="Tasa de cambio paralela">
           <i class="ti ti-currency-dollar"></i>
-          Paralelo: <strong id="tasa-par">{{ (store.tasa_par || 0).toFixed(2) }}</strong>
+          Paralelo: <strong id="tasa-par">{{ fmtTasa(store.tasa_par) }}</strong>
         </div>
         <div class="tasa-info" @click="irATasas" title="Tasa oficial BCV">
-          BCV: <strong id="tasa-bcv">{{ (store.tasa_bcv || 0).toFixed(2) }}</strong>
+          BCV: <strong id="tasa-bcv">{{ fmtTasa(store.tasa_bcv) }}</strong>
         </div>
 
         <button
@@ -80,7 +80,7 @@
       <i class="ti ti-alert-triangle" style="font-size:20px;flex:none"></i>
       <div class="bt-txt">
         <div id="bt-msg"><strong>Las tasas no se han confirmado hoy.</strong></div>
-        <div class="bt-sub" id="bt-sub">{{ textoUltimaConfirmacion }} · Vigentes: BCV {{ (store.tasa_bcv || 0).toFixed(2) }} · Paralelo {{ (store.tasa_par || 0).toFixed(2) }}.
+        <div class="bt-sub" id="bt-sub">{{ textoUltimaConfirmacion }} · Vigentes: BCV {{ fmtTasa(store.tasa_bcv) }} · Paralelo {{ fmtTasa(store.tasa_par) }}.
           <span v-if="store.rol !== 'gerente'">No se puede facturar hasta que el gerente las confirme.</span></div>
       </div>
       <div v-if="store.rol === 'gerente'" style="display:flex;gap:6px">
@@ -109,7 +109,7 @@
           <i class="ti ti-package"></i> <strong>Inventario:</strong> {{ repuestosCriticosCount }} repuestos tienen stock mínimo o agotado.
         </div>
         <div style="color:var(--dgray);font-size:12px;border-top:1px solid var(--border);padding-top:8px;margin-top:8px">
-          Tasa BCV: <strong>{{ store.tasa_bcv }}</strong> · Paralelo: <strong>{{ store.tasa_par }}</strong> · Brecha: <strong>{{ store.tasa_bcv > 0 ? ((store.tasa_par / store.tasa_bcv - 1) * 100).toFixed(1) + '%' : '0%' }}</strong>
+          Tasa BCV: <strong>{{ fmtTasa(store.tasa_bcv) }}</strong> · Paralelo: <strong>{{ fmtTasa(store.tasa_par) }}</strong> · Brecha: <strong>{{ store.tasa_bcv > 0 ? ((store.tasa_par / store.tasa_bcv - 1) * 100).toFixed(1) + '%' : '0%' }}</strong>
         </div>
       </div>
     </div>
@@ -238,6 +238,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
+import { fmtTasa } from '../../services/pricing.js';
 
 const store = useArjStore();
 const notifsAbiertas = ref(false);

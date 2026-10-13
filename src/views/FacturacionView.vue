@@ -504,7 +504,7 @@
           </div>
 
           <div class="total-row small" style="border:none;padding-bottom:0">
-            <span>Cobrar en Bs (tasa BCV {{ store.tasa_bcv }})</span>
+            <span>Cobrar en Bs (tasa BCV {{ fmtTasa(store.tasa_bcv) }})</span>
             <span id="t-bs" style="font-weight:700;color:#FFF">{{ fmtBsMonto(t.totalBs) }}</span>
           </div>
           <div class="total-row small" style="border:none;padding-top:4px;color:rgba(255,255,255,0.6);font-size:10px;justify-content:flex-end;gap:8px">
@@ -574,6 +574,13 @@
           >
             <strong>Venta de contado:</strong> registra el pago completo para poder emitir.
           </div>
+          <!-- Un crédito pagado completo se emite como contado (no "pagada" y "crédito" a la vez) -->
+          <div
+            v-else-if="store.carrito.tipo_pago === 'credito' && store.carrito.pagos.length > 0 && t.subtotal > 0 && store.faltaPorPagarUSD <= 0.01"
+            style="margin-top:10px;background:#E8F5E9;border-left:4px solid var(--green);padding:8px 12px;border-radius:6px;font-size:12px"
+          >
+            <strong>Está pagada completa:</strong> se registrará como venta de <strong>CONTADO</strong>, no a crédito.
+          </div>
           <div
             v-else-if="store.carrito.tipo_pago === 'credito' && store.carrito.pagos.length > 0 && t.subtotal > 0"
             style="margin-top:10px;background:#E8F0F8;border-left:4px solid var(--blue);padding:8px 12px;border-radius:6px;font-size:12px"
@@ -630,7 +637,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO } from '../services/pricing.js';
+import { fmtUSD, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO, fmtTasa } from '../services/pricing.js';
 import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada } from '../services/cobros.js';
 
 const store = useArjStore();
@@ -818,7 +825,9 @@ async function confirmarEmitir() {
     if (!confirm(`⚠ PRÉSTAMO INTER-EMPRESA:\n${negativos.length} producto(s) superan el stock en ${store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'}:\n\n${detalle}\n\n¿Emitir de todas formas?`)) return;
   }
   const resumen = `Cliente: ${store.carrito.cliente_nombre}\nTotal: ${fmtUSD(t.value.subtotal)} ($BCV)\n` +
-    (store.carrito.tipo_pago === 'credito' ? `Crédito ${store.carrito.dias_credito} días · queda debiendo ${fmtUSD(store.faltaPorPagarUSD)}` : 'Contado');
+    (store.carrito.tipo_pago === 'credito' && store.faltaPorPagarUSD > 0.01
+      ? `Crédito ${store.carrito.dias_credito} días · queda debiendo ${fmtUSD(store.faltaPorPagarUSD)}`
+      : (store.carrito.tipo_pago === 'credito' ? 'Contado (estaba a crédito, pero quedó pagada completa)' : 'Contado'));
   if (!confirm('¿Emitir e imprimir esta factura?\n\n' + resumen)) return;
   const r = await store.emitirFactura();
   if (r && r.ok) busquedaCliente.value = '';

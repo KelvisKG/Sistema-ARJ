@@ -19,6 +19,7 @@ import {
 } from '../services/cobros.js';
 import { esHoyVE, periodoDe } from '../services/fechas.js';
 import { MAX_FOTOS, comprimirImagen, nombreFoto } from '../services/monolito.js';
+import { clienteConRif } from '../services/validators.js';
 
 const carritoVacio = () => ({
   cliente_id: null,
@@ -616,6 +617,7 @@ export const useArjStore = defineStore('arj', {
         items: c.items, pagos: c.pagos, tipoPago: c.tipo_pago, estado: this.estadoTasas,
         descManual, motivoManual: descManual > 0 ? `Descuento manual ${c.descuento_manual}%: ${c.descuento_motivo}` : ''
       });
+      const creditoPagado = c.tipo_pago === 'credito' && r.saldoIni <= 0.01;
 
       const factura = {
         empresa: this.empresa,
@@ -629,8 +631,9 @@ export const useArjStore = defineStore('arj', {
         subtotal_usd: Math.round(r.subtotal * 100) / 100,
         saldo_pendiente: r.saldoIni,
         estado: r.estadoFactura,
-        tipo_pago: c.tipo_pago,
-        dias_credito: c.tipo_pago === 'credito' ? (parseInt(c.dias_credito) || 30) : 0,
+        // sql/10: un crédito pagado completo al emitir es contado (no "pagada" + "crédito")
+        tipo_pago: creditoPagado ? 'contado' : c.tipo_pago,
+        dias_credito: (c.tipo_pago === 'credito' && !creditoPagado) ? (parseInt(c.dias_credito) || 30) : 0,
         tasa_par: this.tasa_par,
         tasa_bcv: this.tasa_bcv,
         factor_bs: r.factorBs,
@@ -832,6 +835,12 @@ export const useArjStore = defineStore('arj', {
     // ═══════════════ CLIENTES (C-02) ═══════════════
     async crearCliente(datos) {
       if (!this._exigirConexion('Crear cliente')) return null;
+      // sql/10: el servidor no deja repetir un RIF; aquí se avisa antes de enviar
+      const existe = clienteConRif(this.clientes, datos.rif);
+      if (existe) {
+        this.notif(`Ya existe un cliente con el RIF ${existe.rif}: ${existe.nombre}. Búscalo en la lista en vez de registrarlo otra vez.`, 'error');
+        return null;
+      }
       const r = await db.crearClienteBD(datos);
       if (!r.ok) { this.notif('❌ El cliente NO se guardó: ' + r.error, 'error'); return null; }
       this.clientes.unshift(r.cliente);
@@ -844,6 +853,11 @@ export const useArjStore = defineStore('arj', {
     async actualizarCliente(id, datos) {
       if (!this._exigirConexion('Actualizar cliente')) return false;
       const actual = this.clientes.find(c => c.id === id);
+      const existe = clienteConRif(this.clientes, datos.rif, id);
+      if (existe) {
+        this.notif(`El RIF ${existe.rif} ya es de otro cliente: ${existe.nombre}.`, 'error');
+        return false;
+      }
       if (datos.nivel && actual && datos.nivel !== actual.nivel && this.rol !== 'gerente') {
         this.notif('Solo el gerente puede cambiar el nivel de precio de un cliente', 'error');
         return false;

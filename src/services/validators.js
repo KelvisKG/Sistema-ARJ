@@ -38,3 +38,19 @@ export function isValidPhone(phone) {
   const clean = String(phone).replace(/[\s\-()]/g, '');
   return clean.length >= 7 && /^\+?[0-9]+$/.test(clean);
 }
+
+// RIF normalizado, igual que arj_rif_norm() en el servidor (sql/10):
+// "J-31010573-1" = "J310105731" y un número sin letra se toma como V.
+// Devuelve null para los genéricos (vacío, "V-00000000-0", "000000"), que no cuentan como duplicados.
+export function rifNorm(rif) {
+  const n = String(rif || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!n || !/[0-9]/.test(n) || /^[VJEGP]?0+$/.test(n)) return null;
+  return /^[0-9]/.test(n) ? 'V' + n : n;
+}
+
+// Cliente que ya tiene ese RIF (sin contar al que se está editando)
+export function clienteConRif(clientes, rif, exceptoId = null) {
+  const r = rifNorm(rif);
+  if (!r) return null;
+  return (clientes || []).find(c => c.id !== exceptoId && rifNorm(c.rif) === r) || null;
+}
