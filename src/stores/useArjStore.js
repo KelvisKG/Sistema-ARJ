@@ -118,6 +118,9 @@ export const useArjStore = defineStore('arj', {
   getters: {
     esGerente: s => s.rol === 'gerente',
     puedeCambiarEmpresa: s => s.empresaPermitida === 'ambas',
+    // Perfil distribuidora (sql/11): distribuidora externa, marcada en su perfil.
+    // Solo ve productos importados y sus propios clientes, facturas y cotizaciones.
+    esPerfilDistribuidora: s => s.rol !== 'gerente' && !!(s.perfil && s.perfil.es_distribuidora),
 
     // C-09: confirmación compartida por todas las terminales, en hora de Venezuela
     tasasConfirmadasHoy: s => {
@@ -194,7 +197,7 @@ export const useArjStore = defineStore('arj', {
       this.perfil = perfil;
       this.rol = perfil.rol === 'gerente' ? 'gerente' : 'vendedor';
       this.usuarioNombre = perfil.nombre_display || 'Usuario';
-      this.empresaPermitida = empresaDePerfil(perfil.empresa);
+      this.empresaPermitida = this.esPerfilDistribuidora ? 'distribuidora' : empresaDePerfil(perfil.empresa);
       // A-02: el vendedor entra directo a SU empresa
       this._fijarEmpresa(this.empresaPermitida === 'ambas' ? 'directa' : this.empresaPermitida);
       this.autenticado = true;
@@ -225,7 +228,7 @@ export const useArjStore = defineStore('arj', {
       this.cargando = true;
       try {
         cargarDatosLocal(this);
-        const d = await db.cargarDatosCompletos();
+        const d = await db.cargarDatosCompletos({ carteraPropia: this.esPerfilDistribuidora });
         if (!d.conectado) {
           this.supabaseConectado = false;
           this.errorCarga = d.error || 'No se pudo conectar con la base de datos';
@@ -233,10 +236,10 @@ export const useArjStore = defineStore('arj', {
           return;
         }
         this.errorCarga = '';
-        this.productos = d.productos;
-        this.clientes = d.clientes;
-        this.todasFacturas = d.todasFacturas;
-        this.presupuestos = d.presupuestos;
+        this.productos = this._productosDelPerfil(d.productos);
+        this.clientes = this._delPerfil(d.clientes);
+        this.todasFacturas = this._delPerfil(d.todasFacturas);
+        this.presupuestos = this._delPerfil(d.presupuestos);
         this.embarques = d.embarques;
         this.sistemas = d.sistemas;
         this.bitacora = d.bitacora;
@@ -278,8 +281,8 @@ export const useArjStore = defineStore('arj', {
     // que bajar todo el catálogo después de cada venta)
     async recargarProductos(ids) {
       try {
-        if (!ids || !ids.length) { this.productos = await db.cargarProductos(); return; }
-        const nuevos = await db.cargarProductos(ids);
+        if (!ids || !ids.length) { this.productos = this._productosDelPerfil(await db.cargarProductos()); return; }
+        const nuevos = this._productosDelPerfil(await db.cargarProductos(ids));
         const set = new Set(ids);
         const porId = new Map(nuevos.map(p => [p.id, p]));
         this.productos = this.productos.filter(p => !set.has(p.id) || porId.has(p.id)).map(p => porId.get(p.id) || p);
@@ -287,22 +290,35 @@ export const useArjStore = defineStore('arj', {
     },
     async recargarClientes(ids) {
       try {
-        if (!ids || !ids.length) { this.clientes = await db.cargarClientes(); return; }
-        const porId = new Map((await db.cargarClientes(ids)).map(c => [c.id, c]));
+        if (!ids || !ids.length) { this.clientes = this._delPerfil(await db.cargarClientes()); return; }
+        const porId = new Map(this._delPerfil(await db.cargarClientes(ids)).map(c => [c.id, c]));
         this.clientes = this.clientes.map(c => porId.get(c.id) || c);
       } catch (e) { console.warn('[ARJ] recargar clientes:', e); }
     },
     async recargarFacturas() {
-      try { this.todasFacturas = await db.cargarFacturasRecientes(); } catch (e) { console.warn('[ARJ] recargar facturas:', e); }
+      try { this.todasFacturas = this._delPerfil(await db.cargarFacturasRecientes()); } catch (e) { console.warn('[ARJ] recargar facturas:', e); }
     },
     async recargarCotizaciones() {
-      try { this.presupuestos = await db.cargarCotizaciones(); } catch (e) { console.warn('[ARJ] recargar cotizaciones:', e); }
+      try { this.presupuestos = this._delPerfil(await db.cargarCotizaciones()); } catch (e) { console.warn('[ARJ] recargar cotizaciones:', e); }
     },
     async recargarEmbarques() {
       try { this.embarques = await db.cargarEmbarques(); } catch (e) { console.warn('[ARJ] recargar embarques:', e); }
     },
     async recargarConfiguracion() {
       try { this._aplicarConfiguracion(await db.cargarConfiguracion()); } catch (e) { console.warn('[ARJ] recargar config:', e); }
+    },
+
+    // La seguridad real está en la base (sql/11). Esto es una segunda capa: lo que
+    // el perfil distribuidora no debe ver se quita al cargar, así todas las
+    // pantallas quedan filtradas igual aunque la base aún no tenga el script.
+    _productosDelPerfil(lista) {
+      if (!this.esPerfilDistribuidora) return lista;
+      return lista.filter(p => origenDe(p) === 'importado');
+    },
+    // Clientes, facturas y cotizaciones: solo las filas de las que es dueño
+    _delPerfil(lista) {
+      if (!this.esPerfilDistribuidora) return lista;
+      return lista.filter(x => x.propietario === this.perfil.id);
     },
 
     // Guardia común para operaciones que escriben en la BD
@@ -348,6 +364,8 @@ export const useArjStore = defineStore('arj', {
     cambiarVista(vista) {
       const soloGerente = ['movimientos', 'reportes', 'alertas', 'bitacora', 'exportar', 'config'];
       if (soloGerente.includes(vista) && this.rol !== 'gerente') {
+        // JJ pidió saber si una distribuidora intenta ver de más
+        if (this.esPerfilDistribuidora) this.logBitacora('seguridad', `Intentó abrir la sección "${vista}" (solo gerente)`, true);
         this.notif('Esa sección es solo para el gerente', 'error');
         return;
       }

@@ -229,3 +229,44 @@ describe('clic en la fila abre su ventana (como el monolito)', () => {
     expect(w.find('#modal-abono').exists()).toBe(true);
   });
 });
+
+describe('Perfil distribuidora', () => {
+  const productos = [
+    { id: 1, cod_alt: 'IMP1', origen: 'importado' },
+    { id: 2, cod_alt: 'LOC1', origen: 'local' }
+  ];
+  // propietario: NULL = de ARJ, uuid = de una distribuidora (sql/11)
+  const filas = [{ id: 1, propietario: 'd1' }, { id: 2, propietario: null }, { id: 3, propietario: 'd2' }];
+  const perfilDist = { id: 'd1', rol: 'vendedor', empresa: 'dist', nombre_display: 'Agro Sur', es_distribuidora: true };
+
+  test('la distribuidora solo ve importados y lo suyo, y queda fija en Distribuidora', () => {
+    setActivePinia(createPinia());
+    const store = useArjStore();
+    store._aplicarPerfil({ ...perfilDist, empresa: 'ambas' });
+    expect(store.esPerfilDistribuidora).toBe(true);
+    expect(store.empresa).toBe('distribuidora');
+    expect(store.puedeCambiarEmpresa).toBe(false);
+    expect(store._productosDelPerfil(productos).map(p => p.cod_alt)).toEqual(['IMP1']);
+    expect(store._delPerfil(filas).map(f => f.id)).toEqual([1]);
+  });
+
+  test('un vendedor de ARJ en Distribuidora y el gerente no se filtran', () => {
+    setActivePinia(createPinia());
+    const store = useArjStore();
+    store._aplicarPerfil({ id: 'v1', rol: 'vendedor', empresa: 'dist', nombre_display: 'Pedro' });
+    expect(store.esPerfilDistribuidora).toBe(false);
+    expect(store._productosDelPerfil(productos)).toHaveLength(2);
+    expect(store._delPerfil(filas)).toHaveLength(3);
+    store._aplicarPerfil({ ...perfilDist, rol: 'gerente' });
+    expect(store.esPerfilDistribuidora).toBe(false);
+  });
+
+  test('intentar abrir una sección de gerente deja alerta en la bitácora', () => {
+    setActivePinia(createPinia());
+    const store = useArjStore();
+    store._aplicarPerfil(perfilDist);
+    store.cambiarVista('reportes');
+    expect(store.vistaActiva).not.toBe('reportes');
+    expect(store.bitacora[0]).toMatchObject({ tipo: 'seguridad', esAlerta: true });
+  });
+});
