@@ -40,7 +40,7 @@
     </div>
 
     <!-- Tab búsqueda por aplicación -->
-    <div v-else class="search-tab-content">
+    <div v-else class="search-tab-content active">
       <div style="background:#FFF8E1;border:1px solid #FFC107;border-radius:6px;padding:8px 12px;font-size:11.5px;color:#5D4037;margin-bottom:10px">
         <i class="ti ti-bulb"></i> Combina <strong>marca/modelo</strong> con <strong>sistema</strong> para filtrar.
         Por ejemplo: "Ford 6610" en marca/modelo + "Motor" en sistema = solo repuestos del motor del Ford 6610.
