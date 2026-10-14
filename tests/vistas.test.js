@@ -270,3 +270,17 @@ describe('Perfil distribuidora', () => {
     expect(store.bitacora[0]).toMatchObject({ tipo: 'seguridad', esAlerta: true });
   });
 });
+
+describe('Origen de productos sin origen declarado', () => {
+  test('factor 1,000 = local (como el servidor): la distribuidora no lo ve', async () => {
+    const { mapProducto } = await import('../src/services/supabase.js');
+    const local = mapProducto({ id: 9, cod_alt: 'L9', descripcion: 'Filtro local', origen: null, factor_landed: '1.000' });
+    const imp = mapProducto({ id: 8, cod_alt: 'I8', descripcion: 'Filtro importado', origen: null, factor_landed: '1.471' });
+    expect(local.origen).toBe('local');
+    expect(imp.origen).toBe('importado');
+    setActivePinia(createPinia());
+    const store = useArjStore();
+    store._aplicarPerfil({ id: 'd1', rol: 'vendedor', empresa: 'dist', nombre_display: 'Agro Sur', es_distribuidora: true });
+    expect(store._productosDelPerfil([local, imp]).map(p => p.cod_alt)).toEqual(['I8']);
+  });
+});

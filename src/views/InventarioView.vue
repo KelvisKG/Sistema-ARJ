@@ -70,7 +70,7 @@
             <th v-if="esGerente" class="num" style="width:8%">FOB</th>
             <th class="num" style="width:9%">P. Público</th>
             <th class="center" style="width:7%">Stock</th>
-            <th class="center" style="width:9%">Otra emp.</th>
+            <th v-if="!store.esPerfilDistribuidora" class="center" style="width:9%">Otra emp.</th>
             <th v-if="esGerente" class="center" style="width:13%">Acciones</th>
           </tr>
         </thead>
@@ -101,7 +101,7 @@
               <div v-if="p.precio_manual" style="font-size:9px;color:var(--gold)">manual</div>
             </td>
             <td class="center"><span :class="['inv-stock-badge', claseStock(stockAca(p))]">{{ stockAca(p) }}</span></td>
-            <td class="center"><span class="inv-stock-other disponible" :title="`${otraEmp} tiene ${stockOtra(p)}`">{{ otraEmp }}: {{ stockOtra(p) }}</span></td>
+            <td v-if="!store.esPerfilDistribuidora" class="center"><span class="inv-stock-other disponible" :title="`${otraEmp} tiene ${stockOtra(p)}`">{{ otraEmp }}: {{ stockOtra(p) }}</span></td>
             <td v-if="esGerente" class="center" style="white-space:nowrap">
               <button class="btn btn-secondary btn-sm btn-accion" title="Editar este producto" @click="abrirEditProducto(p)"><i class="ti ti-edit"></i> Editar</button>
               {{ ' ' }}

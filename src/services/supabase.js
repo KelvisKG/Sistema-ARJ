@@ -7,7 +7,7 @@
 // alternos "no atómicos": si la función falla, se informa el error real.
 // =====================================================================
 import { createClient } from '@supabase/supabase-js';
-import { FACTOR_LANDED_FALLBACK } from './pricing.js';
+import { FACTOR_LANDED_FALLBACK, origenDe } from './pricing.js';
 import { encolarAccion } from './syncQueue.js';
 
 export const SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || '';
@@ -112,7 +112,8 @@ export function mapProducto(p) {
     sistema: p.sistema || '',
     precio_manual: p.precio_manual != null && parseFloat(p.precio_manual) > 0 ? parseFloat(p.precio_manual) : null,
     imagen_url: p.imagen_url || '',
-    origen: p.origen || 'importado',
+    // Sin origen declarado decide el factor (1,000 = compra local), igual que el servidor
+    origen: origenDe({ origen: p.origen, factor_landed: p.factor_landed }),
     factor_landed: p.factor_landed != null ? parseFloat(p.factor_landed) : FACTOR_LANDED_FALLBACK,
     proveedor: p.proveedor || '',
     embarque_id: p.embarque_id || null,
