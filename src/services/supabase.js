@@ -7,7 +7,7 @@
 // alternos "no atómicos": si la función falla, se informa el error real.
 // =====================================================================
 import { createClient } from '@supabase/supabase-js';
-import { FACTOR_LANDED_FALLBACK } from './pricing.js';
+import { FACTOR_LANDED_FALLBACK, origenDe } from './pricing.js';
 import { encolarAccion } from './syncQueue.js';
 
 export const SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || '';
@@ -112,7 +112,8 @@ export function mapProducto(p) {
     sistema: p.sistema || '',
     precio_manual: p.precio_manual != null && parseFloat(p.precio_manual) > 0 ? parseFloat(p.precio_manual) : null,
     imagen_url: p.imagen_url || '',
-    origen: p.origen || 'importado',
+    // Sin origen declarado decide el factor (1,000 = compra local), igual que el servidor
+    origen: origenDe({ origen: p.origen, factor_landed: p.factor_landed }),
     factor_landed: p.factor_landed != null ? parseFloat(p.factor_landed) : FACTOR_LANDED_FALLBACK,
     proveedor: p.proveedor || '',
     embarque_id: p.embarque_id || null,
@@ -126,6 +127,7 @@ export function mapCliente(c, cts = []) {
   const adicionales = cts.filter(x => !principal || x.id !== principal.id);
   return {
     id: c.id,
+    propietario: c.propietario || null,
     nombre: c.nombre,
     rif: c.rif || '',
     nivel: c.nivel || 'Publico', // M-02: por defecto precio público, como el monolito
@@ -157,6 +159,7 @@ export function mapFactura(f) {
   return {
     id: f.id, num: f.numero, empresa: empresaNorm(f.empresa), cliente: f.cliente_nombre,
     cliente_id: f.cliente_id, vendedor: f.vendedor,
+    propietario: f.propietario || null,   // sql/11: NULL = de ARJ, uuid = de una distribuidora
     fecha: fechaCorta(f.fecha),
     fecha_raw: f.fecha,
     vence: fechaVence ? fechaCorta(fechaVence) : '',
@@ -193,6 +196,7 @@ function mapCotizacion(c, items) {
   return {
     id: c.id, num: c.numero, empresa: empresaNorm(c.empresa), cliente: c.cliente_nombre,
     cliente_id: c.cliente_id || null,
+    propietario: c.propietario || null,
     fecha: fechaCorta(c.fecha),
     fecha_raw: c.fecha,
     vence: fechaCorta(vence),
@@ -313,7 +317,7 @@ export async function cargarFacturasRango(desdeISO, hastaISO) {
  * Carga todo lo necesario para operar. M-09: si la base devuelve 0 productos
  * o 0 clientes se trata como error (no se opera con un catálogo vacío).
  */
-export async function cargarDatosCompletos() {
+export async function cargarDatosCompletos({ carteraPropia = false } = {}) {
   const r = { conectado: false, error: null };
   try {
     const [config, productos, clientes, facturas, cotizaciones, embarques] = await Promise.all([
@@ -321,7 +325,8 @@ export async function cargarDatosCompletos() {
       cargarCotizaciones(), cargarEmbarques()
     ]);
     if (!productos.length) throw new Error('La base de datos devolvió 0 productos activos');
-    if (!clientes.length) throw new Error('La base de datos devolvió 0 clientes activos');
+    // Una distribuidora (sql/11) solo ve sus clientes: al empezar no tiene ninguno
+    if (!clientes.length && !carteraPropia) throw new Error('La base de datos devolvió 0 clientes activos');
 
     r.configuracion = config;
     r.productos = productos;
