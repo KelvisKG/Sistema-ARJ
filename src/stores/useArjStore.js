@@ -431,6 +431,11 @@ export const useArjStore = defineStore('arj', {
 
     // ═══════════════ CARRITO ═══════════════
     agregarAlCarrito(prod, cant = 1) {
+      // Perfil distribuidora: solo vende importados (el servidor también lo bloquea)
+      if (this.esPerfilDistribuidora && origenDe(prod, this.productos) !== 'importado') {
+        this.notif(`${prod.cod_alt} es de compra local: tu usuario solo vende productos importados`, 'error');
+        return;
+      }
       const n = Math.max(1, parseInt(cant) || 1);
       const stock = this.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0);
       const idx = this.carrito.items.findIndex(it => it.id === prod.id);

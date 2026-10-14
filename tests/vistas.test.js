@@ -284,3 +284,16 @@ describe('Origen de productos sin origen declarado', () => {
     expect(store._productosDelPerfil([local, imp]).map(p => p.cod_alt)).toEqual(['I8']);
   });
 });
+
+describe('Carrito del perfil distribuidora', () => {
+  test('no deja agregar productos locales (sí importados)', () => {
+    setActivePinia(createPinia());
+    const store = useArjStore();
+    store._aplicarPerfil({ id: 'd1', rol: 'vendedor', empresa: 'dist', nombre_display: 'Agro Sur', es_distribuidora: true });
+    store.agregarAlCarrito({ id: 1, cod_alt: 'LOC1', desc: 'Local', fob: 5, origen: 'local', factor_landed: 1, stock_dist: 3 });
+    expect(store.carrito.items).toHaveLength(0);
+    expect(store.toast).toMatchObject({ tipo: 'error' });
+    store.agregarAlCarrito({ id: 2, cod_alt: 'IMP1', desc: 'Importado', fob: 5, origen: 'importado', factor_landed: 1.471, stock_dist: 3 });
+    expect(store.carrito.items.map(i => i.cod_alt)).toEqual(['IMP1']);
+  });
+});
