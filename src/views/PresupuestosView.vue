@@ -91,17 +91,17 @@
             </td>
             <td class="center" style="white-space:nowrap" @click.stop>
               <button
-                v-if="pre.estado === 'activa' || pre.estado === 'por_vencer'"
+                v-if="pre.estado !== 'convertida' && pre.estado !== 'rechazada'"
                 class="btn btn-primary btn-sm btn-accion"
                 title="Convertir a factura"
-                @click="convertirAFactura(pre)"
+                @click.stop="confirmarFacturar(pre)"
               ><i class="ti ti-file-invoice"></i> Facturar</button>
               {{ ' ' }}
               <button
                 v-if="pre.estado !== 'convertida' && pre.estado !== 'rechazada'"
                 class="btn btn-secondary btn-sm btn-accion" style="color:var(--red)"
                 title="Marcar como rechazado (se archiva, no se borra)"
-                @click="marcarRechazado(pre)"
+                @click.stop="confirmarRechazar(pre)"
               ><i class="ti ti-archive"></i> Rechazar</button>
             </td>
           </tr>
@@ -423,6 +423,39 @@
       </div>
     </div>
   </div>
+
+    <!-- MODAL DE CONFIRMACIÓN: FACTURAR O RECHAZAR -->
+    <div v-if="modalConfirma.activo" class="modal show" style="display:flex;z-index:9999" @click.self="modalConfirma.activo = false">
+      <div class="modal-content" style="max-width:480px;text-align:left">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px">
+          <h3 style="margin:0;display:flex;align-items:center;gap:8px" :style="{ color: modalConfirma.tipo === 'rechazar' ? 'var(--red)' : 'var(--blue)' }">
+            <i :class="modalConfirma.tipo === 'rechazar' ? 'ti ti-archive' : 'ti ti-file-invoice'"></i>
+            {{ modalConfirma.titulo }}
+          </h3>
+          <button class="btn btn-secondary btn-sm" @click="modalConfirma.activo = false"><i class="ti ti-x"></i></button>
+        </div>
+
+        <div :style="modalConfirma.tipo === 'rechazar' 
+          ? 'background:#FCEBEB;border:1px solid #F09595;border-left:4px solid var(--red);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--red);margin-bottom:18px' 
+          : 'background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid var(--blue);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--navy);margin-bottom:18px'">
+          <div style="line-height:1.6" v-html="modalConfirma.mensaje"></div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-secondary" @click="modalConfirma.activo = false">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button 
+            :class="modalConfirma.tipo === 'rechazar' ? 'btn btn-red' : 'btn btn-primary'"
+            @click="ejecutarAccionConfirmada"
+          >
+            <i :class="modalConfirma.tipo === 'rechazar' ? 'ti ti-archive' : 'ti ti-file-invoice'"></i>
+            {{ modalConfirma.btnTexto }}
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -558,18 +591,58 @@ function abrirPreview(pre) {
   store.modalPresupuestoActivo = true;
 }
 
-function convertirAFactura(pre) {
-  if (confirm(`¿Convertir el presupuesto ${pre.num} en factura?\n\nLos datos se cargarán automáticamente en el módulo de facturación.`)) {
-    store.convertirPresupuestoEnVenta(pre.id);
+const modalConfirma = ref({
+  activo: false,
+  tipo: '',
+  titulo: '',
+  mensaje: '',
+  btnTexto: '',
+  pre: null
+});
+
+function confirmarFacturar(pre) {
+  modalConfirma.value = {
+    activo: true,
+    tipo: 'facturar',
+    titulo: `¿Convertir ${pre.num} a factura?`,
+    mensaje: `¿Estás seguro de que deseas convertir el presupuesto <strong>${pre.num}</strong> a factura?<br><br>Se cargarán los productos y precios cotizados de <strong>${pre.cliente || 'el cliente'}</strong> directamente al carrito de Facturación.`,
+    btnTexto: 'Sí, Facturar',
+    pre
+  };
+}
+
+function confirmarRechazar(pre) {
+  modalConfirma.value = {
+    activo: true,
+    tipo: 'rechazar',
+    titulo: `¿Rechazar presupuesto ${pre.num}?`,
+    mensaje: `¿Estás seguro de marcar como <strong>RECHAZADO</strong> el presupuesto <strong>${pre.num}</strong> (${fmtUSD(pre.total)})?<br><br>No se borrará: se archivará y dejará de aparecer en la lista activa (podrás consultarlo activando <em>"Ver rechazados"</em>).`,
+    btnTexto: 'Sí, Rechazar',
+    pre
+  };
+}
+
+async function ejecutarAccionConfirmada() {
+  const { tipo, pre } = modalConfirma.value;
+  modalConfirma.value.activo = false;
+  if (!pre) return;
+
+  if (tipo === 'facturar') {
+    await store.convertirPresupuestoEnVenta(pre);
+  } else if (tipo === 'rechazar') {
+    if (await store.rechazarPresupuesto(pre)) {
+      store.logBitacora('presupuesto', `Cotización ${pre.num} marcada como rechazada`);
+      store.notif(`Presupuesto ${pre.num} archivado como rechazado`, 'info');
+    }
   }
 }
 
+async function convertirAFactura(pre) {
+  confirmarFacturar(pre);
+}
+
 async function marcarRechazado(pre) {
-  if (!confirm(`¿Marcar ${pre.num} como RECHAZADA?\n\nNo se borra: se archiva y deja de aparecer en la lista.`)) return;
-  if (await store.rechazarPresupuesto(pre.id)) {
-    store.logBitacora('presupuesto', `Cotización ${pre.num} marcada como rechazada`);
-    store.notif(`Presupuesto ${pre.num} archivado`, 'info');
-  }
+  confirmarRechazar(pre);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -795,7 +868,7 @@ async function convertirAVentaAhora() {
     if (pre) {
       limpiarNuevo();
       modoNuevo.value = false;
-      store.convertirPresupuestoEnVenta(pre.id);
+      store.convertirPresupuestoEnVenta(pre);
     }
   } finally {
     guardando.value = false;
