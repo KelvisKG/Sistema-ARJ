@@ -9,11 +9,27 @@
           <span style="font-weight:700;font-size:14px">Presupuesto: {{ pre.num }}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-sm" style="background:transparent;border:1px solid rgba(255,255,255,0.5);color:#FFF;padding:5px 12px;font-size:12px;cursor:pointer;border-radius:6px" @click="cerrarModal">
-            <i class="ti ti-x"></i> Cerrar
+          <button
+            v-if="pre.estado !== 'convertida' && pre.estado !== 'rechazada'"
+            class="btn btn-sm"
+            style="background:#2563EB;border:none;color:#FFF;padding:5px 14px;font-size:12px;cursor:pointer;border-radius:6px;font-weight:700"
+            @click="facturarDesdeModal"
+          >
+            <i class="ti ti-file-invoice"></i> Facturar
+          </button>
+          <button
+            v-if="pre.estado !== 'convertida' && pre.estado !== 'rechazada'"
+            class="btn btn-sm"
+            style="background:#FFF;border:1px solid var(--red);color:var(--red);padding:5px 12px;font-size:12px;cursor:pointer;border-radius:6px;font-weight:600"
+            @click="rechazarDesdeModal"
+          >
+            <i class="ti ti-archive"></i> Rechazar
           </button>
           <button class="btn btn-sm" style="background:#D97706;border:none;color:#FFF;padding:5px 12px;font-size:12px;cursor:pointer;border-radius:6px;font-weight:600" @click="imprimirPDF">
             <i class="ti ti-printer"></i> Imprimir
+          </button>
+          <button class="btn btn-sm" style="background:transparent;border:1px solid rgba(255,255,255,0.5);color:#FFF;padding:5px 12px;font-size:12px;cursor:pointer;border-radius:6px" @click="cerrarModal">
+            <i class="ti ti-x"></i> Cerrar
           </button>
         </div>
       </div>
@@ -113,7 +129,7 @@
               <span>Descuento</span>
               <span style="font-weight:600;color:var(--text)">$0,00</span>
             </div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12.5px;color:var(--dgray);margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12.5px;color:var(--dgray)">
               <span>IVA (exento)</span>
               <span style="font-weight:600;color:var(--text)">$0,00</span>
             </div>
@@ -127,11 +143,43 @@
 
       </div>
     </div>
+
+    <!-- SUB-MODAL DE CONFIRMACIÓN -->
+    <div v-if="modalConfirma.activo" class="modal show" style="display:flex;z-index:10001" @click.self="modalConfirma.activo = false">
+      <div class="modal-content" style="max-width:460px;text-align:left">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px">
+          <h3 style="margin:0;display:flex;align-items:center;gap:8px" :style="{ color: modalConfirma.tipo === 'rechazar' ? 'var(--red)' : 'var(--blue)' }">
+            <i :class="modalConfirma.tipo === 'rechazar' ? 'ti ti-archive' : 'ti ti-file-invoice'"></i>
+            {{ modalConfirma.titulo }}
+          </h3>
+          <button class="btn btn-secondary btn-sm" @click="modalConfirma.activo = false"><i class="ti ti-x"></i></button>
+        </div>
+
+        <div :style="modalConfirma.tipo === 'rechazar' 
+          ? 'background:#FCEBEB;border:1px solid #F09595;border-left:4px solid var(--red);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--red);margin-bottom:16px' 
+          : 'background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid var(--blue);border-radius:6px;padding:12px 14px;font-size:13px;color:var(--navy);margin-bottom:16px'">
+          <div style="line-height:1.6" v-html="modalConfirma.mensaje"></div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-secondary" @click="modalConfirma.activo = false">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button 
+            :class="modalConfirma.tipo === 'rechazar' ? 'btn btn-red' : 'btn btn-primary'"
+            @click="ejecutarAccionConfirmada"
+          >
+            <i :class="modalConfirma.tipo === 'rechazar' ? 'ti ti-archive' : 'ti ti-file-invoice'"></i>
+            {{ modalConfirma.btnTexto }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD } from '../../services/pricing.js';
 import { generarPresupuestoPDF } from '../../services/exportLazy.js';
@@ -139,6 +187,14 @@ import { generarPresupuestoPDF } from '../../services/exportLazy.js';
 const store = useArjStore();
 
 const pre = computed(() => store.presupuestoSeleccionado || {});
+
+const modalConfirma = ref({
+  activo: false,
+  tipo: '',
+  titulo: '',
+  mensaje: '',
+  btnTexto: ''
+});
 
 const clienteInfo = computed(() => {
   if (!pre.value) return {};
@@ -162,6 +218,7 @@ const totalBsFormateado = computed(() => {
 function cerrarModal() {
   store.modalPresupuestoActivo = false;
   store.presupuestoSeleccionado = null;
+  modalConfirma.value.activo = false;
 }
 
 function imprimirPDF() {
@@ -174,5 +231,44 @@ function imprimirPDF() {
   };
   generarPresupuestoPDF(pre.value, store.tasa_bcv, clienteData);
   store.notif(`PDF de cotización ${pre.value.num} generado`, 'success');
+}
+
+function facturarDesdeModal() {
+  const p = pre.value;
+  modalConfirma.value = {
+    activo: true,
+    tipo: 'facturar',
+    titulo: `¿Convertir ${p.num} a factura?`,
+    mensaje: `¿Deseas convertir el presupuesto <strong>${p.num}</strong> a factura?<br><br>Se cargarán los ítems y precios de <strong>${p.cliente || 'el cliente'}</strong> al carrito de facturación.`,
+    btnTexto: 'Sí, Facturar'
+  };
+}
+
+function rechazarDesdeModal() {
+  const p = pre.value;
+  modalConfirma.value = {
+    activo: true,
+    tipo: 'rechazar',
+    titulo: `¿Rechazar presupuesto ${p.num}?`,
+    mensaje: `¿Deseas marcar como <strong>RECHAZADO</strong> el presupuesto <strong>${p.num}</strong>?<br><br>Se archivará y saldrá de la lista activa. Podrás verlo activando <em>"Ver rechazados"</em>.`,
+    btnTexto: 'Sí, Rechazar'
+  };
+}
+
+async function ejecutarAccionConfirmada() {
+  const p = pre.value;
+  const tipo = modalConfirma.value.tipo;
+  modalConfirma.value.activo = false;
+
+  if (tipo === 'facturar') {
+    cerrarModal();
+    await store.convertirPresupuestoEnVenta(p);
+  } else if (tipo === 'rechazar') {
+    if (await store.rechazarPresupuesto(p)) {
+      store.logBitacora('presupuesto', `Cotización ${p.num} marcada como rechazada`);
+      store.notif(`Presupuesto ${p.num} archivado como rechazado`, 'info');
+      cerrarModal();
+    }
+  }
 }
 </script>

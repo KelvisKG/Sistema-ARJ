@@ -646,7 +646,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO, fmtTasa } from '../services/pricing.js';
 import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada } from '../services/cobros.js';
@@ -721,6 +721,9 @@ const brechaCambiaria = computed(() => {
 });
 
 const busquedaCliente = ref(store.carrito.cliente_nombre || '');
+watch(() => store.carrito.cliente_nombre, val => {
+  busquedaCliente.value = val || '';
+});
 const mostrarClientes = ref(false);
 const clienteBoxRef = ref(null);
 const productoBoxRef = ref(null);

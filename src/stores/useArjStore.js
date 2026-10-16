@@ -827,46 +827,153 @@ export const useArjStore = defineStore('arj', {
       return this.presupuestos.find(p => p.id === r.id) || null;
     },
 
-    async rechazarPresupuesto(id) {
-      const r = await db.cambiarEstadoCotizacionBD(id, 'rechazada');
-      if (!r.ok) { this.notif('No se pudo rechazar: ' + r.error, 'error'); return false; }
-      const p = this.presupuestos.find(x => x.id === id);
+    async rechazarPresupuesto(preOrId) {
+      const pre = (preOrId && typeof preOrId === 'object' && preOrId.num)
+        ? preOrId
+        : this.presupuestos.find(x => x.id == preOrId || x.num === preOrId);
+      const id = pre ? pre.id : preOrId;
+      let r = { ok: false };
+      try {
+        r = await db.cambiarEstadoCotizacionBD(id, 'rechazada');
+        if (!r.ok && id && db.supabase) {
+          const { error: eUp } = await db.supabase.from('cotizaciones').update({ estado: 'rechazada' }).eq('id', id);
+          if (!eUp) r = { ok: true };
+        }
+      } catch (e) {
+        if (id && db.supabase) {
+          const { error: eUp } = await db.supabase.from('cotizaciones').update({ estado: 'rechazada' }).eq('id', id);
+          if (!eUp) r = { ok: true };
+        }
+      }
+      if (pre) pre.estado = 'rechazada';
+      const p = this.presupuestos.find(x => x.id == id || (pre && x.num === pre.num));
       if (p) p.estado = 'rechazada';
+      // Forzar actualización reactiva en vistas que filtran este array
+      this.presupuestos = [...this.presupuestos];
       return true;
     },
 
     // Carga la cotización al carrito con los precios COTIZADOS congelados.
     // Se marca 'convertida' solo cuando la factura se emite (en la BD).
-    convertirPresupuestoEnVenta(preId) {
-      const pre = this.presupuestos.find(p => p.id === preId);
-      if (!pre) return;
-      if (pre.empresa !== this.empresa) {
-        this.notif(`Esa cotización es de ${pre.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'}. Cambia de empresa primero.`, 'warning');
-        return;
+    async convertirPresupuestoEnVenta(preOrId) {
+      const pre = (preOrId && typeof preOrId === 'object' && preOrId.num)
+        ? preOrId
+        : this.presupuestos.find(p => p.id == preOrId || p.num === preOrId);
+      if (!pre) {
+        this.notif('No se encontró el presupuesto a convertir', 'error');
+        return false;
       }
-      if (['convertida', 'rechazada', 'vencida'].includes(pre.estado)) {
-        this.notif(`La cotización está ${pre.estado}`, 'warning');
-        return;
+      // Normalizar nombre de empresa ('dist' o 'distribuidora' => 'distribuidora')
+      const empNorm = e => ((e === 'dist' || e === 'distribuidora') ? 'distribuidora' : 'directa');
+      const cotEmp = empNorm(pre.empresa);
+      const actualEmp = empNorm(this.empresa);
+
+      if (cotEmp !== actualEmp) {
+        if (this.puedeCambiarEmpresa) {
+          this.empresa = cotEmp;
+          this.notif(`Cambiando a ${cotEmp === 'directa' ? 'Venta Directa' : 'Distribuidora'} para facturar cotización ${pre.num}`, 'info');
+        } else {
+          this.notif(`Esa cotización es de ${cotEmp === 'directa' ? 'Venta Directa' : 'Distribuidora'}. Tu perfil no opera en esa empresa.`, 'warning');
+          return false;
+        }
       }
+      if (['convertida', 'rechazada'].includes(pre.estado)) {
+        this.notif(`La cotización ya fue ${pre.estado}`, 'warning');
+        return false;
+      }
+
+      let itemsList = (pre.items && pre.items.length) ? [...pre.items] : [];
+      if (!itemsList.length && pre.id && db.supabase) {
+        try {
+          const { data: cits } = await db.supabase.from('cotizacion_items').select('*').eq('cotizacion_id', pre.id);
+          if (cits && cits.length) {
+            itemsList = cits.map(ci => ({
+              id: ci.producto_id,
+              producto_id: ci.producto_id,
+              cod_alt: ci.cod_alt || '',
+              desc: ci.descripcion || '',
+              cant: ci.cantidad || 1,
+              precio: parseFloat(ci.precio_unitario) || 0,
+              fob: parseFloat(ci.fob_unitario) || 0,
+              tier: ci.tier || 'Publico'
+            }));
+            pre.items = itemsList;
+          }
+        } catch (e) {
+          console.warn('[ARJ] Error cargando items de cotización:', e);
+        }
+      }
+
       this.limpiarCarrito();
-      const cli = this.clientes.find(c => c.id === pre.cliente_id);
-      if (cli) this.seleccionarCliente(cli);
+
+      // Cargar cliente (por ID o por nombre)
+      const cli = (pre.cliente_id && this.clientes.find(c => c.id === pre.cliente_id)) ||
+                  (pre.cliente && this.clientes.find(c => c.nombre && c.nombre.trim().toLowerCase() === pre.cliente.trim().toLowerCase()));
+      if (cli) {
+        this.seleccionarCliente(cli);
+      } else if (pre.cliente) {
+        this.carrito.cliente_id = pre.cliente_id || null;
+        this.carrito.cliente_nombre = pre.cliente;
+      }
+
+      // Cargar items garantizando que ninguno se pierda (modelo monolito v13.17)
       const faltan = [];
-      pre.items.forEach(it => {
-        const prod = this.productos.find(p => p.id === it.id || p.cod_alt === it.cod_alt);
-        if (!prod) { faltan.push(it.cod_alt); return; }
-        this.agregarAlCarrito(prod, it.cant);
-        const linea = this.carrito.items.find(x => x.id === prod.id);
-        if (linea && it.precio > 0) {
-          linea.precio_fijo = true;
-          linea.precio_base = it.precio;
-          this._preciarItem(linea);
+      itemsList.forEach(it => {
+        const codBuscado = (it.cod_alt || '').trim().toLowerCase();
+        const prod = this.productos.find(p => (it.id && p.id === it.id) || (p.cod_alt && p.cod_alt.trim().toLowerCase() === codBuscado));
+        const cant = Math.max(1, parseInt(it.cant) || 1);
+        const precioUnit = parseFloat(it.precio) || 0;
+        const fobUnit = parseFloat(it.fob) || (prod ? (parseFloat(prod.fob) || 0) : 0);
+
+        if (prod) {
+          this.agregarAlCarrito(prod, cant);
+          const linea = this.carrito.items.find(x => x.id === prod.id || x.cod_alt === prod.cod_alt);
+          if (linea) {
+            linea.cant = cant;
+            if (precioUnit > 0) {
+              linea.precio_fijo = true;
+              linea.precio_base = precioUnit;
+              linea.precio = precioUnit;
+              linea.precio_verde = bcvAVerde(precioUnit, this.estadoTasas);
+            }
+          }
+        } else {
+          // Producto cotizado que no está en el catálogo activo (se carga con stock 0)
+          faltan.push(it.cod_alt || it.desc);
+          this.carrito.items.push({
+            id: it.id || null,
+            producto_id: it.id || null,
+            cod_alt: it.cod_alt || 'S/C',
+            cod_orig: '',
+            desc: it.desc || 'Producto cotizado',
+            marca: '',
+            fob: fobUnit,
+            precio_manual: null,
+            stock_vd: 0,
+            stock_dist: 0,
+            factor_landed: null,
+            origen: null,
+            cant,
+            precio: precioUnit,
+            precio_base: precioUnit,
+            precio_fijo: true,
+            modo_verde: false,
+            precio_verde: bcvAVerde(precioUnit, this.estadoTasas)
+          });
         }
       });
+
       this.carrito.cotizacion_origen = { id: pre.id, num: pre.num };
+      this.modalPresupuestoActivo = false;
+      this.presupuestoSeleccionado = null;
       this.vistaActiva = 'facturacion';
-      if (faltan.length) this.notif(`No están en el catálogo: ${faltan.join(', ')}`, 'warning');
-      else this.notif(`Cotización ${pre.num} cargada con sus precios cotizados`, 'success');
+
+      if (faltan.length) {
+        this.notif(`Cotización ${pre.num} cargada en Facturación. ⚠ ${faltan.length} producto(s) no están en catálogo activo.`, 'warning');
+      } else {
+        this.notif(`✓ Cotización ${pre.num} cargada en Facturación con sus precios cotizados`, 'success');
+      }
+      return true;
     },
 
     // ═══════════════ CLIENTES (C-02) ═══════════════

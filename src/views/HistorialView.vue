@@ -108,10 +108,10 @@
                 <i class="ti ti-x"></i> Anular
               </button>
               <button
-                v-if="vistaActual === 'cotizaciones' && ['activa', 'por_vencer'].includes(f.estado)"
+                v-if="vistaActual === 'cotizaciones' && f.estado !== 'convertida' && f.estado !== 'rechazada'"
                 class="btn btn-primary btn-sm btn-accion"
                 title="Convertir a factura"
-                @click="store.convertirPresupuestoEnVenta(f.id)"
+                @click.stop="store.convertirPresupuestoEnVenta(f)"
               >
                 <i class="ti ti-file-invoice"></i> Facturar
               </button>
