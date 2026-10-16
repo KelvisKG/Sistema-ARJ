@@ -14,6 +14,40 @@
 
     <!-- ═══ RESUMEN ═══ -->
     <div v-show="sub === 'resumen'">
+      <!-- SELECTOR DE PERÍODO GLOBAL PARA DASHBOARD Y KPIS -->
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <i class="ti ti-calendar-stats" style="font-size:22px;color:var(--navy)"></i>
+          <div>
+            <div style="font-weight:700;color:var(--navy);font-size:14px">
+              Período seleccionado: <span style="color:var(--gold);text-transform:capitalize">{{ origen.etiqueta }}</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--dgray)">
+              Todos los indicadores de ventas, utilidad, margen y gráficas se actualizan según el rango seleccionado
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:12px;font-weight:600;color:var(--navy)">Período:</label>
+          <select v-model="rango" class="rp-in" @change="cambioRango" style="font-weight:600;color:var(--navy)">
+            <option value="mes">Este mes</option>
+            <option value="mes_ant">Mes pasado</option>
+            <option value="3m">Últimos 3 meses</option>
+            <option value="6m">Últimos 6 meses</option>
+            <option value="12m">Últimos 12 meses</option>
+            <option value="anio">Este año</option>
+            <option value="todo">Todo el histórico</option>
+            <option value="custom">Personalizado…</option>
+          </select>
+          <span v-if="rango === 'custom'" style="display:inline-flex;gap:6px;align-items:center">
+            <input v-model="custDesde" type="date" class="rp-in">
+            <span style="font-size:11.5px;color:var(--dgray)">a</span>
+            <input v-model="custHasta" type="date" class="rp-in">
+            <button class="btn btn-primary btn-sm" @click="cargarOrigen">Aplicar</button>
+          </span>
+        </div>
+      </div>
+
       <div class="kpi-grid">
         <div class="kpi-card green">
           <div class="kpi-icon"><i class="ti ti-trending-up"></i></div>
@@ -23,9 +57,11 @@
         </div>
         <div class="kpi-card blue">
           <div class="kpi-icon"><i class="ti ti-calendar"></i></div>
-          <div class="kpi-label">Ventas este mes</div>
-          <div class="kpi-val">{{ fmtUSD(ventas.totMes) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ ventas.nMes === 0 ? 'Sin ventas este mes' : ventas.nMes + (ventas.nMes === 1 ? ' factura' : ' facturas') }}</div>
+          <div class="kpi-label">{{ rango === 'mes' ? 'Ventas este mes' : 'Ventas del período' }}</div>
+          <div class="kpi-val">{{ fmtUSD(kpisPeriodo.totalVenta) }}</div>
+          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">
+            {{ kpisPeriodo.nFacts === 0 ? 'Sin ventas en ' + origen.etiqueta : kpisPeriodo.nFacts + (kpisPeriodo.nFacts === 1 ? ' factura' : ' facturas') + ' · ' + origen.etiqueta }}
+          </div>
         </div>
         <div class="kpi-card gold">
           <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
@@ -41,27 +77,27 @@
         </div>
         <div class="kpi-card green">
           <div class="kpi-icon"><i class="ti ti-coin"></i></div>
-          <div class="kpi-label">Utilidad bruta del mes</div>
-          <div class="kpi-val">{{ util.val }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ util.sub }}</div>
+          <div class="kpi-label">{{ rango === 'mes' ? 'Utilidad bruta del mes' : 'Utilidad bruta del período' }}</div>
+          <div class="kpi-val">{{ kpisPeriodo.utilVal }}</div>
+          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.utilSub }}</div>
         </div>
         <div class="kpi-card gold">
           <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
-          <div class="kpi-label">Margen real vendido</div>
-          <div class="kpi-val">{{ util.margenVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ util.margenSub }}</div>
+          <div class="kpi-label">{{ rango === 'mes' ? 'Margen real vendido' : 'Margen real del período' }}</div>
+          <div class="kpi-val">{{ kpisPeriodo.margenVal }}</div>
+          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.margenSub }}</div>
         </div>
         <div class="kpi-card blue">
           <div class="kpi-icon"><i class="ti ti-scale"></i></div>
           <div class="kpi-label">Punto de equilibrio</div>
-          <div class="kpi-val">{{ util.peVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ util.peSub }}</div>
+          <div class="kpi-val">{{ kpisPeriodo.peVal }}</div>
+          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.peSub }}</div>
         </div>
         <div class="kpi-card red">
           <div class="kpi-icon"><i class="ti ti-building-store"></i></div>
-          <div class="kpi-label">Costos fijos del mes</div>
-          <div class="kpi-val">{{ fmtUSD(fijos.cf) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ fijos.sub }}</div>
+          <div class="kpi-label">{{ rango === 'mes' ? 'Costos fijos del mes' : 'Costos fijos del período' }}</div>
+          <div class="kpi-val">{{ fmtUSD(kpisPeriodo.cf) }}</div>
+          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.cfSub }}</div>
         </div>
       </div>
 
@@ -75,6 +111,7 @@
               <option value="mes">Este mes</option>
               <option value="mes_ant">Mes pasado</option>
               <option value="3m">Últimos 3 meses</option>
+              <option value="6m">Últimos 6 meses</option>
               <option value="12m">Últimos 12 meses</option>
               <option value="anio">Este año</option>
               <option value="todo">Todo el histórico</option>
@@ -544,7 +581,6 @@ const util = computed(() => {
   }
   return r;
 });
-const top = computed(() => (itsMes.value && itsMes.value.length ? topProductos(itsMes.value) : []));
 
 // ═══ IMPORTADO vs LOCAL con selector de período ═══
 const rango = ref('mes');
@@ -581,6 +617,84 @@ async function cargarOrigen() {
 }
 
 const R = computed(() => (origen.value.data ? resumenOrigen(origen.value.data.its, origen.value.data.fmap, store.productos) : null));
+
+const mesesEnRango = computed(() => {
+  if (rango.value === 'mes' || rango.value === 'mes_ant') return 1;
+  if (rango.value === '3m') return 3;
+  if (rango.value === '6m') return 6;
+  if (rango.value === '12m' || rango.value === 'anio') return 12;
+  if (rango.value === 'custom' && custDesde.value && custHasta.value) {
+    const d1 = new Date(custDesde.value);
+    const d2 = new Date(custHasta.value);
+    const m = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + 1;
+    return Math.max(1, m);
+  }
+  return 1;
+});
+
+const kpisPeriodo = computed(() => {
+  const cfMensual = fijos.value.cf;
+  const meses = mesesEnRango.value;
+  const cf = cfMensual * meses;
+  const cfSub = meses === 1 ? fijos.value.sub : `${fmtUSD(cfMensual)}/mes × ${meses} meses`;
+
+  if (origen.value.data && R.value) {
+    const totalVenta = R.value.tot.venta;
+    const totalCosto = R.value.tot.costo;
+    const totalUtil = R.value.tot.util;
+    const nFacts = origen.value.data.nFacts || 0;
+    const margen = totalVenta > 0 ? (totalUtil / totalVenta) * 100 : 0;
+    const sinCosto = R.value.sinCosto || 0;
+
+    const res = {
+      totalVenta,
+      nFacts,
+      cf,
+      cfSub,
+      utilVal: fmtUSD(totalUtil),
+      utilSub: totalVenta > 0 ? `Ventas ${fmtUSD(totalVenta)} − costo ${fmtUSD(totalCosto)}` : `Sin ventas en ${origen.value.etiqueta}`,
+      margenVal: margen.toFixed(1) + '%',
+      margenSub: sinCosto > 0 ? `Ojo: ${sinCosto} renglón(es) sin costo — margen inflado` : 'Sobre lo efectivamente vendido',
+      peVal: fmtUSD(0),
+      peSub: 'Configura los costos fijos'
+    };
+
+    if (cf <= 0) {
+      res.peVal = fmtUSD(0);
+      res.peSub = 'Configura los costos fijos';
+    } else if (margen <= 0) {
+      res.peVal = '—';
+      res.peSub = 'Margen en cero o negativo';
+    } else {
+      const pe = cf / (margen / 100);
+      const falta = pe - totalVenta;
+      res.peVal = fmtUSD(pe);
+      res.peSub = falta > 0 ? `Faltan ${fmtUSD(falta)} para cubrir los fijos` : `Superado por ${fmtUSD(Math.abs(falta))}`;
+    }
+    return res;
+  }
+
+  const ingreso = rango.value === 'mes' ? ventas.value.totMes : 0;
+  return {
+    totalVenta: ingreso,
+    nFacts: rango.value === 'mes' ? ventas.value.nMes : 0,
+    cf,
+    cfSub,
+    utilVal: util.value.val,
+    utilSub: util.value.sub,
+    margenVal: util.value.margenVal,
+    margenSub: util.value.margenSub,
+    peVal: util.value.peVal,
+    peSub: util.value.peSub
+  };
+});
+
+const top = computed(() => {
+  if (origen.value.data && origen.value.data.its && origen.value.data.its.length) {
+    return topProductos(origen.value.data.its);
+  }
+  return (itsMes.value && itsMes.value.length ? topProductos(itsMes.value) : []);
+});
 const bloquesOrigen = computed(() => (R.value ? [
   { key: 'importado', nom: 'Importado', c: R.value.g.importado, col: '#EAF0F8', icono: 'ship', v: R.value.VR.importado },
   { key: 'local', nom: 'Compra local', c: R.value.g.local, col: '#FBF3E0', icono: 'building-store', v: R.value.VR.local }

@@ -8,8 +8,9 @@
       </div>
       <div id="edit-prod-fields">
         <div class="field-row"><label>Código alternativo:</label>
-          <input v-model="f.cod_alt" type="text" :readonly="!esNuevo"
-            :style="esNuevo ? 'background:#FFF;color:#222' : 'background:#F5F5F5;color:var(--dgray)'">
+          <input v-model="f.cod_alt" type="text" :readonly="!puedeEditarCodAlt"
+            :style="puedeEditarCodAlt ? 'background:#FFF;color:#222' : 'background:#F5F5F5;color:var(--dgray)'"
+            :title="puedeEditarCodAlt ? 'Código alternativo editable' : 'Solo el gerente puede modificar el código alternativo'">
         </div>
         <div class="field-row"><label>Código original:</label><input v-model="f.cod_orig" type="text"></div>
         <div class="field-row"><label>Código de barras:</label>
@@ -137,6 +138,7 @@ const ATAJOS = [
 ];
 
 const esNuevo = computed(() => !!(store.productoSeleccionado && store.productoSeleccionado._nuevo));
+const puedeEditarCodAlt = computed(() => esNuevo.value || store.rol === 'gerente');
 const factorDefault = () => (store.configuracion && store.configuracion.factor_default) || FACTOR_LANDED_FALLBACK;
 
 // Si el producto trae un sistema que ya no está en la lista, se conserva
@@ -226,10 +228,11 @@ async function guardar() {
     if (dup) { store.notif(`Ese código de barras ya está asignado a ${dup.cod_alt} (${dup.desc})`, 'error'); return; }
   }
   let codAlt = orig.cod_alt;
-  if (esNuevo.value) {
-    codAlt = String(d.cod_alt || '').trim();
+  if (puedeEditarCodAlt.value) {
+    codAlt = String(d.cod_alt || '').trim().toUpperCase();
     if (!codAlt) { store.notif('El código alternativo es obligatorio', 'error'); return; }
-    if (store.productos.find(p => p.cod_alt === codAlt)) { store.notif('Ya existe un producto con ese código alternativo', 'error'); return; }
+    const dup = store.productos.find(p => p.id !== orig.id && (p.cod_alt || '').toUpperCase() === codAlt);
+    if (dup) { store.notif(`Ya existe un producto con el código alternativo ${codAlt} (${dup.desc})`, 'error'); return; }
   }
   // v13.3: sin descripción el renglón sale EN BLANCO en la factura del cliente
   const desc = String(d.desc || '').trim();
@@ -275,6 +278,7 @@ async function guardar() {
 
   let bitacora;
   if (esNuevo.value) bitacora = { texto: `Creó nuevo producto ${codAlt} - ${desc}`, critico: true };
+  else if (orig.cod_alt !== codAlt) bitacora = { texto: `Editó producto: cambió código alternativo de ${orig.cod_alt} a ${codAlt}`, critico: true };
   else if (orig.fob !== fob) bitacora = { texto: `Editó producto ${codAlt} — FOB de ${fmtUSD(orig.fob)} a ${fmtUSD(fob)}`, critico: true };
   else if (barrasAnt !== nuevoBarras) bitacora = { texto: `Editó producto ${codAlt} — código de barras actualizado a ${nuevoBarras || '(vacío)'}`, critico: false };
   else bitacora = { texto: `Editó producto ${codAlt} (${desc})`, critico: false };

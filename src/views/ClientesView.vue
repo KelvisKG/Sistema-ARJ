@@ -56,11 +56,12 @@
             <th class="center" style="width:8%">TIPO</th>
             <th style="width:11%">ORIGEN</th>
             <th class="num" style="width:12%">SALDO</th>
+            <th class="center" style="width:6%">ACCIONES</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="clientesFiltrados.length === 0">
-            <td colspan="8" style="text-align:center;padding:24px;color:var(--dgray)">
+            <td colspan="9" style="text-align:center;padding:24px;color:var(--dgray)">
               No se encontraron clientes registrados.
             </td>
           </tr>
@@ -88,6 +89,11 @@
             </td>
             <td class="num" style="font-weight:700" :style="{ color: saldoDe(c) > 0 ? 'var(--red)' : '#1E7B34' }">
               {{ fmtUSD(saldoDe(c)) }}
+            </td>
+            <td class="center" @click.stop>
+              <button class="btn btn-secondary btn-sm" style="color:var(--red);border-color:#FCA5A5;padding:3px 7px" title="Eliminar o desactivar cliente" @click="confirmarEliminarCliente(c)">
+                <i class="ti ti-trash"></i>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -290,7 +296,12 @@
 
         <!-- Botones de accion -->
         <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #E2E8F0;padding-top:16px;flex-wrap:wrap;gap:8px">
-          <button class="btn btn-secondary" @click="mostrarModalDetalle = false">Cerrar</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" @click="mostrarModalDetalle = false">Cerrar</button>
+            <button class="btn btn-secondary" style="border:1px solid var(--red);color:var(--red);background:#FFF" title="Eliminar o desactivar cliente" @click="confirmarEliminarCliente(clienteSeleccionado)">
+              <i class="ti ti-trash"></i> Eliminar
+            </button>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <a :href="`https://wa.me/${(clienteSeleccionado.tel||'').replace(/\D/g,'')}`" target="_blank" class="btn btn-green" style="background:#25D366;border-color:#25D366;text-decoration:none;display:inline-flex">
               <i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp
@@ -396,11 +407,16 @@
           <textarea v-model="cliEditando.notas" rows="2" placeholder="Observaciones adicionales sobre el cliente..." class="val-input" style="resize:vertical"></textarea>
         </div>
 
-        <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:8px">
-          <button class="btn btn-secondary" @click="mostrarModalEditar = false">Cancelar</button>
-          <button class="btn btn-primary" :disabled="!cliEditando.nombre" @click="guardarEdicionCliente">
-            <i class="ti ti-device-floppy"></i> Guardar Cambios
+        <div class="modal-actions" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <button type="button" class="btn btn-secondary" style="border:1px solid var(--red);color:var(--red);background:#FFF" title="Eliminar o desactivar cliente" @click="confirmarEliminarCliente(cliEditando)">
+            <i class="ti ti-trash"></i> Eliminar cliente
           </button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" @click="mostrarModalEditar = false">Cancelar</button>
+            <button class="btn btn-primary" :disabled="!cliEditando.nombre" @click="guardarEdicionCliente">
+              <i class="ti ti-device-floppy"></i> Guardar Cambios
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -641,5 +657,19 @@ async function guardarNuevoCliente() {
     nombre: '', rif: '', tel: '', nivel: 'Publico', tipo: 'contado', direccion: '',
     contacto_nombre: '', contacto_cargo: '', origen: 'referido', origen_detalle: ''
   };
+}
+
+async function confirmarEliminarCliente(c) {
+  if (!c || !c.id) return;
+  const ok = await store.eliminarCliente(c);
+  if (ok) {
+    if (clienteSeleccionado.value && clienteSeleccionado.value.id === c.id) {
+      mostrarModalDetalle.value = false;
+      clienteSeleccionado.value = null;
+    }
+    if (cliEditando.value && cliEditando.value.id === c.id) {
+      mostrarModalEditar.value = false;
+    }
+  }
 }
 </script>

@@ -551,6 +551,39 @@ export const actualizarClienteBD = (clienteId, d) => rpc('actualizar_cliente', {
   }
 });
 
+// Cuántas facturas tiene un cliente (para decidir borrado definitivo o desactivación)
+export async function contarFacturasCliente(clienteId) {
+  const { count, error } = await supabase.from('facturas').select('id', { count: 'exact', head: true }).eq('cliente_id', clienteId);
+  if (error) throw error;
+  return count || 0;
+}
+
+// Elimina definitivamente o desactiva un cliente
+export async function eliminarClienteBD(id, definitivo) {
+  try {
+    const res = await rpc('eliminar_cliente', { p_id: id, p_definitivo: !!definitivo });
+    if (res && res.ok !== undefined) return res;
+  } catch (e) {
+    // Si la función RPC no existe en la BD, se ejecuta el fallback directo
+  }
+
+  if (definitivo) {
+    try {
+      await supabase.from('contactos_cliente').delete().eq('cliente_id', id);
+      const { error: delErr } = await supabase.from('clientes').delete().eq('id', id);
+      if (!delErr) {
+        return { ok: true, accion: 'eliminado', veces: 0 };
+      }
+    } catch (e) {
+      // Si falla por restricción de clave foránea, se desactiva
+    }
+  }
+
+  const { error: updErr } = await supabase.from('clientes').update({ activo: false }).eq('id', id);
+  if (updErr) return { ok: false, error: updErr.message };
+  return { ok: true, accion: 'desactivado', veces: definitivo ? 0 : 1 };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // INVENTARIO (C-01)
 // ═══════════════════════════════════════════════════════════════
