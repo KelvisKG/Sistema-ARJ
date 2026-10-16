@@ -1,8 +1,9 @@
 <template>
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- 1. VISTA LISTADO DE PRESUPUESTOS (CUANDO modoNuevo === false)          -->
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <div v-if="!modoNuevo" class="page active" id="page-cotizaciones">
+  <div class="presupuestos-modulo">
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- 1. VISTA LISTADO DE PRESUPUESTOS (CUANDO modoNuevo === false)          -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div v-if="!modoNuevo" class="page active" id="page-cotizaciones">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div>
         <h1 class="page-title"><i class="ti ti-file-text"></i> Presupuestos</h1>
@@ -291,7 +292,7 @@
                 </div>
                 <div style="text-align:right">
                   <div class="precio" style="font-weight:800;color:var(--green);font-size:14px">
-                    {{ fmtUSD(precioConTier(p.fob, tierSel, p)) }}
+                    {{ fmtUSD(precioProducto(p)) }}
                   </div>
                   <div class="stock" style="font-size:11px;color:var(--dgray);margin-top:2px">
                     Stock: {{ stockDe(p) }}
@@ -421,6 +422,7 @@
         </div>
       </div>
     </div>
+  </div>
   </div>
 </template>
 
@@ -649,6 +651,11 @@ function cambiarTier(nuevoTier) {
 function stockDe(p) {
   if (!p) return 0;
   return store.empresa === 'directa' ? (p.stock_vd || 0) : (p.stock_dist || 0);
+}
+
+function precioProducto(p) {
+  if (!p) return 0;
+  return precioConTier(p.fob, tierSel.value || 'Publico', p);
 }
 
 const sistemasDisponibles = computed(() => {
