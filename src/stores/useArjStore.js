@@ -525,6 +525,20 @@ export const useArjStore = defineStore('arj', {
       this.logBitacora('precio', `Precio de '${it.desc}' fijado en ${fmtUSD(v)} efectivo (${fmtUSD(ant)} → ${fmtUSD(it.precio)} BCV)`, true);
     },
 
+    cambiarPrecioBcvItem(index, valorBcv) {
+      if (!this._exigirGerente('modificar precios')) return;
+      const it = this.carrito.items[index];
+      if (!it) return;
+      const v = parseFloat(valorBcv) || 0;
+      if (v <= 0) { this.notif('Precio inválido: debe ser mayor a 0', 'error'); return; }
+      const ant = it.precio;
+      it.precio = Math.round(v * 100) / 100;
+      it.precio_fijo = true;  // no lo pisa un cambio de tier o cliente
+      it.precio_base = it.precio;
+      it.precio_verde = bcvAVerde(it.precio, this.estadoTasas);
+      this.logBitacora('precio', `Precio BCV de '${it.desc}' fijado en ${fmtUSD(it.precio)} (${fmtUSD(ant)} → ${fmtUSD(it.precio)})`, true);
+    },
+
     // A-01: solo el gerente cambia el nivel de precio, en ambas empresas
     cambiarTier(nuevoTier) {
       if (!this._exigirGerente('cambiar el nivel de precio')) return;
@@ -890,6 +904,46 @@ export const useArjStore = defineStore('arj', {
       await this.recargarClientes([id]);
       this.logBitacora('cliente', `Actualizó cliente ${datos.nombre}`);
       this.notif('Cliente actualizado', 'success');
+      return true;
+    },
+
+    async eliminarCliente(c) {
+      if (!this._exigirConexion('Eliminar cliente')) return false;
+      const saldo = (parseFloat(c.saldo_vd) || 0) + (parseFloat(c.saldo_dist) || 0);
+      if (saldo > 0.01) {
+        this.notif(`No se puede eliminar a "${c.nombre}" porque tiene saldo deudor pendiente (${fmtUSD(saldo)}). Debe liquidar su deuda primero.`, 'error');
+        return false;
+      }
+      let veces = 0;
+      try {
+        veces = await db.contarFacturasCliente(c.id);
+      } catch (e) {
+        console.warn('[contarFacturasCliente]', e);
+        veces = (this.todasFacturas || []).filter(f => f.cliente_id === c.id).length;
+      }
+      const definitivo = veces === 0;
+      const pregunta = definitivo
+        ? `¿Eliminar DEFINITIVAMENTE al cliente "${c.nombre}"?\n\nEste cliente nunca ha tenido facturas registradas. Esta acción borrará su registro.`
+        : `El cliente "${c.nombre}" tiene ${veces} factura(s) registrada(s).\n\nNo se puede borrar por completo para preservar el histórico contable y fiscal.\n\n¿Deseas DESACTIVARLO? Desaparecerá de la lista y búsquedas, pero su histórico se conservará.`;
+
+      if (!confirm(pregunta)) return false;
+
+      const r = await db.eliminarClienteBD(c.id, definitivo);
+      if (!r.ok) {
+        this.notif((definitivo ? 'Error al eliminar' : 'Error al desactivar') + ' en la base de datos: ' + r.error, 'error');
+        return false;
+      }
+      this.clientes = this.clientes.filter(x => x.id !== c.id);
+      if (this.carrito.cliente_id === c.id) {
+        this.limpiarCliente();
+      }
+      if (r.accion === 'eliminado') {
+        this.logBitacora('cliente', `Eliminó cliente ${c.nombre} (borrado definitivo, sin facturas)`, true);
+        this.notif(`✓ Cliente ${c.nombre} eliminado`, 'success');
+      } else {
+        this.logBitacora('cliente', `Desactivó cliente ${c.nombre} (${veces} facturas conservadas)`, true);
+        this.notif(`✓ Cliente ${c.nombre} desactivado (histórico conservado)`, 'success');
+      }
       return true;
     },
 

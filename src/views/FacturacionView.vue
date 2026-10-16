@@ -31,7 +31,7 @@
           <div class="card-tit"><i class="ti ti-user"></i> Datos del cliente</div>
           <div class="field-row">
             <label>Cliente:</label>
-            <div style="display:flex;gap:8px;flex:1;position:relative">
+            <div ref="clienteBoxRef" style="display:flex;gap:8px;flex:1;position:relative">
               <input
                 type="text"
                 v-model="busquedaCliente"
@@ -181,7 +181,7 @@
           </div>
 
           <!-- 1. TAB BÚSQUEDA NORMAL -->
-          <div v-if="tabBusqueda === 'normal'" class="search-tab-content active" id="tab-normal">
+          <div ref="productoBoxRef" v-if="tabBusqueda === 'normal'" class="search-tab-content active" id="tab-normal">
             <div class="search-box">
               <i class="ti ti-search"></i>
               <input
@@ -383,7 +383,17 @@
                   </td>
                   <td class="num">
                     <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
-                      <span v-if="!it.modo_verde" style="font-weight:700">{{ fmtUSD(it.precio) }}</span>
+                      <input
+                        v-if="!it.modo_verde"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        :value="it.precio"
+                        class="val-input"
+                        style="width:80px;padding:3px 6px;font-size:12px;text-align:right;font-weight:700;color:var(--navy)"
+                        title="Precio en Dólar BCV (editable)"
+                        @change="store.cambiarPrecioBcvItem(idx, $event.target.value)"
+                      >
                       <input
                         v-else
                         type="number"
@@ -391,13 +401,14 @@
                         :value="it.precio_verde"
                         class="val-input"
                         style="width:75px;padding:3px 6px;font-size:12px;border-color:var(--green);text-align:right;font-weight:700;color:var(--green)"
+                        title="Precio en Efectivo Verde"
                         @change="store.cambiarPrecioVerdeItem(idx, $event.target.value)"
                       >
                       <button
                         v-if="store.rol === 'gerente'"
                         :class="['btn-sm', it.modo_verde ? 'btn-green' : 'btn-secondary']"
                         style="padding:2px 5px;font-size:10px"
-                        :title="it.modo_verde ? 'Modo Efectivo Verde activo' : 'Cambiar a modo efectivo'"
+                        :title="it.modo_verde ? 'Modo Efectivo Verde activo (clic para volver a $BCV)' : 'Cambiar a modo efectivo ($ verde)'"
                         @click="store.toggleModoVerdeItem(idx)"
                       >
                         $
@@ -635,7 +646,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO, fmtTasa } from '../services/pricing.js';
 import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada } from '../services/cobros.js';
@@ -711,6 +722,34 @@ const brechaCambiaria = computed(() => {
 
 const busquedaCliente = ref(store.carrito.cliente_nombre || '');
 const mostrarClientes = ref(false);
+const clienteBoxRef = ref(null);
+const productoBoxRef = ref(null);
+
+function onClickOutside(e) {
+  if (clienteBoxRef.value && !clienteBoxRef.value.contains(e.target)) {
+    mostrarClientes.value = false;
+  }
+  if (productoBoxRef.value && !productoBoxRef.value.contains(e.target)) {
+    mostrarResultados.value = false;
+  }
+}
+
+function onKeyDown(e) {
+  if (e.key === 'Escape') {
+    mostrarClientes.value = false;
+    mostrarResultados.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onClickOutside);
+  document.addEventListener('keydown', onKeyDown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onClickOutside);
+  document.removeEventListener('keydown', onKeyDown);
+});
 
 const clientesFiltrados = computed(() => {
   const query = busquedaCliente.value.trim().toLowerCase();

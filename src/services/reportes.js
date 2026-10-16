@@ -191,6 +191,7 @@ export function rangoOrigen(sel, desdeTxt, hastaTxt, h = new Date()) {
   if (sel === 'mes') return { desde: fISO(new Date(y, m, 1)), hastaExcl: fISO(manana), etiqueta: 'este mes' };
   if (sel === 'mes_ant') return { desde: fISO(new Date(y, m - 1, 1)), hastaExcl: fISO(new Date(y, m, 1)), etiqueta: new Date(y, m - 1, 1).toLocaleDateString('es-VE', { month: 'long', year: 'numeric' }) };
   if (sel === '3m') return { desde: fISO(new Date(y, m - 2, 1)), hastaExcl: fISO(manana), etiqueta: 'últimos 3 meses' };
+  if (sel === '6m') return { desde: fISO(new Date(y, m - 5, 1)), hastaExcl: fISO(manana), etiqueta: 'últimos 6 meses' };
   if (sel === '12m') return { desde: fISO(new Date(y, m - 11, 1)), hastaExcl: fISO(manana), etiqueta: 'últimos 12 meses' };
   if (sel === 'anio') return { desde: fISO(new Date(y, 0, 1)), hastaExcl: fISO(manana), etiqueta: 'año ' + y };
   if (sel === 'todo') return { desde: '2000-01-01', hastaExcl: fISO(manana), etiqueta: 'todo el histórico' };
