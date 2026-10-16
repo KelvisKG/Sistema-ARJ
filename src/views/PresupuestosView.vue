@@ -463,6 +463,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD, precioConTier, sinFob } from '../services/pricing.js';
+import { generarPresupuestoPDF } from '../services/exportLazy.js';
 
 const store = useArjStore();
 
@@ -829,10 +830,16 @@ async function guardarEImprimir() {
       tier: tierSel.value
     });
     if (pre) {
+      const clienteData = {
+        rif: clienteSel.value?.rif || '',
+        direccion: clienteSel.value?.direccion || '',
+        telefono: clienteSel.value?.tel || ''
+      };
       store.presupuestoSeleccionado = pre;
       store.modalPresupuestoActivo = true;
       limpiarNuevo();
       modoNuevo.value = false;
+      generarPresupuestoPDF(pre, store.tasa_bcv, clienteData, 'print');
     }
   } finally {
     guardando.value = false;

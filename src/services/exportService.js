@@ -373,7 +373,7 @@ export function generarFacturaPDF(factura, action = 'download') {
 // ═══════════════════════════════════════════════════════════════════
 // 2. PDF DE PRESUPUESTO / COTIZACIÓN (Diseño formal tipo documento)
 // ═══════════════════════════════════════════════════════════════════
-export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData, action = 'download') {
+export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData, action = 'print') {
   if (!presupuesto) return;
 
   const doc = new jsPDF('p', 'mm', 'a4');
