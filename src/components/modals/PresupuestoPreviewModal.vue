@@ -229,8 +229,8 @@ function imprimirPDF() {
     direccion: cli.direccion || '',
     telefono: cli.tel || ''
   };
-  generarPresupuestoPDF(pre.value, store.tasa_bcv, clienteData);
-  store.notif(`PDF de cotización ${pre.value.num} generado`, 'success');
+  generarPresupuestoPDF(pre.value, store.tasa_bcv, clienteData, 'print');
+  store.notif(`Presupuesto ${pre.value.num} abierto en otra pestaña`, 'success');
 }
 
 function facturarDesdeModal() {
