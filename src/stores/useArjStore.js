@@ -10,7 +10,7 @@ import { defineStore } from 'pinia';
 import * as db from '../services/supabase.js';
 import { cargarDatosLocal } from '../services/persistence.js';
 import {
-  precioConTier, precioBaseItem, costoLanded, sinFob, bcvAVerde, verdeABcv, fmtUSD, dtoDivisaNeutro as _neutro,
+  precioConTier, precioBaseItem, costoLanded, sinFob, bcvAVerde, verdeABcv, fmtUSD, fmtTasa, dtoDivisaNeutro as _neutro,
   dtoDivisaPct as _pct, dtoDivisaExcedentePct, factorLandedDe, origenDe
 } from '../services/pricing.js';
 import {
@@ -37,6 +37,10 @@ const carritoVacio = () => ({
   pagos: []                  // [{ metodo, moneda: 'USD'|'Bs', monto, ref }]
 });
 
+// Módulos apagados por pedido de JJ (nov-2026). Su código se conserva: para volver a
+// usarlos basta con sacarlos de esta lista y devolver su botón en HeaderNav.
+const MODULOS_DESACTIVADOS = ['turnos', 'alertas'];
+
 const empresaDePerfil = e => (e === 'dist' || e === 'distribuidora') ? 'distribuidora' : (e === 'directa' ? 'directa' : 'ambas');
 
 export const useArjStore = defineStore('arj', {
@@ -60,6 +64,8 @@ export const useArjStore = defineStore('arj', {
     tasa_bcv: 0,
     tasa_par: 0,
     tasas_actualizadas: null,
+    bcv_actualizada: null,     // sql/13: última vez que la BCV cambió sola
+    bcv_fecha_valor: null,     // fecha de vigencia que publica el BCV
     dto_divisa: null,
     reloj: Date.now(),         // fuerza a reevaluar "confirmadas hoy" al cambiar el día
 
@@ -101,6 +107,7 @@ export const useArjStore = defineStore('arj', {
     modalRecepcionActivo: false,
     modalRecepcionesActivo: false,   // historial de recepciones y conteos (v13.21)
     modalEmbarquesActivo: false,
+    modalComprasActivo: false,
     modalNotaCreditoActivo: false,
     facturaNC: null,
     modalEditProdActivo: false,
@@ -111,12 +118,21 @@ export const useArjStore = defineStore('arj', {
     facturaAAnular: null,
     modalNuevoClienteActivo: false,
     modalListaPreciosActivo: false,
+    dialogo: null,                   // diálogo abierto (DialogoModal)
+    modalEmitirActivo: false,
+    emitirBloqueo: '',               // motivo por el que no se puede emitir
+    emitirNegativos: [],             // renglones que superan el stock
     modalPresupuestoActivo: false,
     presupuestoSeleccionado: null
   }),
 
   getters: {
     esGerente: s => s.rol === 'gerente',
+    // Búsqueda por id sin recorrer el catálogo en cada fila
+    productoPorId: s => new Map(s.productos.map(p => [p.id, p])),
+    // sql/12: compras nacionales y embarques comparten tabla; cada ventana usa su lista
+    embarquesImportados: s => s.embarques.filter(e => e.tipo !== 'nacional'),
+    comprasNacionales: s => s.embarques.filter(e => e.tipo === 'nacional'),
     puedeCambiarEmpresa: s => s.empresaPermitida === 'ambas',
     // Perfil distribuidora (sql/11): distribuidora externa, marcada en su perfil.
     // Solo ve productos importados y sus propios clientes, facturas y cotizaciones.
@@ -246,6 +262,7 @@ export const useArjStore = defineStore('arj', {
         this._aplicarConfiguracion(d.configuracion);
         this.supabaseConectado = true;
         this._iniciarRelojYRed();
+        this.refrescarTasaBcv();
       } catch (e) {
         console.error('[ARJ] Error inicializando:', e);
         this.supabaseConectado = false;
@@ -260,12 +277,18 @@ export const useArjStore = defineStore('arj', {
       this.tasa_bcv = cfg.tasa_bcv;
       this.tasa_par = cfg.tasa_par;
       this.tasas_actualizadas = cfg.tasas_actualizadas;
+      this.bcv_actualizada = cfg.bcv_actualizada || null;
+      this.bcv_fecha_valor = cfg.bcv_fecha_valor || null;
     },
 
     _iniciarRelojYRed() {
       if (this._escuchando) return;
       this._escuchando = true;
       setInterval(() => { this.reloj = Date.now(); }, 60000);
+      // La BCV cambia sola en el servidor (sql/13): se trae cada 10 minutos, solo
+      // con la pestaña a la vista; al volver a ella se trae enseguida
+      setInterval(() => { if (!document.hidden) this.refrescarTasaBcv(); }, 10 * 60000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) this.refrescarTasaBcv(); });
       window.addEventListener('online', async () => {
         if (!this.autenticado) return;
         this.notif('Conexión recuperada. Actualizando datos...', 'info');
@@ -338,6 +361,23 @@ export const useArjStore = defineStore('arj', {
     },
 
     // ═══════════════ UI ═══════════════
+    // Diálogos propios en lugar de confirm/alert/prompt del navegador
+    _abrirDialogo(tipo, opciones) {
+      if (this.dialogo) this.responderDialogo(null);   // nunca quedan dos promesas colgadas
+      return new Promise(resolver => { this.dialogo = { ...opciones, tipo, resolver }; });
+    },
+    responderDialogo(valor) {
+      const d = this.dialogo;
+      if (!d) return;
+      this.dialogo = null;
+      if (d.tipo === 'confirmar') d.resolver(valor === true);
+      else if (d.tipo === 'pedir') d.resolver(valor);
+      else d.resolver();
+    },
+    confirmar(opciones) { return this._abrirDialogo('confirmar', opciones); },   // → true / false
+    avisar(opciones) { return this._abrirDialogo('avisar', opciones); },
+    pedirTexto(opciones) { return this._abrirDialogo('pedir', opciones); },      // → texto o null
+
     notif(mensaje, tipo = 'info') {
       this.toast.mensaje = mensaje;
       this.toast.tipo = tipo;
@@ -362,6 +402,10 @@ export const useArjStore = defineStore('arj', {
     },
 
     cambiarVista(vista) {
+      if (MODULOS_DESACTIVADOS.includes(vista)) {
+        this.notif('Ese módulo está desactivado', 'warning');
+        return;
+      }
       const soloGerente = ['movimientos', 'reportes', 'alertas', 'bitacora', 'exportar', 'config'];
       if (soloGerente.includes(vista) && this.rol !== 'gerente') {
         // JJ pidió saber si una distribuidora intenta ver de más
@@ -402,6 +446,30 @@ export const useArjStore = defineStore('arj', {
     },
 
     // ═══════════════ TASAS (C-09) ═══════════════
+    // Pide al servidor que consulte la tasa BCV oficial; si cambió, se aplica aquí
+    async refrescarTasaBcv(manual = false) {
+      if (!this.autenticado || !this.supabaseConectado) return false;
+      let r;
+      try { r = await db.refrescarTasaBcvBD(); } catch (e) { r = { ok: false, error: e.message }; }
+      if (!r || !r.ok) {
+        if (manual) this.notif('No se pudo actualizar la tasa BCV: ' + ((r && r.error) || 'sin respuesta'), 'error');
+        return false;
+      }
+      this.bcv_actualizada = r.bcv_actualizada || this.bcv_actualizada;
+      this.bcv_fecha_valor = r.bcv_fecha_valor || this.bcv_fecha_valor;
+      const nueva = parseFloat(r.tasa_bcv) || 0;
+      if (nueva > 0 && Math.abs(nueva - this.tasa_bcv) > 0.00001) {
+        const antes = this.tasa_bcv;
+        this.tasa_bcv = nueva;
+        if (this.configuracion) Object.assign(this.configuracion, { tasa_bcv: nueva, bcv_actualizada: this.bcv_actualizada, bcv_fecha_valor: this.bcv_fecha_valor });
+        this.actualizarVerdesCarrito();
+        this.notif(`Tasa BCV actualizada: ${fmtTasa(antes)} → ${fmtTasa(nueva)}`, 'info');
+        return true;
+      }
+      if (manual) this.notif('La tasa BCV ya está al día: ' + fmtTasa(this.tasa_bcv), 'success');
+      return false;
+    },
+
     async confirmarTasas(bcv = this.tasa_bcv, par = this.tasa_par) {
       if (!this._exigirGerente('confirmar las tasas')) return false;
       if (!this._exigirConexion('Confirmar tasas')) return false;
@@ -1033,7 +1101,7 @@ export const useArjStore = defineStore('arj', {
         ? `¿Eliminar DEFINITIVAMENTE al cliente "${c.nombre}"?\n\nEste cliente nunca ha tenido facturas registradas. Esta acción borrará su registro.`
         : `El cliente "${c.nombre}" tiene ${veces} factura(s) registrada(s).\n\nNo se puede borrar por completo para preservar el histórico contable y fiscal.\n\n¿Deseas DESACTIVARLO? Desaparecerá de la lista y búsquedas, pero su histórico se conservará.`;
 
-      if (!confirm(pregunta)) return false;
+      if (!await this.confirmar({ titulo: definitivo ? 'Eliminar cliente' : 'Desactivar cliente', mensaje: pregunta, ok: definitivo ? 'Eliminar' : 'Desactivar', tono: 'rojo' })) return false;
 
       const r = await db.eliminarClienteBD(c.id, definitivo);
       if (!r.ok) {
@@ -1127,7 +1195,7 @@ export const useArjStore = defineStore('arj', {
       const pregunta = definitivo
         ? `¿Eliminar DEFINITIVAMENTE el producto "${p.desc}" (${p.cod_alt})?\n\nEste producto nunca ha sido facturado. Esta acción no se puede deshacer.`
         : `El producto "${p.desc}" (${p.cod_alt}) aparece en ${veces} factura(s).\n\nNo se puede borrar sin dañar el histórico fiscal.\n\n¿Deseas DESACTIVARLO? Desaparecerá de la lista pero el histórico se conserva.`;
-      if (!confirm(pregunta)) return false;
+      if (!await this.confirmar({ titulo: definitivo ? 'Eliminar producto' : 'Desactivar producto', mensaje: pregunta, ok: definitivo ? 'Eliminar' : 'Desactivar', tono: 'rojo' })) return false;
       const r = await db.eliminarProductoBD(p.id, definitivo);
       if (!r.ok) { this.notif((definitivo ? 'Error al eliminar' : 'Error al desactivar') + ' en la base de datos: ' + r.error, 'error'); return false; }
       this.productos = this.productos.filter(x => x.id !== p.id);
@@ -1199,11 +1267,42 @@ export const useArjStore = defineStore('arj', {
       return true;
     },
 
+    // Devuelve la compra guardada (para seguir con ella) o null
+    async guardarCompraNacional(datos) {
+      if (!this._exigirGerente('gestionar compras nacionales')) return null;
+      if (!this._exigirConexion('Guardar compra nacional')) return null;
+      const r = await db.guardarCompraNacionalBD(datos);
+      if (!r.ok) { this.notif('No se guardó la compra: ' + r.error, 'error'); return null; }
+      // La fila guardada viene en la respuesta: no hace falta volver a bajar la tabla
+      const i = this.embarques.findIndex(e => e.id === r.data.id);
+      if (i >= 0) this.embarques.splice(i, 1, r.data);
+      else this.embarques.unshift(r.data);
+      this.logBitacora('inventario', `${datos.id ? 'Editó' : 'Creó'} compra nacional ${r.data.codigo} — factor ${Number(r.data.factor).toFixed(4)}`, true);
+      this.notif(`Compra ${r.data.codigo} guardada (factor ${Number(r.data.factor).toFixed(4)})`, 'success');
+      return r.data;
+    },
+
+    // Lleva el factor de un embarque o compra a sus productos, previa confirmación.
+    // Solo recarga los productos que cambiaron.
     async recalcularEmbarque(emb) {
       if (!this._exigirGerente('recalcular costos')) return false;
+      const fNuevo = parseFloat(emb.factor) || 0;
+      if (fNuevo <= 0) { this.notif('Esa compra no tiene factor válido', 'error'); return false; }
+      const sellados = this.productos.filter(p => p.embarque_id === emb.id);
+      if (!sellados.length) { this.notif('Todavía no hay productos con el costo de ' + emb.codigo, 'error'); return false; }
+      const desfasados = sellados.filter(p => Math.abs((parseFloat(p.factor_landed) || 0) - fNuevo) > 0.000001);
+      if (!desfasados.length) { this.notif('Ya están todos al día con factor ' + fNuevo.toFixed(4), 'success'); return false; }
+      const fViejo = parseFloat(desfasados[0].factor_landed) || 0;
+      const ej = desfasados.find(p => (parseFloat(p.fob) || 0) > 0);
+      const lineaEj = ej ? `\nEjemplo — ${ej.cod_alt}: costo ${fmtUSD((parseFloat(ej.fob) || 0) * fViejo)} → ${fmtUSD((parseFloat(ej.fob) || 0) * fNuevo)}` : '';
+      if (!await this.confirmar({ titulo: 'Recalcular costos', ok: 'Recalcular', tono: 'oro', mensaje:
+        `Recalcular ${desfasados.length} producto(s) de ${emb.codigo}.\n\n`
+        + `Factor: ${fViejo.toFixed(4)} → ${fNuevo.toFixed(4)}  (${fNuevo > fViejo ? 'SUBE' : 'BAJA'} el costo)${lineaEj}\n\n`
+        + 'Las facturas ya emitidas NO cambian: guardan su propio costo.\n'
+        + 'Los precios de venta NO se tocan: solo el costo, o sea el margen.' })) return false;
       const r = await db.recalcularEmbarqueBD(emb.id);
       if (!r.ok) { this.notif('No se recalculó: ' + r.error, 'error'); return false; }
-      await this.recargarProductos();
+      await this.recargarProductos(desfasados.map(p => p.id));
       this.logBitacora('inventario', `Recalculó ${r.actualizados} producto(s) de ${emb.codigo} a factor ${Number(r.factor).toFixed(4)}`, true);
       this.notif(`${r.actualizados} producto(s) recalculados`, 'success');
       return true;

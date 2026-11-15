@@ -211,6 +211,8 @@ function mapConfiguracion(cfg) {
     tasa_par: parseFloat(cfg.tasa_par) || 0,
     tasa_bcv: parseFloat(cfg.tasa_bcv) || 0,
     tasas_actualizadas: cfg.tasas_actualizadas || null,
+    bcv_actualizada: cfg.bcv_actualizada || null,   // sql/13: la BCV se actualiza sola
+    bcv_fecha_valor: cfg.bcv_fecha_valor || null,
     factor_default: parseFloat(cfg.factor_landed_default) || FACTOR_LANDED_FALLBACK,
     costos_fijos_mes: parseFloat(cfg.costos_fijos_mes) || 0,
     costos_fijos_hist: (cfg.costos_fijos_hist && typeof cfg.costos_fijos_hist === 'object') ? cfg.costos_fijos_hist : {},
@@ -507,6 +509,8 @@ export async function cargarPagosDesde(desdeISO, usuario) {
 // ═══════════════════════════════════════════════════════════════
 // TASAS Y CONFIGURACIÓN
 // ═══════════════════════════════════════════════════════════════
+// sql/13: el servidor consulta la tasa oficial; la app no manda ningún valor
+export const refrescarTasaBcvBD = () => rpc('refrescar_tasa_bcv', {});
 export const confirmarTasasBD = (bcv, par) => rpc('confirmar_tasas', { p_bcv: bcv, p_par: par });
 export const actualizarConfiguracionBD = campos => rpc('actualizar_configuracion', { p: campos });
 
@@ -596,6 +600,7 @@ export const aplicarRecepcionBD = ({ tipo, destino, embarqueId, referencia, item
     p_referencia: referencia || null, p_items: items, p_no_contados: noContados || []
   });
 export const guardarEmbarqueBD = e => rpc('guardar_embarque', { p: e });
+export const guardarCompraNacionalBD = c => rpc('guardar_compra_nacional', { p: c });
 export const recalcularEmbarqueBD = id => rpc('recalcular_embarque', { p_id: id });
 // sql/09
 export const crearSistemaBD = nombre => rpc('crear_sistema', { p_nombre: nombre });

@@ -9,12 +9,15 @@
         "¿qué tienen para el motor del John Deere 6420?", usa la pestaña <strong>Por aplicación</strong>.</div>
     </div>
 
-    <!-- v13.4: despacho, notas, recepciones y conteo (solo gerente) -->
-    <div v-if="esGerente" style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn btn-secondary" @click="abrirTraspaso"><i class="ti ti-arrows-exchange"></i> Despachar a Directa</button>
-      <button class="btn btn-secondary" @click="abrirNotas"><i class="ti ti-file-text"></i> Notas de entrega</button>
-      <button class="btn btn-secondary" @click="abrirRecepciones"><i class="ti ti-truck-delivery"></i> Recepciones</button>
-      <button class="btn btn-primary" @click="abrirRecepcion"><i class="ti ti-clipboard-check"></i> Conteo / Recepción</button>
+    <!-- Solo la acción más usada a la vista; el resto va en el menú (solo gerente) -->
+    <div v-if="esGerente" class="inv-barra">
+      <button class="btn btn-primary" @click="abrirNuevoProducto"><i class="ti ti-plus"></i> Nuevo producto</button>
+      <div ref="menuRef" class="inv-menu">
+        <button type="button" class="btn btn-secondary inv-mas" title="Más acciones" aria-label="Más acciones" aria-haspopup="menu" :aria-expanded="menuAbierto" @click="menuAbierto = !menuAbierto"><i class="ti ti-dots"></i></button>
+        <div v-if="menuAbierto" class="inv-menu-lista" role="menu">
+          <button v-for="a in acciones" :key="a.t" type="button" role="menuitem" @click="ejecutar(a)"><i :class="['ti', a.i]"></i> {{ a.t }}</button>
+        </div>
+      </div>
     </div>
 
     <!-- Tabs búsqueda inventario -->
@@ -30,12 +33,6 @@
           <i class="ti ti-search"></i>
           <input v-model="busqueda" type="text" placeholder="Buscar por código, descripción, marca...">
         </div>
-        <template v-if="esGerente">
-          <button class="btn btn-secondary" @click="importarExcel"><i class="ti ti-upload"></i> Importar Excel</button>
-          <button class="btn btn-secondary" @click="abrirEmbarques"><i class="ti ti-ship"></i> Embarques</button>
-          <button class="btn btn-primary" @click="abrirNuevoProducto"><i class="ti ti-plus"></i> Nuevo producto</button>
-          <button class="btn btn-secondary" @click="store.modalListaPreciosActivo = true"><i class="ti ti-download"></i> Lista de precios</button>
-        </template>
       </div>
     </div>
 
@@ -127,7 +124,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD, precioPublico, FACTOR_LANDED_FALLBACK } from '../services/pricing.js';
 import { fotosDe } from '../services/monolito.js';
@@ -215,6 +212,42 @@ function abrirTraspaso() {
   if (!store.productos.length) { store.notif('No hay catálogo cargado', 'error'); return; }
   store.modalTraspasoActivo = true;
 }
+
+function abrirCompras() {
+  if (!soloGerente('gestionar compras nacionales')) return;
+  store.modalComprasActivo = true;
+}
+
+// ── Menú "..." ──
+const menuAbierto = ref(false);
+const menuRef = ref(null);
+const acciones = [
+  { t: 'Embarques', i: 'ti-ship', f: abrirEmbarques },
+  { t: 'Compras nacionales', i: 'ti-building-store', f: abrirCompras },
+  { t: 'Conteo / Recepción', i: 'ti-clipboard-check', f: abrirRecepcion },
+  { t: 'Recepciones', i: 'ti-truck-delivery', f: abrirRecepciones },
+  { t: 'Despachar a Directa', i: 'ti-arrows-exchange', f: abrirTraspaso },
+  { t: 'Notas de entrega', i: 'ti-file-text', f: abrirNotas },
+  { t: 'Importar Excel', i: 'ti-upload', f: importarExcel },
+  { t: 'Lista de precios', i: 'ti-download', f: () => { store.modalListaPreciosActivo = true; } }
+];
+function ejecutar(a) {
+  menuAbierto.value = false;
+  a.f();
+}
+function alClicFuera(e) {
+  if (menuAbierto.value && menuRef.value && !menuRef.value.contains(e.target)) menuAbierto.value = false;
+}
+function alTecla(e) {
+  if (e.key === 'Escape') menuAbierto.value = false;
+}
+function escuchar(si) {
+  const f = si ? 'addEventListener' : 'removeEventListener';
+  document[f]('click', alClicFuera);
+  document[f]('keydown', alTecla);
+}
+watch(menuAbierto, escuchar);
+onBeforeUnmount(() => escuchar(false));
 
 function abrirNotas() { store.modalNotasActivo = true; }
 function abrirRecepciones() { store.modalRecepcionesActivo = true; }

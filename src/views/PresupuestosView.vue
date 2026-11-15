@@ -410,8 +410,8 @@
         </div>
 
         <div style="display:flex;flex-direction:column;gap:8px">
-          <button class="btn btn-primary" :disabled="guardando" @click="guardarEImprimir" style="width:100%">
-            <i class="ti ti-printer"></i> Guardar e imprimir presupuesto
+          <button class="btn btn-primary" :disabled="guardando" @click="guardarPresupuestoNuevo" style="width:100%">
+            <i class="ti ti-device-floppy"></i> Guardar presupuesto
           </button>
           <button class="btn btn-green" :disabled="guardando" @click="convertirAVentaAhora" style="width:100%">
             <i class="ti ti-businessplan"></i> Convertir en venta ahora
@@ -463,7 +463,6 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD, precioConTier, sinFob } from '../services/pricing.js';
-import { generarPresupuestoPDF } from '../services/exportLazy.js';
 
 const store = useArjStore();
 
@@ -667,9 +666,9 @@ function limpiarNuevo() {
   filtroSistema.value = '';
 }
 
-function cancelarNuevo() {
+async function cancelarNuevo() {
   if (items.value.length > 0) {
-    if (!confirm('¿Deseas descartar este nuevo presupuesto? Se perderán los productos agregados.')) {
+    if (!await store.confirmar({ titulo: 'Descartar presupuesto', mensaje: '¿Deseas descartar este nuevo presupuesto? Se perderán los productos agregados.', ok: 'Descartar', cancelar: 'Seguir editando', tono: 'rojo' })) {
       return;
     }
   }
@@ -796,14 +795,15 @@ function validarItemsFob() {
   const sinCosto = items.value.filter(sinFob);
   if (sinCosto.length > 0) {
     const lista = sinCosto.map(it => `• ${it.cod_alt} — ${it.desc || 'sin descripción'}`).join('\n');
-    alert(`No se puede guardar el presupuesto: ${sinCosto.length} producto(s) no tienen costo cargado (FOB en 0).\n\n${lista}\n\nEl presupuesto se le entrega al cliente y el precio queda comprometido. Corrige el FOB en Inventario, o quita el producto del presupuesto.`);
+    store.avisar({ titulo: 'No se puede guardar', tono: 'rojo', ok: 'Entendido', mensaje: `${sinCosto.length} producto(s) no tienen costo cargado (FOB en 0).\n\n${lista}\n\nEl presupuesto se le entrega al cliente y el precio queda comprometido. Corrige el FOB en Inventario, o quita el producto del presupuesto.` });
     store.notif(`Presupuesto bloqueado: ${sinCosto.length} producto(s) sin FOB`, 'error');
     return false;
   }
   return true;
 }
 
-async function guardarEImprimir() {
+// Solo guarda y abre la vista previa: desde ahí se decide si imprimir
+async function guardarPresupuestoNuevo() {
   if (!clienteSel.value) {
     store.notif('Selecciona un cliente para el presupuesto', 'error');
     return;
@@ -830,16 +830,10 @@ async function guardarEImprimir() {
       tier: tierSel.value
     });
     if (pre) {
-      const clienteData = {
-        rif: clienteSel.value?.rif || '',
-        direccion: clienteSel.value?.direccion || '',
-        telefono: clienteSel.value?.tel || ''
-      };
       store.presupuestoSeleccionado = pre;
       store.modalPresupuestoActivo = true;
       limpiarNuevo();
       modoNuevo.value = false;
-      generarPresupuestoPDF(pre, store.tasa_bcv, clienteData, 'print');
     }
   } finally {
     guardando.value = false;

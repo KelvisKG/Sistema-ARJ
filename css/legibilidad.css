@@ -304,12 +304,14 @@ body.dark .inv-table tbody tr:nth-child(even) td { background: rgba(255, 255, 25
 .notif { font-size: 15px; }
 
 /* ─── 5. Letra grande (preferencia de cada computadora) ─── */
+/* Un solo valor: el menú lateral y Facturación lo usan para compensar el zoom */
+:root { --escala-letra: 1.15 }
 body.letra-grande .main-content,
 body.letra-grande .nav,
 body.letra-grande #banner-tasas,
 body.letra-grande .modal-content,
 body.letra-grande .confirm-box {
-  zoom: 1.15;
+  zoom: var(--escala-letra);
 }
 
 /* Botón "Letra grande" de la barra superior: con texto, no solo ícono */

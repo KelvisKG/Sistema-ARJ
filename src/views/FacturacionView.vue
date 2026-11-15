@@ -16,12 +16,10 @@
       </div>
     </div>
 
-    <div class="help-box">
-      <i class="ti ti-info-circle"></i>
-      <div>
-        <strong>¿Cómo facturar?</strong> Elige cliente → busca producto (puedes usar código alterno, OEM, descripción, marca o escanear) → ajusta precio (solo gerente) → registra pagos → emite. <strong>Estas facturas NO causan IVA</strong> (repuestos agrícolas exentos).
-      </div>
-    </div>
+    <details class="fact-ayuda">
+      <summary><i class="ti ti-info-circle"></i> ¿Cómo facturar?</summary>
+      <p>Elige cliente → busca producto (puedes usar código alterno, OEM, descripción, marca o escanear) → ajusta precio (solo gerente) → registra pagos → emite. <strong>Estas facturas NO causan IVA</strong> (repuestos agrícolas exentos).</p>
+    </details>
 
     <div class="factura-layout">
       <!-- COLUMNA PRINCIPAL -->
@@ -343,33 +341,29 @@
           <table class="tbl" id="tbl-items" style="margin-top:14px">
             <thead>
               <tr>
-                <th style="width:14%">Código</th>
-                <th style="width:30%">Descripción</th>
-                <th class="num" style="width:9%">Stock</th>
-                <th class="num" style="width:11%">Cantidad</th>
-                <th class="num" style="width:14%">Dólar BCV</th>
-                <th v-if="store.rol === 'gerente'" class="num" style="width:10%">Margen %</th>
-                <th class="num" style="width:12%">Total USD</th>
-                <th style="width:4%"></th>
+                <th>Producto</th>
+                <th class="num" style="width:64px">Cant.</th>
+                <th class="num" style="width:128px">Dólar BCV</th>
+                <th v-if="store.rol === 'gerente'" class="num" style="width:60px">Margen</th>
+                <th class="num" style="width:92px">Total $BCV</th>
+                <th style="width:42px"></th>
               </tr>
             </thead>
             <tbody id="items-body">
               <tr v-if="store.carrito.items.length === 0" id="row-empty">
-                <td :colspan="store.rol === 'gerente' ? 8 : 7" style="text-align:center;padding:24px;color:var(--dgray)">
+                <td :colspan="columnasItems" style="text-align:center;padding:24px;color:var(--dgray)">
                   No has agregado productos. Usa el buscador de arriba ↑
                 </td>
               </tr>
               <template v-for="(it, idx) in store.carrito.items" :key="it.id || it.cod_alt">
                 <tr>
                   <td>
-                    <strong style="color:var(--navy)">{{ it.cod_alt }}</strong>
-                    <div style="font-size:10px;color:var(--dgray)">{{ it.marca }}</div>
-                  </td>
-                  <td>{{ it.desc }}</td>
-                  <td class="num">
-                    <span :class="['badge', stockDe(it) <= 0 ? 'badge-danger' : (it.cant > stockDe(it) ? 'badge-warning' : 'badge-info')]">
-                      {{ stockDe(it) }}
-                    </span>
+                    <div class="fact-prod">
+                      <strong>{{ it.cod_alt }}</strong>
+                      <span v-if="it.marca" class="fact-marca">{{ it.marca }}</span>
+                      <span :class="['badge', stockDe(it) <= 0 ? 'badge-danger' : (it.cant > stockDe(it) ? 'badge-warning' : 'badge-info')]" title="Stock disponible">Stock {{ stockDe(it) }}</span>
+                    </div>
+                    <div class="fact-desc">{{ it.desc }}</div>
                   </td>
                   <td class="num">
                     <input
@@ -434,7 +428,7 @@
                 </tr>
                 <!-- ALERTA PRODUCTO SIN FOB (v13.17) -->
                 <tr v-if="sinFob(it)">
-                  <td colspan="8" style="padding:0">
+                  <td :colspan="columnasItems" style="padding:0">
                     <div style="margin:0;background:#FDECEA;border-left:3px solid var(--red);padding:6px 12px;font-size:11px;color:#8B1A10;display:flex;gap:6px;align-items:center">
                       <i class="ti ti-alert-octagon" style="font-size:14px"></i>
                       <div><strong>{{ it.cod_alt }} no tiene costo cargado (FOB en 0).</strong> No se podrá emitir la factura hasta corregir el FOB en Inventario.</div>
@@ -443,7 +437,7 @@
                 </tr>
                 <!-- ALERTA STOCK INSUFICIENTE / PRÉSTAMO (v13.1) -->
                 <tr v-if="it.cant > stockDe(it)">
-                  <td colspan="8" style="padding:0">
+                  <td :colspan="columnasItems" style="padding:0">
                     <div style="margin:0;background:#FFF8E1;border-left:3px solid var(--gold);padding:6px 12px;font-size:11px;color:#854F0B;display:flex;gap:6px;align-items:center">
                       <i class="ti ti-alert-triangle" style="font-size:14px"></i>
                       <div><strong>Stock insuficiente para {{ it.desc }}.</strong> Disponible local: {{ stockDe(it) }}. Se registrará como préstamo inter-empresarial.</div>
@@ -452,7 +446,7 @@
                 </tr>
                 <!-- ALERTA MARGEN BAJO (GERENTE) -->
                 <tr v-if="store.rol === 'gerente' && !sinFob(it) && margenItem(it) < MARGEN_MINIMO">
-                  <td colspan="8" style="padding:0">
+                  <td :colspan="columnasItems" style="padding:0">
                     <div style="margin:0;background:#FFF3E0;border-left:3px solid #E65100;padding:6px 12px;font-size:11px;color:#BF360C;display:flex;gap:6px;align-items:center">
                       <i class="ti ti-trending-down" style="font-size:14px"></i>
                       <div><strong>Margen de {{ margenItem(it) }}% en {{ it.cod_alt }}</strong> — por debajo del mínimo de {{ MARGEN_MINIMO }}%.</div>
@@ -466,15 +460,20 @@
       </div>
 
       <!-- SIDEBAR TOTALES Y PAGOS -->
-      <div>
+      <div class="fact-lateral">
         <div class="total-box">
           <div class="total-row">
             <span>Subtotal (precio de lista)</span>
             <span id="t-subtotal">{{ fmtUSD(store.subtotalCarrito) }}</span>
           </div>
-          <div v-if="store.subtotalCarrito - t.subtotal > 0.004" class="total-row" style="color:var(--lgold)">
-            <span>Descuento manual</span>
-            <span>−{{ fmtUSD(store.subtotalCarrito - t.subtotal) }}</span>
+          <!-- El descuento en monto neto, en cada moneda en que se puede cobrar -->
+          <div v-if="descuento" id="t-descuento" style="margin:6px 0;padding:8px 10px;border-radius:6px;background:rgba(255,255,255,.1);color:#FDE68A">
+            <div class="total-row" style="padding:0 0 4px;font-weight:700">
+              <span>Descuento ({{ (store.carrito.descuento_manual || descuento.pct).toFixed(1) }}%)</span>
+            </div>
+            <div class="total-row" style="padding:1px 0"><span>En dólar BCV</span><strong>−{{ fmtBCV(descuento.bcv) }}</strong></div>
+            <div class="total-row" style="padding:1px 0"><span>En Dólar ($)</span><strong>−{{ fmtDolar(descuento.dolar) }}</strong></div>
+            <div class="total-row" style="padding:1px 0"><span>En bolívares</span><strong>−{{ fmtBsMonto(descuento.bs) }}</strong></div>
           </div>
           <div class="total-row iva-zero">
             <span><i class="ti ti-info-circle"></i> IVA (exento)</span>
@@ -621,15 +620,7 @@
           </div>
         </div>
 
-        <div class="fiscal-check" style="margin-top:10px">
-          <input v-model="store.carrito.pidio_fiscal" type="checkbox" id="emitir-fiscal">
-          <label for="emitir-fiscal">
-            <i class="ti ti-receipt-tax"></i> El cliente pidió factura fiscal
-            <small>Al emitir, te recordará registrar también en el sistema fiscal homologado</small>
-          </label>
-        </div>
-
-        <div class="action-buttons" style="margin-top:14px">
+        <div class="action-buttons fact-acciones">
           <button class="btn btn-secondary" @click="cancelarFactura">
             <i class="ti ti-x"></i> Cancelar
           </button>
@@ -648,8 +639,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO, fmtTasa } from '../services/pricing.js';
-import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada } from '../services/cobros.js';
+import { fmtUSD, fmtBCV, fmtDolar, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO, fmtTasa } from '../services/pricing.js';
+import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada, descuentoCarrito } from '../services/cobros.js';
 
 const store = useArjStore();
 const tabBusqueda = ref('normal');
@@ -661,6 +652,8 @@ const textoImportar = ref('');
 const mostrarResultados = ref(false);
 
 const t = computed(() => store.totales);
+const columnasItems = computed(() => (store.rol === 'gerente' ? 6 : 5));
+const descuento = computed(() => descuentoCarrito(store.subtotalCarrito, t.value, store.estadoTasas));
 
 // ── Pagos ──
 const mostrarFormPago = ref(false);
@@ -786,7 +779,7 @@ const productosPorAplicacion = computed(() => {
 const productosFavoritos = computed(() => store.productos.filter(p => store.favoritos.includes(p.cod_alt)).slice(0, 8));
 
 function stockDe(p) {
-  const prod = store.productos.find(x => x.id === p.id) || p;
+  const prod = store.productoPorId.get(p.id) || p;
   return store.empresa === 'directa' ? (prod.stock_vd || 0) : (prod.stock_dist || 0);
 }
 
@@ -849,30 +842,18 @@ function procesarImportacion() {
   }
 }
 
-function cancelarFactura() {
-  if (store.carrito.items.length && !confirm('¿Descartar la factura en curso?')) return;
+async function cancelarFactura() {
+  if (store.carrito.items.length && !await store.confirmar({ titulo: 'Descartar factura', mensaje: '¿Descartar la factura en curso? Se perderán los productos y pagos agregados.', ok: 'Descartar', cancelar: 'Seguir facturando', tono: 'rojo' })) return;
   store.limpiarCarrito();
   busquedaCliente.value = '';
 }
 
-async function confirmarEmitir() {
-  const err = store.validarEmision();
-  if (err) {
-    alert('No se puede emitir:\n\n' + err);
-    return;
-  }
-  const negativos = store.carrito.items.filter(it => it.cant > stockDe(it));
-  if (negativos.length > 0) {
-    const detalle = negativos.map(it => `• ${it.cod_alt} (Solicitado: ${it.cant}, Disponible: ${stockDe(it)})`).join('\n');
-    if (!confirm(`⚠ PRÉSTAMO INTER-EMPRESA:\n${negativos.length} producto(s) superan el stock en ${store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'}:\n\n${detalle}\n\n¿Emitir de todas formas?`)) return;
-  }
-  const resumen = `Cliente: ${store.carrito.cliente_nombre}\nTotal: ${fmtUSD(t.value.subtotal)} ($BCV)\n` +
-    (store.carrito.tipo_pago === 'credito' && store.faltaPorPagarUSD > 0.01
-      ? `Crédito ${store.carrito.dias_credito} días · queda debiendo ${fmtUSD(store.faltaPorPagarUSD)}`
-      : (store.carrito.tipo_pago === 'credito' ? 'Contado (estaba a crédito, pero quedó pagada completa)' : 'Contado'));
-  if (!confirm('¿Emitir e imprimir esta factura?\n\n' + resumen)) return;
-  const r = await store.emitirFactura();
-  if (r && r.ok) busquedaCliente.value = '';
-  else if (r && r.error) alert('La factura NO se emitió.\n\n' + r.error);
+// El flujo sigue en EmitirFacturaModal: factura fiscal SÍ/NO y confirmación
+function confirmarEmitir() {
+  store.emitirBloqueo = store.validarEmision() || '';
+  store.emitirNegativos = store.carrito.items
+    .filter(it => it.cant > stockDe(it))
+    .map(it => ({ cod_alt: it.cod_alt, cant: it.cant, stock: stockDe(it) }));
+  store.modalEmitirActivo = true;
 }
 </script>

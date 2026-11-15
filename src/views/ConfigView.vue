@@ -14,6 +14,10 @@
         <div class="field-col" style="margin-bottom:10px">
           <label>Tasa BCV oficial (Bs por $)</label>
           <input v-model="tasaBcv" type="text" inputmode="decimal" class="val-input" style="font-weight:700">
+          <small style="color:var(--dgray);margin-top:4px">
+            <i class="ti ti-refresh"></i> Se actualiza sola desde el BCV<template v-if="store.bcv_fecha_valor"> · vigente desde {{ new Date(store.bcv_fecha_valor + 'T12:00:00').toLocaleDateString('es-VE') }}</template><template v-if="store.bcv_actualizada"> · último cambio {{ new Date(store.bcv_actualizada).toLocaleString('es-VE') }}</template>.
+            Escríbela a mano solo si la fuente falla.
+          </small>
         </div>
         <div style="font-size:12px;color:var(--dgray);margin-bottom:10px">
           Brecha: <strong>{{ brechaPct }}%</strong> · Descuento neutro en efectivo: <strong>{{ store.dtoDivisaNeutro.toFixed(2) }}%</strong><br>
@@ -26,12 +30,12 @@
           <button class="btn btn-primary btn-sm" :disabled="store.procesando" @click="confirmarTasasHoy">
             <i class="ti ti-check"></i> Guardar y confirmar tasas de hoy
           </button>
-          <button class="btn btn-secondary btn-sm" @click="consultarBCV">
-            <i class="ti ti-world-download"></i> Consultar BCV en línea
+          <button class="btn btn-secondary btn-sm" @click="store.refrescarTasaBcv(true)">
+            <i class="ti ti-world-download"></i> Actualizar BCV ahora
           </button>
         </div>
         <div style="font-size:11px;color:var(--dgray);margin-top:8px">
-          Confirmar sin cambiar el valor también cuenta: queda registrado que hoy se revisaron.
+          El paralelo se confirma a mano cada día: sin eso no se puede facturar. Confirmar sin cambiar el valor también cuenta.
         </div>
       </div>
 
@@ -136,19 +140,6 @@ async function confirmarTasasHoy() {
   await store.confirmarTasas(parseTasa(tasaBcv.value), parseTasa(tasaPar.value));
 }
 
-async function consultarBCV() {
-  try {
-    const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
-    if (!res.ok) throw new Error('Error en la API');
-    const data = await res.json();
-    if (data && data.promedio) {
-      tasaBcv.value = aTexto(data.promedio);
-      store.notif(`BCV consultado: ${data.promedio}. Revisa y pulsa "Guardar y confirmar".`, 'info');
-    }
-  } catch (e) {
-    store.notif('No se pudo consultar el BCV. Escribe la tasa a mano.', 'error');
-  }
-}
 
 // ── Parámetros ──
 const factorDefault = ref((store.configuracion && store.configuracion.factor_default) || 1.471);

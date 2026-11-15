@@ -204,7 +204,7 @@ const prev = computed(() => {
 async function agregarSistemaNuevo() {
   if (store.rol !== 'gerente') { store.notif('Solo el gerente puede crear sistemas', 'error'); return; }
   if (!store.supabaseConectado) { store.notif('Sin conexión: no se puede crear el sistema', 'error'); return; }
-  const nombre = prompt('Nombre del nuevo sistema (ej: Transmisión, Aire acondicionado...):');
+  const nombre = await store.pedirTexto({ titulo: 'Nuevo sistema', mensaje: 'Se agregará a la lista de sistemas de los productos.', etiqueta: 'Nombre del sistema', placeholder: 'Ej: Transmisión, Aire acondicionado...', ok: 'Crear' });
   if (!nombre || !nombre.trim()) return;
   if ((store.sistemas || []).includes(nombre.trim())) { store.notif('Ese sistema ya existe', 'warning'); return; }
   const creado = await store.crearSistema(nombre.trim());
@@ -240,7 +240,7 @@ async function guardar() {
   if (desc.length < 4) { store.notif('La descripción es muy corta para identificar el producto', 'error'); return; }
   // El origen tiene su propio campo: escribirlo en la descripción ensucia la factura
   if (/^\s*(DISTRIBUIDOR|LOCAL|IMPORTADO)\b/i.test(desc)) {
-    if (!confirm('La descripción empieza con "' + desc.split(/\s+/)[0] + '".\n\nEl origen ya tiene su propio campo — ese prefijo va a salir impreso en la factura del cliente.\n\n¿Guardar así de todos modos?')) return;
+    if (!await store.confirmar({ titulo: 'Revisa la descripción', mensaje: 'La descripción empieza con "' + desc.split(/\s+/)[0] + '".\n\nEl origen ya tiene su propio campo: ese prefijo va a salir impreso en la factura del cliente.\n\n¿Guardar así de todos modos?', ok: 'Guardar así', tono: 'oro' })) return;
   }
   const fac = parseFloat(d.factor_landed);
   if (!Number.isFinite(fac) || fac < 1 || fac > 5) {

@@ -839,7 +839,7 @@ async function agregarAlEquipo() {
 async function quitarDelEquipo(i) {
   const t = equipo.value[i];
   if (!t) return;
-  if (!confirm(`¿Quitar a ${t.nombre} del equipo?\n\nSus ventas y metas anteriores NO se borran.`)) return;
+  if (!await store.confirmar({ titulo: 'Quitar del equipo', mensaje: `¿Quitar a ${t.nombre} del equipo?\n\nSus ventas y metas anteriores NO se borran.`, ok: 'Quitar', tono: 'rojo' })) return;
   if (!(await guardarEquipo(equipo.value.filter((_, k) => k !== i)))) return;
   store.logBitacora('config', `Quitó a ${t.nombre} del equipo`, false);
   store.notif(`${t.nombre} quitado del equipo`, 'warning');

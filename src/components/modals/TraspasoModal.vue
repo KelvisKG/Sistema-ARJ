@@ -278,7 +278,7 @@ const resumen = computed(() => ({
 // Todo en una sola operación del servidor: si un renglón falla, no se mueve nada
 async function aplicar() {
   if (!A.value || !A.value.ok.length) return;
-  if (!confirm(`Se van a mover ${A.value.ok.length} producto(s) de Distribuidora a Venta Directa.\n\n¿Despachar?`)) return;
+  if (!await store.confirmar({ titulo: 'Despachar a Venta Directa', mensaje: `Se van a mover ${A.value.ok.length} producto(s) de Distribuidora a Venta Directa.\n\n¿Despachar?`, ok: 'Despachar' })) return;
   aplicando.value = true;
   try {
     const ref = referencia.value.trim();

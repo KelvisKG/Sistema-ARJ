@@ -10,6 +10,7 @@ import '../css/components/buttons.css';
 import '../css/components/cards.css';
 import '../css/components/forms.css';
 import '../css/components/modals.css';
+import '../css/components/modal-elegante.css';
 import '../css/components/notifications.css';
 import '../css/components/search.css';
 import '../css/components/tables.css';
@@ -29,3 +30,6 @@ import '../css/legibilidad.css';
 
 // Modo oscuro de todos los módulos (va al final: corrige colores escritos a mano)
 import '../css/modo-oscuro.css';
+
+// Menú lateral (va al final: reemplaza la barra superior de módulos)
+import '../css/components/barra-lateral.css';

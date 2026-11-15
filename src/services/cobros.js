@@ -61,6 +61,18 @@ export function totalesCarrito(items, estado) {
   return { subtotal, factorBs, totalBcv, totalBs, totalUsdBase, ajuste, totalUsd };
 }
 
+// Cuánto se rebajó de la lista, en monto neto y en cada moneda de cobro. null si no hay rebaja.
+export function descuentoCarrito(subtotalLista, t, estado) {
+  const bcv = (parseFloat(subtotalLista) || 0) - t.subtotal;
+  if (!(bcv > 0.004)) return null;
+  return {
+    bcv,
+    pct: (bcv / subtotalLista) * 100,
+    dolar: totalEnDivisas(subtotalLista, estado) - t.totalUsdBase,
+    bs: bcv * t.factorBs * (parseFloat(estado.tasa_bcv) || 0)
+  };
+}
+
 // Fracción de la factura cubierta por los pagos (cada uno en su moneda)
 export function fraccionPagada(pagos, totales, excluirIdx = -1) {
   if (!(totales.subtotal > 0)) return 0;

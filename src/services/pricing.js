@@ -179,6 +179,11 @@ export function fmtUSD(val) {
   });
 }
 
+// Referencia de moneda: el precio y la deuda están en dólar BCV; lo que entrega el
+// cliente en billetes o Zelle es dólar físico. Son montos distintos: nunca sin rótulo.
+export const fmtBCV = val => fmtUSD(val) + ' BCV';
+export const fmtDolar = val => fmtUSD(val) + ' Dólar';
+
 export function fmtBs(val, tasa) {
   const bs = (parseFloat(val) || 0) * (parseFloat(tasa) || 0);
   return 'Bs. ' + bs.toLocaleString('es-VE', {
