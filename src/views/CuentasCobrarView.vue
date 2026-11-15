@@ -18,19 +18,19 @@
       <div class="kpi-card blue">
         <div class="kpi-icon"><i class="ti ti-coin"></i></div>
         <div class="kpi-label">Por cobrar total</div>
-        <div class="kpi-val">{{ fmtUSD(kpis.total) }}</div>
+        <div class="kpi-val">{{ fmtBCV(kpis.total) }}</div>
         <div class="kpi-sub">{{ facturas.length }} factura(s)</div>
       </div>
       <div class="kpi-card red">
         <div class="kpi-icon"><i class="ti ti-alert-triangle"></i></div>
         <div class="kpi-label">Vencidas</div>
-        <div class="kpi-val" style="color:var(--red)">{{ fmtUSD(kpis.vencidas) }}</div>
+        <div class="kpi-val" style="color:var(--red)">{{ fmtBCV(kpis.vencidas) }}</div>
         <div class="kpi-sub">{{ kpis.nVencidas }} factura(s)</div>
       </div>
       <div class="kpi-card gold">
         <div class="kpi-icon"><i class="ti ti-clock"></i></div>
         <div class="kpi-label">Por vencer ≤7d</div>
-        <div class="kpi-val" style="color:var(--gold)">{{ fmtUSD(kpis.porVencer) }}</div>
+        <div class="kpi-val" style="color:var(--gold)">{{ fmtBCV(kpis.porVencer) }}</div>
         <div class="kpi-sub">{{ kpis.nPorVencer }} factura(s)</div>
       </div>
       <div class="kpi-card green">
@@ -56,9 +56,9 @@
           </span>
         </div>
         <div class="deuda-monto-block">
-          <div class="deuda-monto">{{ fmtUSD(f.saldo_pendiente) }}</div>
-          <div style="font-size:11px;color:var(--gold);font-weight:600">con resguardo {{ fmtUSD(f.saldo_pendiente * factorBsDe(f, store.estadoTasas)) }} · {{ fmtBsMonto(saldoBsHoy(f, store.estadoTasas)) }}</div>
-          <div v-if="f.abonado > 0" class="deuda-abono">Abonado: {{ fmtUSD(f.abonado) }} de {{ fmtUSD(f.total) }}</div>
+          <div class="deuda-monto">{{ fmtBCV(f.saldo_pendiente) }}</div>
+          <div style="font-size:11px;color:var(--gold);font-weight:600">con resguardo {{ fmtBCV(f.saldo_pendiente * factorBsDe(f, store.estadoTasas)) }} · {{ fmtBsMonto(saldoBsHoy(f, store.estadoTasas)) }}</div>
+          <div v-if="f.abonado > 0" class="deuda-abono">Abonado: {{ fmtBCV(f.abonado) }} de {{ fmtBCV(f.total) }}</div>
         </div>
         <div style="display:flex;gap:4px" @click.stop>
           <button class="btn btn-primary btn-sm" title="Registrar abono" @click="abrirAbono(f)"><i class="ti ti-cash-banknote"></i> Abonar</button>
@@ -68,74 +68,113 @@
       </div>
     </div>
 
-    <!-- REGISTRAR ABONO (monolito v13.32 / v13.33) -->
+    <!-- REGISTRAR ABONO (monolito v13.32 / v13.33). La moneda de cada monto va siempre rotulada -->
     <div v-if="ab" class="modal show" id="modal-abono">
-      <div class="modal-content" style="max-width:460px;text-align:left">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px">
-          <h2 style="margin:0;font-size:16px"><i class="ti ti-cash-banknote" style="color:var(--green)"></i> Registrar abono</h2>
-          <button class="btn btn-secondary btn-sm" @click="ab = null"><i class="ti ti-x"></i></button>
-        </div>
-        <div style="background:var(--sky);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:12px">
-          <div style="font-weight:600">{{ ab.f.num }} <span style="color:var(--dgray);font-weight:400">·</span> {{ ab.f.cliente }}</div>
-          <div v-if="(parseFloat(ab.f.abonado) || 0) > 0.009" style="margin-top:4px;color:var(--dgray);font-size:11px">Total {{ fmtUSD(ab.f.total) }} · abonado {{ fmtUSD(ab.f.abonado || 0) }}</div>
-          <div style="margin-top:8px;padding:8px;background:#FFF;border:1px solid var(--border);border-radius:6px">
-            <div style="display:grid;grid-template-columns:auto auto;gap:5px 12px;font-size:11.5px">
-              <span style="color:var(--dgray)">Saldo</span>
-              <strong style="text-align:right;color:var(--red)">{{ fmtUSD(ab.f.saldo_pendiente) }}</strong>
-              <template v-if="Math.abs(factorBsDe(ab.f, store.estadoTasas) - 1) > 0.0001">
-                <span style="color:var(--dgray)" title="Resguardo cambiario congelado al emitir esta factura. Es la cifra que se convierte a bolívares.">Con resguardo ({{ ((factorBsDe(ab.f, store.estadoTasas) - 1) * 100).toFixed(1) }}%)</span>
-                <strong style="text-align:right;color:var(--gold)">{{ fmtUSD(ab.f.saldo_pendiente * factorBsDe(ab.f, store.estadoTasas)) }}</strong>
-              </template>
-              <span style="color:var(--dgray)">Efectivo hoy</span>
-              <strong style="text-align:right;color:var(--green)" :title="ab.acordado ? 'Objetivo de efectivo acordado al emitir esta factura.' : 'Equivalente del saldo en dólares físicos, a la brecha de hoy.'">{{ fmtUSD(ab.objetivo) }}<span v-if="ab.acordado" style="font-size:9px;color:var(--gold);font-weight:600"> ACORDADO</span></strong>
-              <span style="color:var(--dgray);border-top:1px solid var(--border);padding-top:5px">Bolívares hoy</span>
-              <strong style="text-align:right;color:var(--navy);font-size:13px;border-top:1px solid var(--border);padding-top:5px">{{ fmtBsMonto(saldoBsHoy(ab.f, store.estadoTasas)) }}</strong>
+      <div class="modal-content me-caja me-ancha">
+        <header class="me-cab">
+          <span class="me-icono verde"><i class="ti ti-cash-banknote"></i></span>
+          <div class="me-titulo">
+            <h2>Registrar abono</h2>
+            <p>{{ ab.f.num }} · {{ ab.f.cliente }}</p>
+          </div>
+          <button type="button" class="me-cerrar" title="Cerrar" aria-label="Cerrar" @click="ab = null"><i class="ti ti-x"></i></button>
+        </header>
+
+        <div class="ab-cols">
+        <aside class="ab-lado">
+        <section class="me-panel">
+          <div class="me-etq">Saldo pendiente</div>
+          <div class="me-grande">{{ fmtBCV(ab.f.saldo_pendiente) }}</div>
+          <template v-if="(parseFloat(ab.f.abonado) || 0) > 0.009">
+            <div class="ab-barra"><span :style="{ width: pctPagado + '%' }"></span></div>
+            <div class="me-nota">Ya abonó {{ fmtBCV(ab.f.abonado) }} de {{ fmtBCV(ab.f.total) }}</div>
+          </template>
+          <div class="me-etq ab-sep">Para saldar la factura hoy, el cliente paga:</div>
+          <div class="ab-opciones-saldo">
+            <div class="ab-equiv">
+              <span>En Dólar ($)<em v-if="ab.acordado" title="Objetivo de efectivo acordado al emitir esta factura."> · acordado</em></span>
+              <strong>{{ fmtDolar(ab.objetivo) }}</strong>
+            </div>
+            <div class="ab-o">o</div>
+            <div class="ab-equiv">
+              <span>En bolívares</span>
+              <strong>{{ fmtBsMonto(saldoBsHoy(ab.f, store.estadoTasas)) }}</strong>
             </div>
           </div>
+          <div v-if="Math.abs(factorBsDe(ab.f, store.estadoTasas) - 1) > 0.0001" class="me-nota" title="Resguardo cambiario congelado al emitir esta factura. Es la cifra que se convierte a bolívares.">
+            Los bolívares incluyen resguardo de {{ ((factorBsDe(ab.f, store.estadoTasas) - 1) * 100).toFixed(1) }}%: {{ fmtBCV(ab.f.saldo_pendiente * factorBsDe(ab.f, store.estadoTasas)) }}
+          </div>
+        </section>
+
+        <section v-if="montoNum > 0" :class="['ab-resumen', { error: calculo && !calculo.ok }]">
+          <template v-if="calculo && calculo.ok">
+            <div><span>El cliente entrega</span><strong>{{ ab.moneda === 'USD' ? fmtDolar(montoNum) : fmtBsMonto(montoNum) }}</strong></div>
+            <div><span>Se acredita a la factura</span><strong>{{ fmtBCV(calculo.acreditaUSD) }}</strong></div>
+            <div class="ab-queda"><span>Saldo después del abono</span>
+              <strong :class="resto <= 0.01 ? 'ok' : 'debe'">{{ resto <= 0.01 ? 'Factura saldada' : fmtBCV(resto) }}</strong></div>
+          </template>
+          <div v-else-if="modoEf === 'saldar' && ab.moneda === 'USD'" class="ab-aviso"><i class="ti ti-alert-circle"></i> Faltan {{ fmtDolar(ab.objetivo - montoNum) }} para saldar. Elige otra forma de acreditar este pago.</div>
+          <div v-else class="ab-aviso"><i class="ti ti-alert-circle"></i> {{ calculo && calculo.error }}</div>
+        </section>
+        <section v-if="!(montoNum > 0)" class="ab-resumen ab-vacio"><i class="ti ti-arrow-right"></i> Escribe cuánto entrega el cliente para ver cómo queda la factura.</section>
+        </aside>
+
+        <div class="ab-form">
+        <section class="me-paso">
+          <h3><b>1</b> ¿Cómo paga el cliente?</h3>
+          <div class="ab-grupo">Dólar ($)</div>
+          <div class="ab-metodos">
+            <button v-for="m in METODOS_DOLAR" :key="m.v" type="button" :class="['ab-metodo', { activo: ab.metodo === m.v }]" :aria-pressed="ab.metodo === m.v" @click="elegirMetodo(m.v, 'USD')"><i :class="['ti', m.i]"></i> {{ m.t }}</button>
+          </div>
+          <div class="ab-grupo">Bolívares</div>
+          <div class="ab-metodos">
+            <button v-for="m in METODOS_BS" :key="m.v" type="button" :class="['ab-metodo', { activo: ab.metodo === m.v }]" :aria-pressed="ab.metodo === m.v" @click="elegirMetodo(m.v, 'Bs')"><i :class="['ti', m.i]"></i> {{ m.t }}</button>
+          </div>
+        </section>
+
+        <section class="me-paso">
+          <h3><b>2</b> ¿Cuánto entrega?</h3>
+          <div class="ab-monto">
+            <span>{{ ab.moneda === 'USD' ? '$' : 'Bs.' }}</span>
+            <input ref="inpMonto" v-model="ab.monto" type="text" inputmode="decimal" placeholder="0,00" aria-label="Monto del abono">
+            <em>{{ ab.moneda === 'USD' ? 'Dólar' : 'Bolívares' }}</em>
+          </div>
+          <div class="me-nota">Acepta cualquier formato: 59.818,55 · 59818.55 · 59818,55</div>
+
+          <label class="ab-lbl">Referencia o N° de confirmación
+            <span v-if="requiereReferencia(ab.metodo)" class="ab-oblig">obligatoria</span>
+            <span v-else class="ab-opc">opcional</span>
+          </label>
+          <input v-model="ab.ref" type="text" class="ab-inp" placeholder="N° de referencia, transferencia o voucher">
+        </section>
+
+        <!-- Solo para pagos en $: el usuario decide cómo se acredita -->
+        <section v-if="ab.moneda === 'USD' && montoNum > 0" class="me-paso">
+          <h3><b>3</b> ¿Cómo se acredita este pago?</h3>
+          <label :class="['me-opcion', { activo: modoEf === 'saldar' }]">
+            <input v-model="ab.modo" type="radio" value="saldar">
+            <span class="ab-modo-txt"><strong>Saldar la factura completa</strong><small>Para cuando entrega el monto acordado en dólares.</small></span>
+            <span class="ab-modo-val">{{ fmtBCV(ab.f.saldo_pendiente) }}</span>
+          </label>
+          <label :class="['me-opcion', { activo: modoEf === 'convertir' }]">
+            <input v-model="ab.modo" type="radio" value="convertir">
+            <span class="ab-modo-txt"><strong>Convertir a dólar BCV</strong><small>El efectivo vale más con la brecha de hoy (−{{ store.dtoDivisaPct.toFixed(1) }}%).</small></span>
+            <span class="ab-modo-val">{{ fmtBCV(abonoAcredita(montoNum, 'convertir', ab.f, store.estadoTasas)) }}</span>
+          </label>
+          <label :class="['me-opcion', { activo: modoEf === 'cara' }]">
+            <input v-model="ab.modo" type="radio" value="cara">
+            <span class="ab-modo-txt"><strong>Al valor de la cara</strong><small>Sin convertir: solo si el precio ya estaba en dólar BCV.</small></span>
+            <span class="ab-modo-val">{{ fmtBCV(montoNum) }}</span>
+          </label>
+        </section>
+
         </div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div>
-            <label class="ab-lbl">Monto del abono *</label>
-            <div style="display:flex;gap:4px">
-              <input ref="inpMonto" v-model="ab.monto" type="text" placeholder="Pega o escribe el monto" class="ab-inp" style="flex:1;font-size:14px">
-              <select v-model="ab.moneda" class="ab-inp" style="width:auto;flex:none">
-                <option value="USD">USD</option>
-                <option value="Bs">Bs</option>
-              </select>
-            </div>
-            <div style="font-size:10.5px;color:var(--dgray);margin-top:3px"><i class="ti ti-info-circle"></i> Acepta cualquier formato: 59.818,55 · 59818.55 · 59818,55</div>
-          </div>
-          <!-- Solo para pagos en $: el usuario decide cómo se acredita -->
-          <div v-if="ab.moneda === 'USD' && montoNum > 0" style="background:#F2F5FA;border-radius:6px;padding:9px 11px">
-            <div style="font-size:11.5px;font-weight:600;margin-bottom:6px">¿Cómo acredito este pago en efectivo?</div>
-            <label class="ab-modo"><input v-model="ab.modo" type="radio" value="saldar" style="width:auto;margin:0"><span style="flex:1">Saldar la factura completa</span><strong>{{ fmtUSD(ab.f.saldo_pendiente) }}</strong></label>
-            <label class="ab-modo"><input v-model="ab.modo" type="radio" value="convertir" style="width:auto;margin:0"><span style="flex:1">Convertir a $BCV</span><strong>{{ fmtUSD(abonoAcredita(montoNum, 'convertir', ab.f, store.estadoTasas)) }}</strong></label>
-            <label class="ab-modo"><input v-model="ab.modo" type="radio" value="cara" style="width:auto;margin:0"><span style="flex:1">Al valor de la cara</span><strong>{{ fmtUSD(montoNum) }}</strong></label>
-            <div style="margin-top:7px;padding-top:6px;border-top:1px solid var(--border);font-size:12px;line-height:1.45">
-              <span v-if="modoEf === 'saldar' && cubre" style="color:#1E7B34">Cubre el objetivo de {{ fmtUSD(ab.objetivo) }}.</span>
-              <span v-else-if="modoEf === 'saldar'" style="color:#B00020">Faltan {{ fmtUSD(ab.objetivo - montoNum) }} para el objetivo de {{ fmtUSD(ab.objetivo) }}.</span>
-              <span v-else-if="modoEf === 'convertir'">El efectivo vale más en $BCV (brecha de hoy −{{ store.dtoDivisaPct.toFixed(1) }}%).</span>
-              <span v-else>Sin convertir. Úsalo solo si el precio ya estaba en $BCV.</span>
-              <br>Acredita <strong>{{ fmtUSD(previa.acred) }}</strong> · saldo queda en
-              <strong :style="{ color: previa.resto <= 0.01 ? '#1E7B34' : '#B00020' }">{{ fmtUSD(Math.max(0, previa.resto)) }}</strong>
-            </div>
-          </div>
-          <div>
-            <label class="ab-lbl">Método de pago *</label>
-            <select v-model="ab.metodo" class="ab-inp" style="width:100%" @change="cambioMetodo">
-              <option>Efectivo USD</option><option>Zelle USD</option><option>Pago móvil Bs.</option><option>Transferencia Bs.</option><option>Efectivo Bs.</option><option>Punto de venta</option>
-            </select>
-          </div>
-          <div>
-            <label class="ab-lbl">Referencia / N° confirmación <span v-if="requiereReferencia(ab.metodo)" style="color:var(--red)">*</span></label>
-            <input v-model="ab.ref" type="text" class="ab-inp" placeholder="N° de referencia bancaria, transferencia, voucher..." style="width:100%">
-            <div v-if="requiereReferencia(ab.metodo)" style="font-size:10.5px;margin-top:3px"><span style="color:var(--red)"><i class="ti ti-alert-circle"></i> Obligatorio para {{ ab.metodo }} — para trazabilidad y disputas futuras</span></div>
-          </div>
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;border-top:1px solid var(--border);padding-top:10px">
-            <button class="btn btn-secondary" @click="ab = null">Cancelar</button>
-            <button class="btn btn-primary" :disabled="store.procesando" @click="confirmarAbono"><i class="ti ti-check"></i> {{ store.procesando ? 'Registrando...' : 'Registrar' }}</button>
-          </div>
         </div>
+
+        <footer class="me-pie">
+          <button type="button" class="btn btn-secondary" @click="ab = null">Cancelar</button>
+          <button type="button" class="btn btn-primary" :disabled="store.procesando || !calculo || !calculo.ok" @click="confirmarAbono"><i class="ti ti-check"></i> {{ store.procesando ? 'Registrando...' : 'Registrar abono' }}</button>
+        </footer>
       </div>
     </div>
   </div>
@@ -144,8 +183,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBsMonto, factorBsDe } from '../services/pricing.js';
-import { requiereReferencia, parseMontoVE, saldoBsHoy, objetivoEfectivo, abonoAcredita } from '../services/cobros.js';
+import { fmtBCV, fmtDolar, fmtBsMonto, factorBsDe } from '../services/pricing.js';
+import { requiereReferencia, parseMontoVE, saldoBsHoy, objetivoEfectivo, abonoAcredita, calcularAbono } from '../services/cobros.js';
 import { cargarCobradoMes } from '../services/supabase.js';
 
 const store = useArjStore();
@@ -181,7 +220,7 @@ async function cargarCobrado() {
     const r = await cargarCobradoMes(empresaConsultada);
     // Si se cambió de empresa mientras viajaba la consulta, no se pisa el valor nuevo
     if (store.empresa !== empresaConsultada) return;
-    cobradoMes.value = { val: fmtUSD(r.total), sub: r.cuenta + (r.cuenta === 1 ? ' pago' : ' pagos') };
+    cobradoMes.value = { val: fmtDolar(r.total), sub: r.cuenta + (r.cuenta === 1 ? ' pago' : ' pagos') };
   } catch (e) {
     console.error('[ARJ] Error calculando Cobrado mes:', e);
     cobradoMes.value = { val: '—', sub: 'error al calcular' };
@@ -221,11 +260,21 @@ function abrirAbono(f) {
   nextTick(() => { if (inpMonto.value) inpMonto.value.focus(); });
 }
 
-// La moneda se cambia sola según el método
-function cambioMetodo() {
-  const m = ab.value.metodo;
-  if (/Bs\.|m[oó]vil|punto de venta/i.test(m)) ab.value.moneda = 'Bs';
-  else if (/USD|Zelle/i.test(m)) ab.value.moneda = 'USD';
+// El método decide la moneda
+const METODOS_DOLAR = [
+  { v: 'Efectivo USD', t: 'Efectivo', i: 'ti-cash' },
+  { v: 'Zelle USD', t: 'Zelle', i: 'ti-building-bank' },
+  { v: 'USDT', t: 'USDT', i: 'ti-coin' }
+];
+const METODOS_BS = [
+  { v: 'Pago móvil Bs.', t: 'Pago móvil', i: 'ti-device-mobile' },
+  { v: 'Transferencia Bs.', t: 'Transferencia', i: 'ti-arrows-exchange' },
+  { v: 'Efectivo Bs.', t: 'Efectivo', i: 'ti-cash' },
+  { v: 'Punto de venta', t: 'Punto de venta', i: 'ti-credit-card' }
+];
+function elegirMetodo(m, moneda) {
+  ab.value.metodo = m;
+  ab.value.moneda = moneda;
 }
 
 const montoNum = computed(() => (ab.value ? parseMontoVE(ab.value.monto) : 0));
@@ -234,11 +283,17 @@ const cubre = computed(() => ab.value && montoNum.value >= ab.value.objetivo - 1
 const modoEf = computed(() => (ab.value ? (ab.value.modo || (cubre.value ? 'saldar' : 'convertir')) : 'convertir'));
 // El monolito marca esa opción la primera vez que hay monto; después manda el usuario
 watch(montoNum, n => { if (ab.value && !ab.value.modo && n > 0 && ab.value.moneda === 'USD') ab.value.modo = modoEf.value; });
-const previa = computed(() => {
-  if (!ab.value) return { acred: 0, resto: 0 };
-  const saldo = ab.value.f.saldo_pendiente;
-  const acred = Math.min(abonoAcredita(montoNum.value, modoEf.value, ab.value.f, store.estadoTasas), saldo);
-  return { acred, resto: Math.round((saldo - acred) * 100) / 100 };
+// La vista previa usa el mismo cálculo que el registro: lo que se ve es lo que se guarda
+const calculo = computed(() => {
+  if (!ab.value || !(montoNum.value > 0)) return null;
+  return calcularAbono({ f: ab.value.f, montoIn: montoNum.value, moneda: ab.value.moneda, modo: modoEf.value, estado: store.estadoTasas });
+});
+// Saldo que queda después del abono (el resumen solo se muestra con un cálculo válido)
+const resto = computed(() => (calculo.value && calculo.value.ok
+  ? Math.round((ab.value.f.saldo_pendiente - calculo.value.acreditaUSD) * 100) / 100 : 0));
+const pctPagado = computed(() => {
+  if (!ab.value || !(ab.value.f.total > 0)) return 0;
+  return Math.min(100, Math.max(0, (ab.value.f.abonado || 0) / ab.value.f.total * 100));
 });
 
 async function confirmarAbono() {
@@ -253,15 +308,63 @@ async function confirmarAbono() {
     if (r.error) store.notif('Error registrando abono: ' + r.error, 'error');
     return;
   }
-  store.notif('✓ Abono de ' + fmtUSD(r.acreditaUSD) + ' registrado. Saldo: ' + fmtUSD(r.saldo), 'success');
+  store.notif('✓ Abono de ' + fmtBCV(r.acreditaUSD) + ' registrado. Saldo: ' + fmtBCV(r.saldo), 'success');
   ab.value = null;
   cargarCobrado();
 }
 </script>
 
 <style scoped>
-.ab-lbl { font-size: 12px; font-weight: 600; display: block; margin-bottom: 3px }
-.ab-inp { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit }
-.ab-modo { display: flex; gap: 7px; align-items: center; cursor: pointer; padding: 3px 0; font-size: 12px }
-.ab-modo strong { font-variant-numeric: tabular-nums }
+.ab-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 24px; align-items: start; padding: 18px 22px 0 }
+
+.ab-sep { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border) }
+.ab-barra { height: 7px; margin-top: 10px; overflow: hidden; border-radius: 99px; background: var(--border) }
+.ab-barra span { display: block; height: 100%; border-radius: 99px; background: var(--green) }
+.ab-opciones-saldo { display: flex; align-items: stretch; gap: 8px; margin-top: 8px }
+.ab-equiv { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg) }
+.ab-equiv span { display: block; color: var(--dgray); font-size: 12.5px }
+.ab-equiv em { color: var(--gold); font-style: normal; font-weight: 700 }
+.ab-equiv strong { display: block; margin-top: 1px; color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere }
+.ab-o { align-self: center; color: var(--dgray); font-size: 13px }
+
+.ab-grupo { margin: 8px 0 5px; color: var(--dgray); font-size: 12.5px; font-weight: 600 }
+.ab-metodos { display: flex; flex-wrap: wrap; gap: 6px }
+.ab-metodo { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 7px 13px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; transition: border-color .15s, background .15s }
+.ab-metodo:hover { border-color: var(--blue) }
+.ab-metodo.activo { border-color: var(--blue); background: var(--lblue); color: var(--blue); font-weight: 700 }
+
+.ab-monto { display: flex; align-items: center; gap: 8px; padding: 4px 14px; border: 1.5px solid var(--border); border-radius: 12px; background: var(--input-bg) }
+.ab-monto:focus-within { border-color: var(--blue); box-shadow: var(--shadow-glow-blue) }
+.ab-monto span { color: var(--dgray); font-size: 20px; font-weight: 700 }
+.ab-monto input { flex: 1; min-width: 0; padding: 8px 0; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--text); font: inherit; font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums }
+.ab-monto input:focus, .ab-monto input:focus-visible { border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent !important }
+.ab-monto em { color: var(--dgray); font-size: 13px; font-style: normal; font-weight: 600 }
+.ab-lbl { display: flex; align-items: center; gap: 7px; margin: 14px 0 5px; font-size: 13.5px; font-weight: 600 }
+.ab-oblig { color: var(--red); font-size: 12.5px }
+.ab-opc { color: var(--dgray); font-size: 12.5px; font-weight: 400 }
+.ab-inp { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-family: inherit; font-size: 14.5px }
+
+.ab-modo-txt { flex: 1; min-width: 0 }
+.ab-modo-val { flex: none; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums }
+
+.ab-resumen { margin: 14px 0 0; padding: 12px 16px; border-radius: 12px; background: var(--lgreen) }
+.ab-resumen.error { background: var(--lred) }
+.ab-vacio { background: var(--gray); color: var(--dgray); font-size: 13.5px }
+.ab-resumen > div:not(.ab-aviso) { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 14px }
+.ab-resumen strong { font-variant-numeric: tabular-nums; text-align: right }
+.ab-resumen > .ab-queda { margin-top: 5px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 15.5px; font-weight: 600 }
+.ok { color: var(--green) }
+.debe { color: var(--red) }
+.ab-aviso { color: var(--red); font-size: 14px; font-weight: 600 }
+
+@media (max-width: 760px) {
+  .ab-cols { grid-template-columns: minmax(0, 1fr); gap: 18px }
+}
+
+@media (max-width: 520px) {
+  .ab-opciones-saldo { flex-direction: column }
+  .ab-o { align-self: flex-start; margin-left: 4px }
+  .me-opcion { flex-wrap: wrap }
+  .ab-modo-val { margin-left: 27px }
+}
 </style>

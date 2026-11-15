@@ -29,17 +29,21 @@
       <PresupuestoPreviewModal />
       <TraspasoModal />
       <NotasEntregaModal />
-      <EditProdModal />
       <DtoDivisaModal />
       <DtoManualModal />
       <ModoCajaModal />
       <AnularFacturaModal />
       <NuevoClienteRapidoModal />
       <EmbarquesModal />
+      <ComprasNacionalesModal />
+      <EditProdModal />
       <ListaPreciosModal />
+      <EmitirFacturaModal />
       <RecepcionModal />
       <RecepcionesModal />
       <NotaCreditoModal />
+      <!-- Va último: las confirmaciones se abren encima de cualquier otra ventana -->
+      <DialogoModal />
 
       <!-- BOTÓN AYUDA FLOTANTE Y HINT DE ATAJOS -->
       <button class="help-fab" @click="mostrarModalAyuda = true" title="Ayuda y atajos">
@@ -118,7 +122,10 @@ import ModoCajaModal from './components/modals/ModoCajaModal.vue';
 import AnularFacturaModal from './components/modals/AnularFacturaModal.vue';
 import NuevoClienteRapidoModal from './components/modals/NuevoClienteRapidoModal.vue';
 import EmbarquesModal from './components/modals/EmbarquesModal.vue';
+import ComprasNacionalesModal from './components/modals/ComprasNacionalesModal.vue';
 import ListaPreciosModal from './components/modals/ListaPreciosModal.vue';
+import EmitirFacturaModal from './components/modals/EmitirFacturaModal.vue';
+import DialogoModal from './components/common/DialogoModal.vue';
 import RecepcionModal from './components/modals/RecepcionModal.vue';
 import RecepcionesModal from './components/modals/RecepcionesModal.vue';
 import NotaCreditoModal from './components/modals/NotaCreditoModal.vue';
@@ -182,7 +189,7 @@ onMounted(async () => {
 #arj-root {
   min-height: 100vh;
   max-width: 100vw;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Transiciones de Vista */

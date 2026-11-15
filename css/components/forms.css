@@ -224,3 +224,6 @@ textarea.is-invalid {
     margin-bottom: 4px;
   }
 }
+
+/* El selector de mes muestra "noviembre de 2026": con menos ancho se corta */
+input[type="month"] { min-width: 205px }

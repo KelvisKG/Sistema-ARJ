@@ -47,10 +47,10 @@
             <tr style="background:#F2F5FA;color:var(--navy)">
               <th style="width:5%" class="center">#</th>
               <th style="width:15%;text-align:left">CÓDIGO</th>
-              <th style="width:40%;text-align:left">DESCRIPCIÓN</th>
+              <th style="width:32%;text-align:left">DESCRIPCIÓN</th>
               <th class="center" style="width:10%">CANT.</th>
-              <th class="num" style="width:15%">P.UNIT</th>
-              <th class="num" style="width:15%">TOTAL</th>
+              <th class="num" style="width:19%">P.UNIT</th>
+              <th class="num" style="width:19%">TOTAL</th>
             </tr>
           </thead>
           <tbody>
@@ -62,8 +62,8 @@
                 <span :title="badge(it).titulo" :style="badge(it).estilo">{{ badge(it).txt }}</span>{{ it.desc }}
               </td>
               <td class="center">{{ it.cant }}</td>
-              <td class="num">{{ fmtUSD(it.precio) }}</td>
-              <td class="num" style="font-weight:700">{{ fmtUSD(it.cant * it.precio) }}</td>
+              <td class="num" style="white-space:nowrap">{{ fmtBCV(it.precio) }}</td>
+              <td class="num" style="font-weight:700;white-space:nowrap">{{ fmtBCV(it.cant * it.precio) }}</td>
             </tr>
             <tr v-if="cargandoDetalles">
               <td colspan="6" class="center" style="padding:20px;color:var(--navy)"><i class="ti ti-loader"></i> Cargando productos...</td>
@@ -76,9 +76,9 @@
         <!-- Qué porcentaje de la factura es importado: el mismo reparto con que el reporte prorratea descuentos y cobros -->
         <div v-if="mezcla" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:7px;font-size:11.5px;color:var(--dgray)">
           <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#1F3864;margin-right:5px"></span>
-            Importado <strong style="color:#1F3864">{{ fmtUSD(mezcla.imp) }}</strong> ({{ (mezcla.imp / mezcla.tot * 100).toFixed(1) }}%)</span>
+            Importado <strong style="color:#1F3864">{{ fmtBCV(mezcla.imp) }}</strong> ({{ (mezcla.imp / mezcla.tot * 100).toFixed(1) }}%)</span>
           <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#BF8F00;margin-right:5px"></span>
-            Local <strong style="color:#8A6200">{{ fmtUSD(mezcla.loc) }}</strong> ({{ (mezcla.loc / mezcla.tot * 100).toFixed(1) }}%)</span>
+            Local <strong style="color:#8A6200">{{ fmtBCV(mezcla.loc) }}</strong> ({{ (mezcla.loc / mezcla.tot * 100).toFixed(1) }}%)</span>
         </div>
       </div>
 
@@ -101,7 +101,7 @@
                 <td style="padding:8px">{{ pago.metodo }}</td>
                 <td style="padding:8px">{{ pago.referencia || pago.ref || '—' }}</td>
                 <td style="text-align:right;padding:8px;font-weight:600">
-                  {{ /USD|Zelle/i.test(pago.metodo || '') ? fmtUSD(pago.monto_usd) : fmtBsMonto(pago.monto_bs) }}
+                  {{ /USD|Zelle/i.test(pago.metodo || '') ? fmtDolar(pago.monto_usd) : fmtBsMonto(pago.monto_bs) }}
                   <div v-if="pago.notas" style="font-size:9px;color:var(--dgray);font-weight:400;margin-top:2px">{{ pago.notas }}</div>
                 </td>
               </tr>
@@ -121,23 +121,23 @@
           <div style="background:var(--navy);color:#FFF;border-radius:8px;padding:16px;margin-bottom:12px;font-size:13px">
             <div style="display:flex;justify-content:space-between;margin-bottom:6px">
               <span>Subtotal:</span>
-              <span style="font-weight:600">{{ fmtUSD(store.facturaReciente.total) }}</span>
+              <span style="font-weight:600">{{ fmtBCV(store.facturaReciente.total) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.2)">
               <span>IVA (exento):</span>
-              <span style="font-weight:600">$0.00</span>
+              <span style="font-weight:600">{{ fmtBCV(0) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
               <span style="font-size:20px;font-weight:800">TOTAL:</span>
-              <span style="font-size:20px;font-weight:800">{{ fmtUSD(store.facturaReciente.total) }}</span>
+              <span style="font-size:20px;font-weight:800">{{ fmtBCV(store.facturaReciente.total) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:6px">
               <span style="color:rgba(255,255,255,0.7)">Abonado:</span>
-              <span style="font-weight:600">{{ fmtUSD(totalAbonado) }}</span>
+              <span style="font-weight:600">{{ fmtBCV(totalAbonado) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between">
               <span style="color:rgba(255,255,255,0.7)">Saldo pendiente:</span>
-              <span style="font-weight:600">{{ fmtUSD(saldoPendiente) }}</span>
+              <span style="font-weight:600">{{ fmtBCV(saldoPendiente) }}</span>
             </div>
           </div>
 
@@ -145,11 +145,11 @@
           <div style="background:#FBF3E0;border:1px solid #F5E6C8;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px">
             <div style="font-size:10px;color:var(--dgray);font-weight:700;margin-bottom:8px">FORMA DE PAGO Y DESCUENTOS</div>
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-cash" style="color:var(--gold)"></i> Abonado ():</span>
-              <span style="font-weight:700">{{ fmtUSD(totalAbonado) }}</span>
+              <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-cash" style="color:var(--gold)"></i> Abonado:</span>
+              <span style="font-weight:700">{{ fmtBCV(totalAbonado) }}</span>
             </div>
             <div v-if="store.facturaReciente.descuento_manual > 0" style="margin-top:6px;color:var(--red)">
-              Descuentos: <strong>{{ fmtUSD(store.facturaReciente.descuento_manual) }}</strong>
+              Descuentos: <strong>{{ fmtBCV(store.facturaReciente.descuento_manual) }}</strong>
               <div style="font-size:10.5px;color:var(--dgray)">{{ store.facturaReciente.motivo_descuento }}</div>
             </div>
           </div>
@@ -174,7 +174,7 @@
               <span style="font-weight:700;color:var(--navy)">{{ fmtBsMonto((store.facturaReciente.total || 0) * (store.facturaReciente.factor_bs || 1) * (store.facturaReciente.tasa_bcv || 0)) }}</span>
             </div>
             <div style="font-size:9.5px;line-height:1.4">
-              El total está en $BCV. En efectivo valía <strong>{{ fmtUSD(valorEfectivo) }}</strong> ese día — por eso un pago menor puede dejar la factura en cero.
+              El total está en $BCV. En efectivo valía <strong>{{ fmtDolar(valorEfectivo) }}</strong> ese día — por eso un pago menor puede dejar la factura en cero.
             </div>
           </div>
 
@@ -196,7 +196,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
-import { fmtUSD, fmtBsMonto, origenDe, fmtTasa } from '../../services/pricing.js';
+import { fmtBCV, fmtDolar, fmtBsMonto, origenDe, fmtTasa } from '../../services/pricing.js';
 import { generarFacturaPDF } from '../../services/exportLazy.js';
 import { cargarDetallesFactura } from '../../services/supabase.js';
 

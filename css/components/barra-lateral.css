@@ -1,0 +1,69 @@
+/* =====================================================================
+   SISTEMA ARJ · MENÚ LATERAL PLEGABLE (nov-2026)
+   Por defecto solo se ven los iconos de los módulos. Al pasar el cursor
+   (o al moverse con el teclado) se despliega por encima del contenido, sin
+   empujarlo. Para volver al menú de arriba basta con quitar su import en
+   main-estilos.js. En celular sigue el menú de hamburguesa de siempre.
+   ===================================================================== */
+@media (min-width: 769px) {
+  :root { --lateral: 68px; --lateral-abierto: 240px }
+  body.letra-grande { --lateral: 74px; --lateral-abierto: 280px }
+
+  .nav {
+    position: fixed;
+    top: var(--header-h);
+    bottom: 0;
+    left: 0;
+    z-index: 4000;
+    width: var(--lateral);
+    box-sizing: border-box;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 10px 76px;   /* abajo: espacio para el botón flotante de ayuda */
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+    transition: width .18s ease, box-shadow .18s ease;
+  }
+
+  .nav:hover,
+  .nav:focus-within {
+    width: var(--lateral-abierto);
+    box-shadow: var(--shadow-xl);
+  }
+
+  /* El icono no se mueve al desplegar: solo aparece el nombre a su derecha */
+  .nav-item {
+    flex: none;
+    padding: 11px 0 11px 13px;
+    border-bottom: 0;
+    border-left: 4px solid transparent;
+    border-radius: 8px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .nav-item i { flex: none; width: 20px; text-align: center }
+  /* Plegada: solo el icono; el nombre aparece al desplegar */
+  .nav-txt { transition: opacity .12s ease }
+  .nav:not(:hover):not(:focus-within) .nav-txt { opacity: 0; visibility: hidden }
+
+  .nav-item.active,
+  body.dark .nav-item.active {
+    border-bottom-width: 0;
+    border-left-color: currentColor;
+  }
+
+  .main-content,
+  #banner-tasas { margin-left: var(--lateral) }
+
+  /* "Letra grande" agranda con zoom: el menú crece por su cuenta y el margen no se agranda dos veces */
+  body.letra-grande .nav { zoom: 1 }
+  body.letra-grande .nav-item { font-size: 17px }
+  body.letra-grande .main-content,
+  body.letra-grande #banner-tasas { margin-left: calc(var(--lateral) / var(--escala-letra)) }
+}
+
+@media (min-width: 769px) and (prefers-reduced-motion: reduce) {
+  .nav { transition: none }
+}

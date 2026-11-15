@@ -217,15 +217,11 @@ const abiertas = ref({});
 
 const costo = p => costoLanded(p, store.productos);
 const activos = computed(() => store.productos.filter(p => p.activo !== false));
-const embarquesActivos = computed(() => store.embarques.filter(e => e.activo !== false));
+// Las compras nacionales se reciben desde su propia ventana (Compras nacionales)
+const embarquesActivos = computed(() => store.embarquesImportados.filter(e => e.activo !== false));
 const embSel = computed(() => store.embarques.find(e => e.id === embId.value) || null);
 
-// v13.11: se acota por MARCA (el proveedor está vacío en casi todo el catálogo)
-const marcas = computed(() => {
-  const n = {};
-  activos.value.forEach(p => { const m = (p.marca || '').trim(); if (m) n[m] = (n[m] || 0) + 1; });
-  return Object.keys(n).sort().map(m => ({ marca: m, n: n[m] }));
-});
+const marcas = computed(() => store.marcasCatalogo);
 
 watch(() => store.modalRecepcionActivo, abierto => {
   if (!abierto) return;
@@ -235,13 +231,13 @@ watch(() => store.modalRecepcionActivo, abierto => {
 
 // Trae al cuadro los códigos de una marca con el stock que YA tiene el sistema:
 // sirve cuando el conteo ya se cargó a mano y solo falta sellar el costo
-function traerMarca() {
+async function traerMarca() {
   const m = marcaTraer.value;
   if (!m) { store.notif('Elige una marca primero', 'error'); return; }
   const campo = destino.value === 'vd' ? 'stock_vd' : 'stock_dist';
   const lista = activos.value.filter(p => (p.marca || '').trim() === m);
   if (!lista.length) { store.notif('No hay productos de ' + m, 'error'); return; }
-  if (texto.value.trim() && !confirm('El cuadro ya tiene texto. ¿Reemplazarlo?')) return;
+  if (texto.value.trim() && !await store.confirmar({ titulo: 'Reemplazar texto', mensaje: 'El cuadro ya tiene texto. ¿Reemplazarlo?', ok: 'Reemplazar', tono: 'oro' })) return;
   texto.value = lista.map(p => `${p.cod_alt}\t${parseInt(p[campo]) || 0}`).join('\n');
   store.notif(`${lista.length} código(s) de ${m} traídos con su stock actual`, 'success');
 }
@@ -368,7 +364,7 @@ async function aplicar() {
   if (an.tipo === 'recepcion') {
     items = an.ok.map(r => ({ producto_id: r.prod.id, cantidad: r.cant }));
     verbo = 'sumados'; n = an.ok.length;
-    if (!confirm(`Se van a SUMAR las cantidades a ${n} producto(s) en ${an.nomDest}.` + textoSellado(an) + '\n\n¿Aplicar?')) return;
+    if (!await store.confirmar({ titulo: 'Aplicar recepción', mensaje: `Se van a SUMAR las cantidades a ${n} producto(s) en ${an.nomDest}.` + textoSellado(an) + '\n\n¿Aplicar?', ok: 'Aplicar' })) return;
   } else {
     // Solo lo contado. Los NO CONTADOS jamás se ponen en cero automáticamente
     const ajustes = an.faltan.concat(an.sobran);
@@ -377,9 +373,9 @@ async function aplicar() {
     const ajustados = new Set(ajustes.map(r => r.prod.id));
     an.sellar.filter(p => !ajustados.has(p.id)).forEach(p => items.push({ producto_id: p.id, delta: 0 }));
     verbo = 'ajustados'; n = ajustes.length;
-    if (!confirm(`Se va a ajustar el stock de ${n} producto(s) al conteo físico en ${an.nomDest}.\n\n`
+    if (!await store.confirmar({ titulo: 'Aplicar conteo', ok: 'Aplicar', tono: 'oro', mensaje: `Se va a ajustar el stock de ${n} producto(s) al conteo físico en ${an.nomDest}.\n\n`
       + `Los ${an.noContados.length} "no contados" NO se tocan: podrían no haberse contado todavía.`
-      + textoSellado(an) + '\n\n¿Aplicar?')) return;
+      + textoSellado(an) + '\n\n¿Aplicar?' })) return;
   }
   if (!items.length) return;
   aplicando.value = true;

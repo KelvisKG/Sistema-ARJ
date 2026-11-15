@@ -11,7 +11,7 @@
       </div>
 
       <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px">
-        <div v-if="!store.embarques.length" style="padding:18px;text-align:center;color:var(--dgray);font-size:12.5px">Todavía no hay embarques cargados.</div>
+        <div v-if="!embarques.length" style="padding:18px;text-align:center;color:var(--dgray);font-size:12.5px">Todavía no hay embarques cargados.</div>
         <table v-else style="width:100%;border-collapse:collapse;font-size:12px">
           <thead><tr style="background:var(--navy);color:#fff">
             <th style="padding:7px 9px;text-align:left">Código</th>
@@ -22,7 +22,7 @@
             <th style="padding:7px 9px"></th>
           </tr></thead>
           <tbody>
-            <tr v-for="e in store.embarques" :key="e.id" style="border-bottom:1px solid var(--gray)">
+            <tr v-for="e in embarques" :key="e.id" style="border-bottom:1px solid var(--gray)">
               <td style="padding:7px 9px;font-weight:600">{{ e.codigo }}</td>
               <td style="padding:7px 9px">{{ e.proveedor || '' }}</td>
               <td style="padding:7px 9px;text-align:right">{{ e.fecha_llegada || '—' }}</td>
@@ -31,7 +31,7 @@
               <td style="padding:7px 9px;text-align:right;white-space:nowrap">
                 <button class="btn btn-secondary btn-sm" @click="editar(e)"><i class="ti ti-pencil"></i></button>
                 {{ ' ' }}
-                <button class="btn btn-secondary btn-sm" title="Recalcular costos de este embarque" @click="recalcular(e)"><i class="ti ti-refresh"></i></button>
+                <button class="btn btn-secondary btn-sm" title="Recalcular costos de este embarque" @click="store.recalcularEmbarque(e)"><i class="ti ti-refresh"></i></button>
               </td>
             </tr>
           </tbody>
@@ -112,6 +112,8 @@ import { fmtUSD } from '../../services/pricing.js';
 const store = useArjStore();
 const vacio = () => ({ id: null, codigoOriginal: '', codigo: '', proveedor: '', fecha: '', fob: '', flete: '', pf: '', pc: 2, pd: 25 });
 const form = ref(vacio());
+// Las compras nacionales viven en la misma tabla y tienen su propia ventana (sql/12)
+const embarques = computed(() => store.embarquesImportados);
 const guardando = ref(false);
 
 watch(() => store.modalEmbarquesActivo, abierto => { if (abierto) limpiar(); });
@@ -169,27 +171,6 @@ async function guardar() {
   }
 }
 
-// Costo de reposición: lleva el factor del embarque a sus productos. Lo ya
-// vendido no cambia (vive congelado en factura_items). Nunca automático.
-async function recalcular(e) {
-  if (store.rol !== 'gerente') { store.notif('Solo el gerente puede recalcular costos', 'error'); return; }
-  const fNuevo = parseFloat(e.factor) || 0;
-  if (fNuevo <= 0) { store.notif('Ese embarque no tiene factor válido', 'error'); return; }
-  const sellados = store.productos.filter(p => p.embarque_id === e.id);
-  if (!sellados.length) { store.notif('Todavía no hay productos sellados con ' + e.codigo, 'error'); return; }
-  const desfasados = sellados.filter(p => Math.abs((parseFloat(p.factor_landed) || 0) - fNuevo) > 0.000001);
-  if (!desfasados.length) { store.notif('Ya están todos al día con factor ' + fNuevo.toFixed(4), 'success'); return; }
-  const fViejo = parseFloat(desfasados[0].factor_landed) || 0;
-  const ej = desfasados.find(p => (parseFloat(p.fob) || 0) > 0);
-  const lineaEj = ej ? `\nEjemplo — ${ej.cod_alt}: costo ${fmtUSD((parseFloat(ej.fob) || 0) * fViejo)} → ${fmtUSD((parseFloat(ej.fob) || 0) * fNuevo)}` : '';
-  if (!confirm(
-    `Recalcular ${desfasados.length} producto(s) de ${e.codigo}.\n\n`
-    + `Factor: ${fViejo.toFixed(4)} → ${fNuevo.toFixed(4)}  (${fNuevo > fViejo ? 'SUBE' : 'BAJA'} el costo)${lineaEj}\n\n`
-    + 'Las facturas ya emitidas NO cambian: guardan su propio costo.\n'
-    + 'Los precios de venta NO se tocan — solo el costo, o sea el margen.\n\n'
-    + '¿Aplicar?')) return;
-  await store.recalcularEmbarque(e);
-}
 
 function cerrar() { store.modalEmbarquesActivo = false; }
 </script>

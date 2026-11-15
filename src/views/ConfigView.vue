@@ -14,6 +14,10 @@
         <div class="field-col" style="margin-bottom:10px">
           <label>Tasa BCV oficial (Bs por $)</label>
           <input v-model="tasaBcv" type="text" inputmode="decimal" class="val-input" style="font-weight:700">
+          <small style="color:var(--dgray);margin-top:4px">
+            <i class="ti ti-refresh"></i> Se actualiza sola desde el BCV<template v-if="store.bcv_fecha_valor"> · vigente desde {{ new Date(store.bcv_fecha_valor + 'T12:00:00').toLocaleDateString('es-VE') }}</template><template v-if="store.bcv_actualizada"> · último cambio {{ new Date(store.bcv_actualizada).toLocaleString('es-VE') }}</template>.
+            Escríbela a mano solo si la fuente falla.
+          </small>
         </div>
         <div style="font-size:12px;color:var(--dgray);margin-bottom:10px">
           Brecha: <strong>{{ brechaPct }}%</strong> · Descuento neutro en efectivo: <strong>{{ store.dtoDivisaNeutro.toFixed(2) }}%</strong><br>
@@ -26,12 +30,12 @@
           <button class="btn btn-primary btn-sm" :disabled="store.procesando" @click="confirmarTasasHoy">
             <i class="ti ti-check"></i> Guardar y confirmar tasas de hoy
           </button>
-          <button class="btn btn-secondary btn-sm" @click="consultarBCV">
-            <i class="ti ti-world-download"></i> Consultar BCV en línea
+          <button class="btn btn-secondary btn-sm" @click="store.refrescarTasaBcv(true)">
+            <i class="ti ti-world-download"></i> Actualizar BCV ahora
           </button>
         </div>
         <div style="font-size:11px;color:var(--dgray);margin-top:8px">
-          Confirmar sin cambiar el valor también cuenta: queda registrado que hoy se revisaron.
+          El paralelo se confirma a mano cada día: sin eso no se puede facturar. Confirmar sin cambiar el valor también cuenta.
         </div>
       </div>
 
@@ -40,16 +44,16 @@
         <h3><i class="ti ti-adjustments" style="color:var(--blue)"></i> Parámetros ARJ</h3>
         <div class="field-col" style="margin-bottom:10px">
           <label>Factor landed por defecto (productos nuevos importados)</label>
-          <div style="display:flex;gap:8px">
-            <input v-model.number="factorDefault" type="number" step="0.001" min="1" class="val-input" style="flex:1">
+          <div class="cfg-fila">
+            <input v-model.number="factorDefault" type="number" step="0.001" min="1" class="val-input">
             <button class="btn btn-secondary btn-sm" @click="guardarFactor">Guardar</button>
           </div>
         </div>
         <div class="field-col" style="margin-bottom:6px">
           <label>Costos fijos del mes (USD)</label>
-          <div style="display:flex;gap:8px">
-            <input v-model="mesCostos" type="month" class="val-input" style="width:150px" @change="cargarMes">
-            <input v-model.number="montoCostos" type="number" step="10" min="0" class="val-input" style="flex:1">
+          <div class="cfg-fila">
+            <input v-model="mesCostos" type="month" class="val-input cfg-mes" aria-label="Mes" @change="cargarMes">
+            <input v-model.number="montoCostos" type="number" step="10" min="0" class="val-input" aria-label="Monto en USD">
             <button class="btn btn-secondary btn-sm" @click="guardarCostosFijos">Guardar</button>
           </div>
         </div>
@@ -63,7 +67,7 @@
       <!-- NIVELES DE PRECIO -->
       <div class="config-card card">
         <h3><i class="ti ti-list" style="color:var(--blue)"></i> Niveles de precio</h3>
-        <table class="tbl" style="font-size:12.5px">
+        <table class="tbl cfg-niveles" style="font-size:12.5px">
           <tbody>
             <tr><td><strong>Público</strong></td><td>Sin descuento — todos los clientes nuevos</td></tr>
             <tr><td><strong>Aliado T1</strong></td><td>–5% — compras de $2.500 a $4.999</td></tr>
@@ -77,18 +81,20 @@
       <!-- USUARIOS -->
       <div class="config-card card">
         <h3><i class="ti ti-users" style="color:var(--blue)"></i> Usuarios del sistema</h3>
-        <table class="tbl" style="font-size:12.5px">
-          <thead><tr><th>Nombre</th><th>Rol</th><th>Empresa</th><th>Estado</th></tr></thead>
-          <tbody>
-            <tr v-if="cargandoUsuarios"><td colspan="4" style="text-align:center;color:var(--dgray)">Cargando...</td></tr>
-            <tr v-for="u in usuarios" :key="u.id">
-              <td>{{ u.nombre_display }}</td>
-              <td>{{ u.rol }}</td>
-              <td>{{ u.empresa === 'dist' ? 'Distribuidora' : (u.empresa === 'directa' ? 'Venta Directa' : 'Ambas') }}</td>
-              <td><span :class="['badge', u.activo ? 'badge-success' : 'badge-secondary']">{{ u.activo ? 'Activo' : 'Inactivo' }}</span></td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- El rol va bajo el nombre: así la tabla cabe en la tarjeta; si aun así no cabe, se desliza dentro -->
+        <div class="cfg-tabla">
+          <table class="tbl cfg-usuarios" style="font-size:12.5px">
+            <thead><tr><th>Usuario</th><th>Empresa</th><th>Estado</th></tr></thead>
+            <tbody>
+              <tr v-if="cargandoUsuarios"><td colspan="3" style="text-align:center;color:var(--dgray)">Cargando...</td></tr>
+              <tr v-for="u in usuarios" :key="u.id">
+                <td><strong>{{ u.nombre_display }}</strong><div class="cfg-rol">{{ u.rol }}</div></td>
+                <td>{{ u.empresa === 'dist' ? 'Distribuidora' : (u.empresa === 'directa' ? 'Venta Directa' : 'Ambas') }}</td>
+                <td><span :class="['badge', u.activo ? 'badge-success' : 'badge-secondary']">{{ u.activo ? 'Activo' : 'Inactivo' }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <div style="font-size:11px;color:var(--dgray);margin-top:6px">
           Las cuentas se crean en el panel de Supabase (Authentication) y se activan en la tabla <code>perfiles</code>.
         </div>
@@ -136,19 +142,6 @@ async function confirmarTasasHoy() {
   await store.confirmarTasas(parseTasa(tasaBcv.value), parseTasa(tasaPar.value));
 }
 
-async function consultarBCV() {
-  try {
-    const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
-    if (!res.ok) throw new Error('Error en la API');
-    const data = await res.json();
-    if (data && data.promedio) {
-      tasaBcv.value = aTexto(data.promedio);
-      store.notif(`BCV consultado: ${data.promedio}. Revisa y pulsa "Guardar y confirmar".`, 'info');
-    }
-  } catch (e) {
-    store.notif('No se pudo consultar el BCV. Escribe la tasa a mano.', 'error');
-  }
-}
 
 // ── Parámetros ──
 const factorDefault = ref((store.configuracion && store.configuracion.factor_default) || 1.471);

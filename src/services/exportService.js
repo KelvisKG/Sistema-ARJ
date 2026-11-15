@@ -5,7 +5,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { fmtUSD, precioConTier } from './pricing.js';
+import { fmtUSD, fmtBCV, precioConTier } from './pricing.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS DE DESCARGA
@@ -247,7 +247,7 @@ export function generarFacturaPDF(factura, action = 'download') {
 
   autoTable(doc, {
     startY: y,
-    head: [['#', 'Código', 'Descripción', 'Cant.', 'P. Unit USD', 'Total USD']],
+    head: [['#', 'Código', 'Descripción', 'Cant.', 'P. Unit $BCV', 'Total $BCV']],
     body: items.length > 0 ? items : [['—', '—', 'Sin items registrados', '0', '$0.00', '$0.00']],
     theme: 'plain',
     margin: { left: marginL, right: marginR },
@@ -298,7 +298,7 @@ export function generarFacturaPDF(factura, action = 'download') {
   doc.text('Subtotal', totalBoxX, y);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(51, 51, 51);
-  doc.text(fmtUSD(subtotal), pageWidth - marginR, y, { align: 'right' });
+  doc.text(fmtBCV(subtotal), pageWidth - marginR, y, { align: 'right' });
 
   y += 5;
 
@@ -308,7 +308,7 @@ export function generarFacturaPDF(factura, action = 'download') {
   doc.text('Descuentos aplicados', totalBoxX, y);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(51, 51, 51);
-  doc.text(factura.descuento_manual > 0 ? fmtUSD(factura.descuento_manual) : '$0,00', pageWidth - marginR, y, { align: 'right' });
+  doc.text(fmtBCV(factura.descuento_manual > 0 ? factura.descuento_manual : 0), pageWidth - marginR, y, { align: 'right' });
 
   y += 5;
 
@@ -318,7 +318,7 @@ export function generarFacturaPDF(factura, action = 'download') {
   doc.text('IVA (exento)', totalBoxX, y);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(51, 51, 51);
-  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
+  doc.text(fmtBCV(0), pageWidth - marginR, y, { align: 'right' });
 
   y += 8;
 
@@ -329,7 +329,7 @@ export function generarFacturaPDF(factura, action = 'download') {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(...WHITE);
-  doc.text('TOTAL USD', totalBoxX, y + 5);
+  doc.text('TOTAL $BCV', totalBoxX, y + 5);
   doc.setFontSize(13);
   doc.text(fmtUSD(subtotal), pageWidth - marginR, y + 5, { align: 'right' });
 
@@ -345,7 +345,7 @@ export function generarFacturaPDF(factura, action = 'download') {
   doc.text(`Total en Bs: Bs. ${totalBs} (Tasa BCV del día de emisión: ${tasa})`, marginL, y);
 
   if (factura.tipo_pago === 'credito' || (factura.saldo_pendiente || 0) > 0) {
-    doc.text(`Abonado: ${fmtUSD(factura.abonado || 0)}  ·  Saldo pendiente: ${fmtUSD(factura.saldo_pendiente || 0)}` +
+    doc.text(`Abonado: ${fmtBCV(factura.abonado || 0)}  ·  Saldo pendiente: ${fmtBCV(factura.saldo_pendiente || 0)}` +
       (factura.vence ? `  ·  Vence: ${factura.vence}` : ''), marginL, y + 4.5);
   }
   if (factura.motivo_descuento) {

@@ -1,0 +1,89 @@
+/* =====================================================================
+   SISTEMA ARJ · MODALES ANCHOS DE DINERO (nov-2026, pedido de JJ)
+   Cabecera con icono, dos columnas y barra de acciones siempre visible.
+   Solo usa las variables del tema: funciona igual en modo oscuro.
+   ===================================================================== */
+.me-caja { padding: 0; text-align: left }
+.me-caja.me-angosta { max-width: 520px }
+.me-caja.me-media { max-width: 780px }
+.me-caja.me-ancha { max-width: 940px }
+
+.me-cab { display: flex; align-items: center; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--border) }
+.me-icono { flex: none; width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 23px }
+.me-icono.verde { background: var(--lgreen); color: var(--green) }
+.me-icono.oro { background: var(--lgold); color: var(--gold) }
+.me-icono.rojo { background: var(--lred); color: var(--red) }
+.me-icono.azul { background: var(--lblue); color: var(--blue) }
+.me-titulo { flex: 1; min-width: 0 }
+.me-titulo h2 { margin: 0; font-size: 19px }
+.me-titulo p { margin: 2px 0 0; color: var(--dgray); font-size: 13.5px; overflow-wrap: anywhere }
+.me-cerrar { flex: none; width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: var(--dgray); cursor: pointer; font-size: 17px }
+.me-cerrar:hover { background: var(--gray) }
+
+.me-cuerpo { padding: 18px 22px 2px }
+.me-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start }
+
+.me-panel { margin-bottom: 14px; padding: 15px 17px; border: 1px solid var(--border); border-radius: 14px; background: var(--gray) }
+.me-etq { color: var(--dgray); font-size: 13px; font-weight: 600 }
+.me-grande { margin-top: 1px; color: var(--navy); font-size: 28px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere }
+.me-nota { margin-top: 6px; color: var(--dgray); font-size: 12.5px; line-height: 1.4 }
+.me-fila { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 14px }
+.me-fila span { color: var(--dgray) }
+.me-fila strong { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere }
+.me-fila.total { margin-top: 5px; padding-top: 9px; border-top: 1px solid var(--border); font-size: 15.5px; font-weight: 700 }
+.me-fila.total span { color: inherit }
+
+.me-paso { margin-bottom: 16px }
+.me-paso h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 15.5px }
+.me-paso h3 b { width: 24px; height: 24px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--lblue); color: var(--blue); font-size: 13px }
+.me-lbl { display: block; margin: 0 0 5px; font-size: 13.5px; font-weight: 600 }
+.me-area { width: 100%; box-sizing: border-box; min-height: 92px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--input-bg); color: var(--text); font-family: inherit; font-size: 14.5px; resize: vertical }
+
+.me-aviso { display: flex; gap: 8px; margin-bottom: 14px; padding: 11px 13px; border-radius: 12px; font-size: 13.5px; line-height: 1.4 }
+.me-aviso i { flex: none; margin-top: 2px }
+.me-aviso.rojo { background: var(--lred); color: var(--red) }
+.me-aviso.oro { background: var(--lgold); color: var(--gold) }
+.me-aviso.verde { background: var(--lgreen); color: var(--green) }
+
+.me-lista { margin: 8px 0 0; padding: 0; list-style: none; font-size: 14px }
+.me-lista li { display: flex; gap: 8px; padding: 4px 0 }
+.me-lista i { flex: none; margin-top: 3px; color: var(--dgray) }
+
+.me-opcion { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 12px; cursor: pointer }
+.me-opcion.activo { border-color: var(--blue); background: var(--lblue) }
+.me-opcion input { flex: none; width: 17px; height: 17px; margin: 0 }
+.me-opcion strong { display: block; font-size: 14px }
+.me-opcion small { display: block; color: var(--dgray); font-size: 12.5px; line-height: 1.35 }
+
+.me-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px }
+.me-chip { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 46px; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; transition: border-color .15s, background .15s }
+.me-chip:hover { border-color: var(--blue) }
+.me-chip.activo { border-color: var(--blue); background: var(--lblue); color: var(--blue) }
+
+.me-pregunta { margin: 4px 0 16px; color: var(--text); font-size: 21px; font-weight: 700; text-align: center }
+.me-si-no { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.me-respuesta { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 76px; border: 2px solid var(--border); border-radius: 14px; background: var(--card-bg); font: inherit; font-size: 24px; font-weight: 800; cursor: pointer; transition: background .15s, border-color .15s }
+.me-respuesta.si { color: var(--green) }
+.me-respuesta.si:hover { border-color: var(--green); background: var(--lgreen) }
+.me-respuesta.no { color: var(--red) }
+.me-respuesta.no:hover { border-color: var(--red); background: var(--lred) }
+.me-cliente { margin-top: 1px; color: var(--navy); font-size: 18px; font-weight: 700; overflow-wrap: anywhere }
+.me-enlace { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--blue); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer }
+
+.me-mensaje { margin: 0 0 16px; color: var(--text); font-size: 15px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere }
+
+.me-monedas { width: 100%; border-collapse: collapse; font-size: 14px }
+.me-monedas th { padding: 0 0 6px; color: var(--dgray); font-size: 12.5px; font-weight: 600; text-align: right }
+.me-monedas th:first-child, .me-monedas td:first-child { text-align: left }
+.me-monedas td { padding: 7px 0; border-top: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums }
+.me-monedas td + td { padding-left: 10px }
+.me-monedas .menos { color: var(--red) }
+.me-monedas .cobra { font-weight: 700 }
+
+/* Fijo abajo: el botón principal siempre a la vista, aunque el modal sea largo */
+.me-pie { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--border); background: var(--card-bg) }
+
+@media (max-width: 760px) {
+  .me-cols { grid-template-columns: minmax(0, 1fr); gap: 4px }
+  .me-pie .btn { flex: 1; justify-content: center }
+}

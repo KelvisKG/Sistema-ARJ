@@ -565,8 +565,8 @@ async function guardarMovimientoDinero() {
 }
 
 async function anularMovimiento(m) {
-  const motivo = prompt(`Motivo para anular "${m.concepto}" ($${m.montoUSD.toFixed(2)}):`);
-  if (!motivo || !motivo.trim()) return;
+  const motivo = await store.pedirTexto({ titulo: 'Anular movimiento', mensaje: `"${m.concepto}" ($${m.montoUSD.toFixed(2)})`, etiqueta: 'Motivo de la anulación', ok: 'Anular', tono: 'rojo' });
+  if (!motivo) return;
   const { anularMovimientoCajaBD } = await import('../services/supabase.js');
   const r = await anularMovimientoCajaBD(m.idBD, motivo.trim());
   if (!r.ok) { store.notif('No se anuló: ' + r.error, 'error'); return; }
