@@ -20,6 +20,11 @@ vi.mock('../src/services/supabase.js', async (original) => ({
   cargarRecepciones: async () => [],
   cargarRenglonesNotaCredito: async () => ({ items: [{ producto_id: 1, cod_alt: 'HF6510', descripcion: 'Filtro', cantidad: 2, precio_unitario: '13' }], yaDev: {} }),
   guardarBitacoraEnSupabase: async () => {},
+  cargarPreciosManuales: async () => ([
+    { id: 1, cod: 'HF6510', desc: 'Filtro', cant: 2, cobrado: 44.94, lista: 50, dif: -10.12, tipo: 'dolar', monto: 40, quien: 'JJ', facturaId: 37, numero: 'VD-2026-00040', fecha: '15 nov 2026', fechaRaw: '2026-11-15', empresa: 'directa', cliente: 'CONSUMIDOR FINAL', anulada: false },
+    { id: 3, cod: 'HF7000', desc: 'Correa', cant: 1, cobrado: 18, lista: 20, dif: -2, tipo: 'bcv', monto: 18, quien: 'JJ', facturaId: 37, numero: 'VD-2026-00040', fecha: '15 nov 2026', fechaRaw: '2026-11-15', empresa: 'directa', cliente: 'CONSUMIDOR FINAL', anulada: false },
+    { id: 2, cod: 'HF6510', desc: 'Filtro', cant: 1, cobrado: 60, lista: 50, dif: 10, tipo: 'bcv', monto: 60, quien: 'Ana', facturaId: 38, numero: 'VD-2026-00041', fecha: '15 nov 2026', fechaRaw: '2026-11-15', empresa: 'directa', cliente: 'X', anulada: true }
+  ]),
   refrescarTasaBcvBD: vi.fn(async () => ({ ok: true, cambio: true, tasa_bcv: 900.5, bcv_actualizada: '2026-11-15T12:00:00Z', bcv_fecha_valor: '2026-11-13' }))
 }));
 
@@ -739,5 +744,63 @@ describe('USDT en abonos', () => {
     await usdt.trigger('click');
     expect(w.find('.ab-monto span').text()).toBe('$');
     expect(w.find('.ab-oblig').exists()).toBe(true);
+  });
+});
+
+describe('Historial → Precios manuales', () => {
+  test('el carrito manda el cambio manual de cada renglón al emitir', async () => {
+    const { store } = await montar(vistas['../src/views/FacturacionView.vue'].default);
+    store.cambiarPrecioVerdeItem(0, 40);
+    expect(store.carrito.items[0].ajuste).toEqual({ tipo: 'dolar', monto: 40 });
+    store.cambiarPrecioBcvItem(0, 55);
+    expect(store.carrito.items[0].ajuste).toEqual({ tipo: 'bcv', monto: 55 });
+  });
+
+  test('solo el gerente ve la pestaña; muestra lista, cobrado, diferencia y quién', async () => {
+    const v = await montar(vistas['../src/views/HistorialView.vue'].default, s => { s.rol = 'vendedor'; });
+    expect(v.w.text()).not.toContain('Precios manuales');
+    const { w, store } = await montar(vistas['../src/views/HistorialView.vue'].default);
+    await w.findAll('.btn-toggle').find(b => b.text() === 'Precios manuales').trigger('click');
+    await flushPromises();
+    // Una fila por factura: la 00040 junta sus dos productos cambiados
+    const filas = w.findAll('#precios-manuales tbody tr');
+    expect(filas).toHaveLength(2);
+    const f40 = filas.find(f => f.text().includes('VD-2026-00040')).text();
+    expect(f40).toContain('2 producto(s)');
+    expect(f40).toContain('HF6510, HF7000');
+    expect(f40).toContain('escritos en $ · escritos en dólar BCV');
+    expect(f40).toContain('−$12.12 BCV');
+    expect(w.find('#precios-manuales').text()).toContain('Anulada');
+    // La anulada se ve pero no suma
+    expect(w.find('#precios-manuales .kpi-card.blue .kpi-val').text()).toBe('2');
+    expect(w.find('#precios-manuales .kpi-card.red .kpi-val').text()).toBe('$12.12 BCV');
+    expect(w.find('#precios-manuales .kpi-card.green .kpi-val').text()).toBe('$0.00 BCV');
+    // Clic en la fila abre la factura
+    await filas.find(f => f.text().includes('VD-2026-00040')).trigger('click');
+    await flushPromises();
+    expect(store.modalFacturaActivo).toBe(true);
+    expect(store.facturaReciente.id).toBe(37);
+  });
+});
+
+describe('Vista de la factura: precio manual', () => {
+  test('cada renglón cambiado a mano muestra la lista y cómo se escribió', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useArjStore();
+    poblar(store);
+    const f = store.todasFacturas[0];
+    f.items = [
+      { id: 1, cod_alt: 'HF6510', desc: 'Filtro', cant: 1, precio: 22.47, precio_lista: 25.25, ajuste: { tipo: 'dolar', monto: 20, quien: 'Kelvis' } },
+      { id: 2, cod_alt: 'HF7000', desc: 'Otro', cant: 1, precio: 30 }
+    ];
+    f.pagos = [{ fecha: new Date().toISOString(), metodo: 'Efectivo USD', monto_usd: 1, monto_bs: 0 }];
+    store.facturaReciente = f;
+    store.modalFacturaActivo = true;
+    const w = mount(modales['../src/components/modals/FacturaModal.vue'].default, { global: { plugins: [pinia] } });
+    await flushPromises();
+    const notas = w.findAll('.fm-ajuste');
+    expect(notas).toHaveLength(1);
+    expect(notas[0].text()).toBe('Precio manual: lista $25.25 BCV · escrito como $20.00 Dólar · Kelvis');
   });
 });

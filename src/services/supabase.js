@@ -301,6 +301,31 @@ export async function cargarFacturasRecientes(limite = 500) {
   return todas.map(mapFactura);
 }
 
+// sql/14: renglones de factura con el precio cambiado a mano, por fecha de la factura
+export async function cargarPreciosManuales(desdeISO, hastaISO) {
+  const { data, error } = await supabase.from('factura_items')
+    // '*': ajuste_recuperado (sql/15) puede no existir todavía
+    .select('*, facturas!inner(id, numero, fecha, empresa, cliente_nombre, estado)')
+    .not('ajuste_tipo', 'is', null)
+    .gte('facturas.fecha', desdeISO).lt('facturas.fecha', hastaISO)
+    .limit(2000);
+  if (error) throw error;
+  return (data || []).map(r => {
+    const f = r.facturas || {};
+    const lista = r.precio_lista != null ? parseFloat(r.precio_lista) : null;
+    const cobrado = parseFloat(r.precio_unitario) || 0;
+    const cant = r.cantidad || 0;
+    return {
+      id: r.id, cod: r.cod_alt, desc: r.descripcion || '', cant, cobrado, lista,
+      dif: lista != null ? Math.round((cobrado - lista) * cant * 100) / 100 : null,
+      tipo: r.ajuste_tipo, monto: r.ajuste_monto != null ? parseFloat(r.ajuste_monto) : null, quien: r.ajustado_por || '',
+      recuperado: !!r.ajuste_recuperado,
+      facturaId: f.id, numero: f.numero, fecha: f.fecha ? fechaCorta(f.fecha) : '', fechaRaw: f.fecha || '', empresa: empresaNorm(f.empresa),
+      cliente: f.cliente_nombre || '', anulada: f.estado === 'anulada'
+    };
+  }).sort((a, b) => (b.fechaRaw.localeCompare(a.fechaRaw) || String(b.numero).localeCompare(String(a.numero))));
+}
+
 // Facturas por rango de fechas (exportación fiscal: sin el límite de 500)
 export async function cargarFacturasRango(desdeISO, hastaISO) {
   const todas = [];
@@ -486,7 +511,10 @@ export async function cargarDetallesFactura(facturaId) {
       total_linea: parseFloat(it.total_linea) || 0,
       // Congelados al emitir: deciden si el renglón es importado o local (v13.39)
       origen: it.origen || '',
-      factor_landed: it.factor_landed != null ? parseFloat(it.factor_landed) : null
+      factor_landed: it.factor_landed != null ? parseFloat(it.factor_landed) : null,
+      // sql/14: precio de lista del momento y cambio manual del precio
+      precio_lista: it.precio_lista != null ? parseFloat(it.precio_lista) : null,
+      ajuste: it.ajuste_tipo ? { tipo: it.ajuste_tipo, monto: it.ajuste_monto != null ? parseFloat(it.ajuste_monto) : null, quien: it.ajustado_por || '', recuperado: !!it.ajuste_recuperado } : null
     }));
     return { items, pagos: pRes.data || [] };
   } catch (e) {

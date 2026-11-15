@@ -596,6 +596,7 @@ export const useArjStore = defineStore('arj', {
       it.precio_verde = v;
       it.precio_fijo = true;  // v13.23: no lo pisa un cambio de tier o cliente
       it.precio_base = it.precio;
+      it.ajuste = { tipo: 'dolar', monto: v };   // sql/14: queda en la factura (Historial → Precios manuales)
       this.logBitacora('precio', `Precio de '${it.desc}' fijado en ${fmtUSD(v)} efectivo (${fmtUSD(ant)} → ${fmtUSD(it.precio)} BCV)`, true);
     },
 
@@ -610,6 +611,7 @@ export const useArjStore = defineStore('arj', {
       it.precio_fijo = true;  // no lo pisa un cambio de tier o cliente
       it.precio_base = it.precio;
       it.precio_verde = bcvAVerde(it.precio, this.estadoTasas);
+      it.ajuste = { tipo: 'bcv', monto: it.precio };   // sql/14
       this.logBitacora('precio', `Precio BCV de '${it.desc}' fijado en ${fmtUSD(it.precio)} (${fmtUSD(ant)} → ${fmtUSD(it.precio)})`, true);
     },
 
@@ -755,6 +757,9 @@ export const useArjStore = defineStore('arj', {
         cobrar_verde: r.cobrarVerde,
         cotizacion_id: c.cotizacion_origen ? c.cotizacion_origen.id : null
       };
+      // sql/14: cambio manual de cada renglón (precio escrito o descuento manual %)
+      const dtoPct = (this.empresa === 'directa' && c.descuento_manual > 0) ? c.descuento_manual : 0;
+      const ajusteDe = it => (it.ajuste ? it.ajuste : (dtoPct > 0 ? { tipo: 'descuento', monto: dtoPct } : null));
       const items = c.items.map(it => ({
         producto_id: it.id,
         cod_alt: it.cod_alt,
@@ -765,7 +770,9 @@ export const useArjStore = defineStore('arj', {
         total_linea: Math.round(it.cant * it.precio * 100) / 100,
         tier: c.tier || 'Publico',
         factor_landed: factorLandedDe(it, this.productos),  // se congela (no se reescribe la utilidad)
-        origen: origenDe(it, this.productos)
+        origen: origenDe(it, this.productos),
+        ajuste_tipo: ajusteDe(it) ? ajusteDe(it).tipo : null,
+        ajuste_monto: ajusteDe(it) ? ajusteDe(it).monto : null
       }));
       const pagos = pagosParaBD(c.pagos, this.estadoTasas, this.usuarioNombre);
 
