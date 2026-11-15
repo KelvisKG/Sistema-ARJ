@@ -60,6 +60,7 @@
               <td>
                 <!-- v13.39: importado o local decide si el cobro se convierte a USDT -->
                 <span :title="badge(it).titulo" :style="badge(it).estilo">{{ badge(it).txt }}</span>{{ it.desc }}
+                <div v-if="it.ajuste" class="fm-ajuste"><i class="ti ti-pencil"></i> {{ notaAjuste(it) }}</div>
               </td>
               <td class="center">{{ it.cant }}</td>
               <td class="num" style="white-space:nowrap">{{ fmtBCV(it.precio) }}</td>
@@ -215,6 +216,15 @@ function badge(it) {
     ? { txt: 'IMP' + (declarado ? '' : '?'), titulo: declarado ? 'Producto importado' : deducido, estilo: ESTILO_BADGE + 'background:#E3EAF5;color:#1F3864' }
     : { txt: 'LOC' + (declarado ? '' : '?'), titulo: declarado ? 'Compra local' : deducido, estilo: ESTILO_BADGE + 'background:#F6EBD2;color:#8A6200' };
 }
+// sql/14: el renglón recuerda si su precio se cambió a mano y cuál era el de lista
+function notaAjuste(it) {
+  const a = it.ajuste;
+  const como = a.tipo === 'dolar' ? 'escrito como ' + fmtDolar(a.monto)
+    : a.tipo === 'descuento' ? 'descuento manual ' + (a.monto || 0) + '%' : 'escrito en dólar BCV';
+  const lista = it.precio_lista != null ? 'lista ' + fmtBCV(it.precio_lista) + ' · ' : '';
+  return 'Precio manual: ' + lista + como + (a.quien ? ' · ' + a.quien : '') + (a.recuperado ? ' (recuperado de la bitácora)' : '');
+}
+
 const mezcla = computed(() => {
   const its = (store.facturaReciente && store.facturaReciente.items) || [];
   let imp = 0, loc = 0;
@@ -284,3 +294,7 @@ function anularFactura() {
   store.modalAnularActivo = true;
 }
 </script>
+
+<style scoped>
+.fm-ajuste { margin-top: 3px; color: var(--gold); font-size: 12.5px; font-weight: 600 }
+</style>

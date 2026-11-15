@@ -7,11 +7,12 @@
       <input
         v-model="busqueda"
         type="text"
-        placeholder="Buscar por N° factura, cliente o vendedor..."
+        :placeholder="vistaActual === 'precios' ? 'Buscar por factura, cliente, producto o quién lo cambió...' : 'Buscar por N° factura, cliente o vendedor...'"
         class="val-input"
         style="flex:1;min-width:240px"
       >
       <select
+        v-if="vistaActual !== 'precios'"
         v-model="filtroEstado"
         class="val-input"
         style="min-width:180px"
@@ -26,10 +27,14 @@
         <div class="toggle-switch" style="display:inline-flex;background:var(--card-bg);border:1px solid var(--border);border-radius:20px;overflow:hidden">
           <button :class="['btn-toggle', vistaActual === 'facturas' ? 'active' : '']" @click="vistaActual = 'facturas'">Facturas</button>
           <button :class="['btn-toggle', vistaActual === 'cotizaciones' ? 'active' : '']" @click="vistaActual = 'cotizaciones'">Cotizaciones</button>
+          <button v-if="store.rol === 'gerente'" :class="['btn-toggle', vistaActual === 'precios' ? 'active' : '']" @click="vistaActual = 'precios'">Precios manuales</button>
         </div>
       </div>
     </div>
 
+    <PreciosManuales v-if="vistaActual === 'precios'" :busqueda="busqueda" />
+
+    <template v-else>
     <!-- KPIs Historial -->
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <div class="kpi-card blue" style="margin:0;padding:10px 14px;cursor:pointer" @click="filtroEstado = ''">
@@ -120,6 +125,7 @@
         </tbody>
       </table>
     </div>
+    </template>
   </div>
 </template>
 
@@ -127,6 +133,7 @@
 import { ref, computed } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
 import { fmtUSD } from '../services/pricing.js';
+import PreciosManuales from '../components/historial/PreciosManuales.vue';
 
 const store = useArjStore();
 const busqueda = ref('');
