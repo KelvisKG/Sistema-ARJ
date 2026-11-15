@@ -593,43 +593,80 @@ describe('Inventario más limpio y compras nacionales', () => {
     expect(guardar).toHaveBeenCalledWith(expect.objectContaining({ codigo: 'NAC-9', proveedor: 'FERRE CA', num_factura: 'A-123', monto: 2000, gastos: 100 }));
   });
 
-  test('sin compra elegida no se avanza; al elegirla pasa a productos', async () => {
+  async function irALista(w) {
+    await w.find('.cn-compra').trigger('click');
+    await w.find('#cn-siguiente').trigger('click');
+  }
+
+  test('sin compra elegida no se avanza; al elegirla pide la lista como en Recepción', async () => {
     const { w } = await abrirCompras();
     expect(w.find('#cn-siguiente').attributes('disabled')).toBeDefined();
-    await w.find('.cn-compra').trigger('click');
-    await w.find('#cn-siguiente').trigger('click');
+    await irALista(w);
     expect(w.text()).toContain('Factura F-77');
-    expect(w.find('#cn-buscar').exists()).toBe(true);
+    expect(w.find('#cn-lista').exists()).toBe(true);
   });
 
-  test('paso 2 y 3: agrega productos, registra la entrada y muestra el resumen', async () => {
+  test('pegar, revisar y sumar: acumula códigos repetidos y avisa líneas malas', async () => {
     const { w, store } = await abrirCompras();
-    const aplicar = vi.spyOn(store, 'aplicarRecepcion').mockResolvedValue({ numero: 'REC-2026-00009', renglones: 1, unidades: 4, sellados: 1, conflictos: [] });
+    const aplicar = vi.spyOn(store, 'aplicarRecepcion').mockResolvedValue({ numero: 'REC-2026-00009', renglones: 1, unidades: 5, sellados: 1, conflictos: [] });
     vi.spyOn(store, 'confirmar').mockResolvedValue(true);
-    await w.find('.cn-compra').trigger('click');
-    await w.find('#cn-siguiente').trigger('click');
-    await w.find('#cn-buscar').setValue('HF65');
-    await w.find('.cn-resultado').trigger('click');
-    await w.find('.cn-cant').setValue(4);
+    await irALista(w);
+    await w.find('#cn-lista').setValue('HF6510\t4\nhf6510 1\nMALA 1,5');
+    await w.find('#cn-revisar').trigger('click');
+    const tabla = w.find('.cn-tabla').text();
+    expect(tabla).toContain('HF6510');
+    expect(tabla).toContain('+5');
+    expect(w.find('.me-aviso.rojo').text()).toContain('Línea 3');
     await w.find('#cn-registrar').trigger('click');
     await flushPromises();
-    expect(aplicar).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'recepcion', embarqueId: 'n1', referencia: 'Factura F-77', items: [{ producto_id: 1, cantidad: 4 }] }));
+    expect(aplicar).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'recepcion', embarqueId: 'n1', referencia: 'Factura F-77', items: [{ producto_id: 1, cantidad: 5 }] }));
     expect(w.text()).toContain('REC-2026-00009');
-    expect(w.text()).toContain('1 producto(s) · 4 und.');
   });
 
-  test('si el código no existe ofrece crear el producto y lo agrega al guardarlo', async () => {
+  test('elegir una marca trae sus productos en 0; los que quedan en 0 no se tocan', async () => {
+    const { w } = await abrirCompras(s => {
+      s.productos.push({ id: 2, cod_alt: 'HF-200', desc: 'Filtro 2', marca: 'FLEETGUARD', fob: 2, stock_vd: 1, stock_dist: 0, activo: true });
+    });
+    await irALista(w);
+    await w.find('#cn-marca').setValue('FLEETGUARD');
+    const lista = w.find('#cn-lista').element.value;
+    expect(lista).toContain('HF6510\t0');
+    expect(lista).toContain('HF-200\t0');
+    await w.find('#cn-marca').setValue('FLEETGUARD');
+    expect(w.find('#cn-lista').element.value.split('\n')).toHaveLength(2);
+    await w.find('#cn-lista').setValue(w.find('#cn-lista').element.value.replace('HF6510\t0', 'HF6510\t7'));
+    await w.find('#cn-revisar').trigger('click');
+    expect(w.find('.cn-tabla').text()).toContain('+7');
+    expect(w.find('.cn-tabla').text()).not.toContain('HF-200');
+    expect(w.text()).toContain('1 producto(s) quedaron en 0');
+  });
+
+  test('el botón Nuevo producto crea el producto y lo agrega al cuadro en 0', async () => {
     const { w, store } = await abrirCompras();
-    await w.find('.cn-compra').trigger('click');
-    await w.find('#cn-siguiente').trigger('click');
-    await w.find('#cn-buscar').setValue('nuevo-1');
+    await irALista(w);
+    await w.find('#cn-nuevo-producto').trigger('click');
+    expect(store.modalEditProdActivo).toBe(true);
+    expect(store.productoSeleccionado).toMatchObject({ _nuevo: true, cod_alt: '', origen: 'local', factor_landed: 1.05, proveedor: 'FERRE CA' });
+    store.productos = [...store.productos, { id: 77, cod_alt: 'MANG-34', desc: 'Manguera', stock_vd: 0, stock_dist: 0 }];
+    await flushPromises();
+    expect(w.find('#cn-lista').element.value).toContain('MANG-34	0');
+  });
+
+  test('un código que no existe se puede crear y vuelve a la revisión con su cantidad', async () => {
+    const { w, store } = await abrirCompras();
+    await irALista(w);
+    await w.find('#cn-lista').setValue('NUEVO-1\t2');
+    await w.find('#cn-revisar').trigger('click');
     expect(w.find('.cn-no-existe').text()).toContain('NUEVO-1');
-    await w.find('.cn-no-existe button').trigger('click');
+    expect(w.find('#cn-registrar').attributes('disabled')).toBeDefined();
+    await w.find('.cn-crear button').trigger('click');
     expect(store.modalEditProdActivo).toBe(true);
     expect(store.productoSeleccionado).toMatchObject({ _nuevo: true, cod_alt: 'NUEVO-1', origen: 'local', factor_landed: 1.05, proveedor: 'FERRE CA' });
     store.productos = [...store.productos, { id: 99, cod_alt: 'NUEVO-1', desc: 'Correa', stock_vd: 0, stock_dist: 0 }];
     await flushPromises();
     expect(w.find('.cn-tabla').text()).toContain('NUEVO-1');
+    expect(w.find('.cn-tabla').text()).toContain('+2');
+    expect(w.find('.cn-no-existe').exists()).toBe(false);
   });
 
   test('Conteo / Recepción ya no ofrece las compras nacionales', async () => {
@@ -690,5 +727,17 @@ describe('Tasa BCV automática', () => {
     store.cambiarVista('alertas');
     expect(store.vistaActiva).not.toBe('turnos');
     expect(store.vistaActiva).not.toBe('alertas');
+  });
+});
+
+describe('USDT en abonos', () => {
+  test('aparece como pago en dólares y pide referencia', async () => {
+    const { w } = await montar(vistas['../src/views/CuentasCobrarView.vue'].default);
+    await w.find('.deuda-row .btn-primary').trigger('click');
+    const usdt = w.findAll('.ab-metodo').find(b => b.text().includes('USDT'));
+    expect(usdt).toBeTruthy();
+    await usdt.trigger('click');
+    expect(w.find('.ab-monto span').text()).toBe('$');
+    expect(w.find('.ab-oblig').exists()).toBe(true);
   });
 });

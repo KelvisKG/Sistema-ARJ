@@ -221,12 +221,7 @@ const activos = computed(() => store.productos.filter(p => p.activo !== false));
 const embarquesActivos = computed(() => store.embarquesImportados.filter(e => e.activo !== false));
 const embSel = computed(() => store.embarques.find(e => e.id === embId.value) || null);
 
-// v13.11: se acota por MARCA (el proveedor está vacío en casi todo el catálogo)
-const marcas = computed(() => {
-  const n = {};
-  activos.value.forEach(p => { const m = (p.marca || '').trim(); if (m) n[m] = (n[m] || 0) + 1; });
-  return Object.keys(n).sort().map(m => ({ marca: m, n: n[m] }));
-});
+const marcas = computed(() => store.marcasCatalogo);
 
 watch(() => store.modalRecepcionActivo, abierto => {
   if (!abierto) return;

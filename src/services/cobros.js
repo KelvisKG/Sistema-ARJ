@@ -18,7 +18,7 @@ export function monedaDeMetodo(m) {
   return /USD|Zelle/i.test(m || '') ? 'USD' : 'Bs';
 }
 export function requiereReferencia(m) {
-  return /transferencia|pago m[oó]vil|punto de venta|zelle/i.test(m || '');
+  return /transferencia|pago m[oó]vil|punto de venta|zelle|usdt/i.test(m || '');
 }
 
 // Parser de montos en formato venezolano (1.234,56) o US (1,234.56)

@@ -133,6 +133,12 @@ export const useArjStore = defineStore('arj', {
     // sql/12: compras nacionales y embarques comparten tabla; cada ventana usa su lista
     embarquesImportados: s => s.embarques.filter(e => e.tipo !== 'nacional'),
     comprasNacionales: s => s.embarques.filter(e => e.tipo === 'nacional'),
+    // Marcas de los productos activos con cuántos tiene cada una (v13.11: se acota por marca)
+    marcasCatalogo: s => {
+      const n = {};
+      s.productos.forEach(p => { const m = (p.marca || '').trim(); if (m && p.activo !== false) n[m] = (n[m] || 0) + 1; });
+      return Object.keys(n).sort().map(m => ({ marca: m, n: n[m] }));
+    },
     puedeCambiarEmpresa: s => s.empresaPermitida === 'ambas',
     // Perfil distribuidora (sql/11): distribuidora externa, marcada en su perfil.
     // Solo ve productos importados y sus propios clientes, facturas y cotizaciones.

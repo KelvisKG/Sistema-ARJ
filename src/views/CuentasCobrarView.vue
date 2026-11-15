@@ -263,7 +263,8 @@ function abrirAbono(f) {
 // El método decide la moneda
 const METODOS_DOLAR = [
   { v: 'Efectivo USD', t: 'Efectivo', i: 'ti-cash' },
-  { v: 'Zelle USD', t: 'Zelle', i: 'ti-building-bank' }
+  { v: 'Zelle USD', t: 'Zelle', i: 'ti-building-bank' },
+  { v: 'USDT', t: 'USDT', i: 'ti-coin' }
 ];
 const METODOS_BS = [
   { v: 'Pago móvil Bs.', t: 'Pago móvil', i: 'ti-device-mobile' },

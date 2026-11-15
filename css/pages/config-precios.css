@@ -66,3 +66,13 @@
       font-weight: 400;
       margin-top: 2px
     }
+
+/* Configuración: campo(s) + botón en una fila que baja de línea si no cabe */
+.cfg-fila { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px }
+.cfg-fila .val-input { flex: 1 1 110px; min-width: 0 }
+.cfg-fila .cfg-mes { flex: 1 1 175px }
+.cfg-fila .btn { flex: none }
+.cfg-niveles td:first-child { white-space: nowrap }
+.cfg-tabla { max-width: 100%; overflow-x: auto }
+.cfg-usuarios td:last-child, .cfg-usuarios th:last-child { white-space: nowrap; text-align: right }
+.cfg-rol { color: var(--dgray); font-size: 12.5px; text-transform: capitalize }
