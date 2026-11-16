@@ -72,9 +72,14 @@ export async function obtenerPerfilSesion() {
 
 export async function cargarPerfil(userId) {
   const { data: perfil, error } = await supabase.from('perfiles').select('*').eq('id', userId).maybeSingle();
-  if (error || !perfil) {
+  if (error) {
+    console.error('[ARJ Error al cargar perfil]:', error);
     await supabase.auth.signOut().catch(() => {});
-    return { ok: false, error: 'Tu usuario no tiene un perfil asignado. Pide al gerente que lo active.' };
+    return { ok: false, error: `Error al consultar perfil: ${error.message}` };
+  }
+  if (!perfil) {
+    await supabase.auth.signOut().catch(() => {});
+    return { ok: false, error: 'Tu usuario no tiene un perfil asignado. Pide al gerente que lo active en la tabla perfiles.' };
   }
   if (perfil.activo === false) {
     await supabase.auth.signOut().catch(() => {});
@@ -86,7 +91,22 @@ export async function cargarPerfil(userId) {
 export async function iniciarSesion(email, password) {
   if (!SUPABASE_CONFIGURADO) return { ok: false, error: 'Sistema sin configurar: falta el archivo .env' };
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { ok: false, error: 'Email o contraseña incorrectos.' };
+  if (error) {
+    console.error('[ARJ Supabase Auth Error]:', error);
+    if (/invalid api key/i.test(error.message || '')) {
+      return { ok: false, error: 'Clave de API de Supabase inválida (401). Verifica VITE_SUPABASE_KEY en .env.' };
+    }
+    if (error.message === 'Invalid login credentials') {
+      return { ok: false, error: 'Email o contraseña incorrectos.' };
+    }
+    if (error.message === 'Email not confirmed') {
+      return { ok: false, error: 'El correo electrónico no ha sido confirmado.' };
+    }
+    if (error.status === 0 || /fetch failed|network/i.test(error.message || '')) {
+      return { ok: false, error: 'Error de conexión: No se pudo contactar al servidor de Supabase.' };
+    }
+    return { ok: false, error: error.message || 'Email o contraseña incorrectos.' };
+  }
   return cargarPerfil(data.user.id);
 }
 
