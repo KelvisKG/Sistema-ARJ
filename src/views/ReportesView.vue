@@ -14,306 +14,62 @@
 
     <!-- ═══ RESUMEN ═══ -->
     <div v-show="sub === 'resumen'">
-      <!-- SELECTOR DE PERÍODO GLOBAL PARA DASHBOARD Y KPIS -->
-      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <i class="ti ti-calendar-stats" style="font-size:22px;color:var(--navy)"></i>
-          <div>
-            <div style="font-weight:700;color:var(--navy);font-size:14px">
-              Período seleccionado: <span style="color:var(--gold);text-transform:capitalize">{{ origen.etiqueta }}</span>
-            </div>
-            <div style="font-size:11.5px;color:var(--dgray)">
-              Todos los indicadores de ventas, utilidad, margen y gráficas se actualizan según el rango seleccionado
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <label style="font-size:12px;font-weight:600;color:var(--navy)">Período:</label>
-          <select v-model="rango" class="rp-in" @change="cambioRango" style="font-weight:600;color:var(--navy)">
-            <option value="mes">Este mes</option>
-            <option value="mes_ant">Mes pasado</option>
-            <option value="3m">Últimos 3 meses</option>
-            <option value="6m">Últimos 6 meses</option>
-            <option value="12m">Últimos 12 meses</option>
-            <option value="anio">Este año</option>
-            <option value="todo">Todo el histórico</option>
-            <option value="custom">Personalizado…</option>
-          </select>
-          <span v-if="rango === 'custom'" style="display:inline-flex;gap:6px;align-items:center">
-            <input v-model="custDesde" type="date" class="rp-in">
-            <span style="font-size:11.5px;color:var(--dgray)">a</span>
-            <input v-model="custHasta" type="date" class="rp-in">
-            <button class="btn btn-primary btn-sm" @click="cargarOrigen">Aplicar</button>
-          </span>
-        </div>
-      </div>
+      <!-- SELECTOR DE PERÍODO GLOBAL -->
+      <PeriodFilter
+        v-model:rango="rango"
+        v-model:custDesde="custDesde"
+        v-model:custHasta="custHasta"
+        :etiqueta="origen.etiqueta"
+        :cargando="origen.estado === 'cargando'"
+        @cambio="cambioRango"
+        @aplicar="cargarOrigen"
+      />
 
-      <div class="kpi-grid">
-        <div class="kpi-card green">
-          <div class="kpi-icon"><i class="ti ti-trending-up"></i></div>
-          <div class="kpi-label">Ventas hoy</div>
-          <div class="kpi-val">{{ fmtUSD(ventas.totHoy) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ ventas.nHoy === 0 ? 'Sin ventas hoy' : ventas.nHoy + (ventas.nHoy === 1 ? ' factura' : ' facturas') }}</div>
-        </div>
-        <div class="kpi-card blue">
-          <div class="kpi-icon"><i class="ti ti-calendar"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Ventas este mes' : 'Ventas del período' }}</div>
-          <div class="kpi-val">{{ fmtUSD(kpisPeriodo.totalVenta) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">
-            {{ kpisPeriodo.nFacts === 0 ? 'Sin ventas en ' + origen.etiqueta : kpisPeriodo.nFacts + (kpisPeriodo.nFacts === 1 ? ' factura' : ' facturas') + ' · ' + origen.etiqueta }}
-          </div>
-        </div>
-        <div class="kpi-card gold">
-          <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
-          <div class="kpi-label">Margen del catálogo</div>
-          <div class="kpi-val">{{ margenCatalogo == null ? '0%' : margenCatalogo.toFixed(1) + '%' }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ margenCatalogo == null ? 'Sin datos aún' : 'Teórico — todo a precio de lista' }}</div>
-        </div>
-        <div class="kpi-card red">
-          <div class="kpi-icon"><i class="ti ti-package"></i></div>
-          <div class="kpi-label">Stock crítico</div>
-          <div class="kpi-val">{{ stockCritico.bajos }}</div>
-          <div class="kpi-sub">1 a {{ stockCritico.umbral }} ud · {{ stockCritico.agotados }} agotados de {{ store.productos.length }}</div>
-        </div>
-        <div class="kpi-card green">
-          <div class="kpi-icon"><i class="ti ti-coin"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Utilidad bruta del mes' : 'Utilidad bruta del período' }}</div>
-          <div class="kpi-val">{{ kpisPeriodo.utilVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.utilSub }}</div>
-        </div>
-        <div class="kpi-card gold">
-          <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Margen real vendido' : 'Margen real del período' }}</div>
-          <div class="kpi-val">{{ kpisPeriodo.margenVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.margenSub }}</div>
-        </div>
-        <div class="kpi-card blue">
-          <div class="kpi-icon"><i class="ti ti-scale"></i></div>
-          <div class="kpi-label">Punto de equilibrio</div>
-          <div class="kpi-val">{{ kpisPeriodo.peVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.peSub }}</div>
-        </div>
-        <div class="kpi-card red">
-          <div class="kpi-icon"><i class="ti ti-building-store"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Costos fijos del mes' : 'Costos fijos del período' }}</div>
-          <div class="kpi-val">{{ fmtUSD(kpisPeriodo.cf) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.cfSub }}</div>
-        </div>
-      </div>
+      <!-- TARJETAS DE KPIS PRINCIPALES -->
+      <KpiGrid
+        :rango="rango"
+        :origen-etiqueta="origen.etiqueta"
+        :tot-hoy="ventas.totHoy"
+        :n-hoy="ventas.nHoy"
+        :kpis-periodo="kpisPeriodo"
+        :margen-catalogo="margenCatalogo"
+        :stock-critico="stockCritico"
+        :total-productos="store.productos.length"
+      />
 
-      <!-- VENTAS POR ORIGEN (v13.28) · selector de período (v13.35) -->
-      <div class="chart-card" style="margin-bottom:16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-          <h3 style="margin:0"><i class="ti ti-world" style="color:var(--blue)"></i> Importado vs Local
-            <span style="font-weight:500;color:var(--dgray)">— {{ origen.lbl.charAt(0).toUpperCase() + origen.lbl.slice(1) }}</span></h3>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <select v-model="rango" class="rp-in" @change="cambioRango">
-              <option value="mes">Este mes</option>
-              <option value="mes_ant">Mes pasado</option>
-              <option value="3m">Últimos 3 meses</option>
-              <option value="6m">Últimos 6 meses</option>
-              <option value="12m">Últimos 12 meses</option>
-              <option value="anio">Este año</option>
-              <option value="todo">Todo el histórico</option>
-              <option value="custom">Personalizado…</option>
-            </select>
-            <span v-if="rango === 'custom'" style="display:inline-flex;gap:6px;align-items:center">
-              <input v-model="custDesde" type="date" class="rp-in">
-              <span style="font-size:11.5px;color:var(--dgray)">a</span>
-              <input v-model="custHasta" type="date" class="rp-in">
-              <button class="btn btn-primary btn-sm" @click="cargarOrigen">Aplicar</button>
-            </span>
-          </div>
-        </div>
-
-        <div v-if="origen.estado === 'cargando'" style="padding:14px;text-align:center;color:var(--dgray)"><i class="ti ti-loader"></i> Leyendo {{ origen.etiqueta }}…</div>
-        <div v-else-if="origen.estado === 'error'" style="padding:14px;text-align:center;color:var(--red)">{{ origen.error }}</div>
-        <div v-else-if="origen.estado === 'sinconexion'" style="padding:14px;text-align:center;color:var(--dgray)">Sin conexión a la base.</div>
-        <div v-else-if="!origen.data || !origen.data.its.length" style="padding:14px;text-align:center;color:var(--dgray)">Sin ventas en {{ origen.etiqueta }}.</div>
-        <template v-else>
-          <div style="display:flex;flex-wrap:wrap;gap:10px">
-            <div v-for="b in bloquesOrigen" :key="b.key" :style="{ flex: '1 1 210px', background: b.col, borderRadius: '8px', padding: '10px 12px' }">
-              <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.4px;font-weight:600"><i :class="'ti ti-' + b.icono"></i> {{ b.nom }}</div>
-              <div style="font-size:20px;font-weight:800;color:var(--navy);line-height:1.25">{{ fmtUSD(b.c.venta) }}</div>
-              <div style="font-size:11.5px;color:var(--dgray);margin-bottom:6px">{{ pc(b.c.venta, R.tot.venta) }} de la venta &middot; {{ b.c.uds.toLocaleString('es-VE') }} uds &middot; {{ b.c.lineas }} renglones</div>
-              <div style="height:5px;background:#FFF;border-radius:3px;overflow:hidden;margin-bottom:6px">
-                <div :style="{ height: '100%', width: (R.tot.venta > 0 ? b.c.venta / R.tot.venta * 100 : 0).toFixed(1) + '%', background: 'var(--gold)' }"></div></div>
-              <div style="font-size:12px;line-height:1.6">Costo <strong>{{ fmtUSD(b.c.costo) }}</strong><br>
-                Utilidad <strong :style="{ color: b.c.util >= 0 ? '#1E7B34' : '#B00020' }">{{ fmtUSD(b.c.util) }}</strong> &middot; margen <strong>{{ b.c.mg.toFixed(1) }}%</strong><br>
-                <span style="color:var(--dgray)">Aporta {{ pc(b.c.util, R.tot.util) }} de la utilidad</span>
-                <!-- Desglose de caja: lo que YA está y lo que falta por cobrar son cosas distintas -->
-                <div v-if="b.v && (b.v.enMano > 0 || b.v.porCobrar > 0)" style="margin-top:8px;padding-top:7px;border-top:1px solid rgba(0,0,0,.08)">
-                  <div style="color:#1E7B34;font-weight:700;font-size:13px">✓ Ya en caja: {{ fmtUSD(b.v.enMano) }}</div>
-                  <div v-if="b.v.efectivo > 0 || b.v.usdt > 0" style="font-size:11px;color:var(--dgray);margin-top:1px">
-                    {{ [b.v.efectivo > 0 ? fmtUSD(b.v.efectivo) + ' efectivo' : '', b.v.usdt > 0 ? fmtUSD(b.v.usdt) + ' a convertir en USDT' : ''].filter(Boolean).join(' · ') }}</div>
-                  <template v-if="b.v.porCobrar > 0">
-                    <div style="color:#BF8F00;font-weight:600;font-size:12.5px;margin-top:5px">⏳ Por cobrar: {{ fmtUSD(b.v.porCobrar) }}</div>
-                    <div style="font-size:11px;color:var(--dgray);margin-top:1px">Aún no es plata. Sujeto a que la brecha se mueva.</div>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div v-if="R.g.local.venta > 0 && R.g.importado.venta > 0" style="margin-top:9px;font-size:12px;color:var(--dgray);line-height:1.5">
-            El margen de <strong>{{ R.g.importado.mg - R.g.local.mg >= 0 ? 'importado' : 'local' }}</strong> es
-            {{ Math.abs(R.g.importado.mg - R.g.local.mg).toFixed(1) }} puntos mayor. Utilidad total del mes: <strong>{{ fmtUSD(R.tot.util) }}</strong>.</div>
-          <div v-if="R.deducidos > 0 || R.sinCosto > 0" style="margin-top:8px;padding:8px 10px;border-radius:6px;background:#FFF4E5;border-left:3px solid #BF8F00;font-size:11.5px;line-height:1.5">
-            <div v-if="R.deducidos > 0">⚠ <strong>{{ R.deducidos }} renglón(es) sin origen guardado</strong> — clasificados por el factor congelado, es una deducción</div>
-            <div v-if="R.sinCosto > 0">⚠ <strong>{{ R.sinCosto }} renglón(es) sin costo</strong> — su margen sale inflado</div>
-          </div>
-          <div v-if="R.VR.nPend > 0" style="margin-top:10px;padding:8px 10px;border-radius:6px;background:#FFF9E6;border-left:3px solid #BF8F00;font-size:11.5px;line-height:1.5">
-            <strong>{{ R.VR.nPend }} factura(s) sin cobrar del todo.</strong> Lo de "por cobrar" no está en tu caja:
-            mientras esos bolívares no entren, la brecha sigue corriendo y el objetivo en USDT baja cada día.</div>
-          <div v-if="R.VR.sinTasa > 0" style="margin-top:8px;font-size:11px;color:var(--dgray)">{{ R.VR.sinTasa }} factura(s) sin tasas congeladas: no entran en el cálculo de caja.</div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-sm" style="background:var(--navy);color:#FFF" @click="detalleAbierto = !detalleAbierto"><i class="ti ti-list-search"></i> Ver qué productos son</button>
-            <button class="btn btn-sm btn-secondary" @click="descargarDetalleOrigen"><i class="ti ti-download"></i> Descargar detalle CSV</button>
-          </div>
-        </template>
-
-        <!-- Detalle por producto -->
-        <div v-if="detalleAbierto" style="margin-top:12px">
-          <div v-if="!origen.data || !origen.data.its.length" style="padding:14px;text-align:center;color:var(--dgray);font-size:12.5px">Escoge un período con ventas y vuelve a abrir el detalle.</div>
-          <template v-else>
-            <div v-for="t in tablasDetalle" :key="t.key" style="margin-bottom:14px">
-              <div :style="{ fontSize: '12px', fontWeight: 700, color: 'var(--navy)', background: t.col, padding: '6px 9px', borderRadius: '6px 6px 0 0' }">
-                <i :class="'ti ti-' + t.icono"></i> {{ t.titulo }} — {{ t.lista.length }} producto(s) · {{ fmtUSD(t.tV) }} $BCV · ≈ {{ fmtUSD(t.tW) }} verde</div>
-              <div style="overflow-x:auto">
-                <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-                  <thead><tr style="background:#F7F7F7;color:var(--dgray)">
-                    <th style="text-align:left;padding:5px 7px">Código</th><th style="text-align:left;padding:5px 7px">Descripción</th>
-                    <th style="text-align:right;padding:5px 7px">Uds</th><th style="text-align:right;padding:5px 7px">Venta $BCV</th>
-                    <th style="text-align:right;padding:5px 7px">$verde facturado</th><th style="text-align:right;padding:5px 7px">Costo</th>
-                    <th style="text-align:right;padding:5px 7px">Utilidad</th><th style="text-align:right;padding:5px 7px">Margen</th></tr></thead>
-                  <tbody>
-                    <tr v-for="p in t.lista.slice(0, 60)" :key="p.cod + p.desc" style="border-bottom:1px solid var(--border)">
-                      <td style="padding:4px 7px;font-family:monospace">{{ p.cod }}</td>
-                      <td style="padding:4px 7px">{{ p.desc }}</td>
-                      <td style="padding:4px 7px;text-align:right">{{ p.uds.toLocaleString('es-VE') }}</td>
-                      <td style="padding:4px 7px;text-align:right;font-weight:600">{{ fmtUSD(p.venta) }}</td>
-                      <td style="padding:4px 7px;text-align:right;color:#1E7B34">{{ p.sinTasa ? '—' : fmtUSD(p.verde) }}</td>
-                      <td style="padding:4px 7px;text-align:right;color:var(--dgray)">{{ fmtUSD(p.costo) }}</td>
-                      <td :style="{ padding: '4px 7px', textAlign: 'right', color: p.venta - p.costo >= 0 ? '#1E7B34' : '#B00020' }">{{ fmtUSD(p.venta - p.costo) }}</td>
-                      <td style="padding:4px 7px;text-align:right">{{ (p.venta > 0 ? (p.venta - p.costo) / p.venta * 100 : 0).toFixed(1) }}%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-if="t.lista.length > 60" style="font-size:11px;color:var(--dgray);padding:5px 7px">Mostrando los 60 de mayor venta. El CSV los trae todos.</div>
-            </div>
-            <div style="font-size:11px;color:var(--dgray);line-height:1.5;padding:6px 2px">
-              La columna <strong>$verde facturado</strong> es el equivalente de lo <em>facturado</em> con la brecha congelada
-              de cada factura, esté cobrado o no, y sin descontar. No es caja. La caja real, ya separada entre cobrado y
-              pendiente, está en el recuadro de arriba.</div>
-          </template>
-        </div>
-      </div>
+      <!-- TARJETAS DE COMPARACIÓN (Importado vs Local y Mes actual vs Mes anterior) -->
+      <ComparisonCards
+        :origen="origen"
+        :r="R"
+        :bloques-origen="bloquesOrigen"
+        :tablas-detalle="tablasDetalle"
+        :detalle-abierto="detalleAbierto"
+        :comp-meses="compMeses"
+        @toggle-detalle="detalleAbierto = !detalleAbierto"
+        @descargar-csv="descargarDetalleOrigen"
+      />
 
       <!-- METAS DE VENTA -->
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:15px;color:var(--navy);font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-target"></i> Metas de venta del mes</h2>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:11.5px;color:var(--dgray)">Período:</span>
-            <select v-model="metasPer" class="val-input" style="width:150px">
-              <option v-for="x in opcionesPeriodo" :key="x" :value="x">{{ etiquetaPeriodo(x) }}</option>
-            </select>
-            <span v-if="esMesCerrado" style="background:#FFF8E1;color:#5D4037;padding:2px 8px;border-radius:8px;font-size:10.5px;font-weight:600">MES CERRADO</span>
-          </div>
-          <button class="btn btn-secondary btn-sm" @click="abrirEquipo"><i class="ti ti-users-plus"></i> Gestionar equipo</button>
-        </div>
-        <div v-if="esMesCerrado" style="background:#FFF8E1;border-left:3px solid var(--gold);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11.5px;color:#5D4037">
-          <i class="ti ti-info-circle"></i> Estás viendo un mes distinto al actual. Las barras de "vendido" siempre muestran el <strong>mes en curso</strong>; solo la meta cambia de período.
-        </div>
+      <SalesGoalsCard
+        v-model:metas-per="metasPer"
+        :nombre-emp="nombreEmp"
+        :opciones-periodo="opcionesPeriodo"
+        :es-mes-cerrado="esMesCerrado"
+        :meta-empresa="metaEmpresa"
+        :pct-emp="pctEmp"
+        :ventas-empresa="ventasEmpresa"
+        :falta-emp="faltaEmp"
+        :base-sug="baseSug"
+        :lista-trab="listaTrab"
+        :filas-trab="filasTrab"
+        :aviso-suma="avisoSuma"
+        @abrir-equipo="abrirEquipo"
+        @actualizar-meta-empresa="actualizarMetaEmpresa"
+        @actualizar-meta-vendedor="actualizarMetaVendedor"
+        @sugerir-meta="sugerirMeta"
+      />
 
-        <div style="background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div>
-              <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Meta empresa</div>
-              <div style="font-size:14px;font-weight:600;color:var(--navy)">{{ nombreEmp }}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:11.5px;color:var(--dgray)">Meta:</span>
-              <input type="number" class="val-input" :value="metaEmpresa" step="500" min="0" style="width:110px" @change="actualizarMetaEmpresa($event.target.value)">
-            </div>
-          </div>
-          <div style="background:var(--gray);border-radius:5px;height:24px;position:relative;overflow:hidden">
-            <div :style="{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,var(--green),#4CAF50)', width: pctEmp + '%', transition: 'width 0.4s', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '8px', color: '#FFF', fontSize: '11px', fontWeight: 600 }">{{ pctEmp > 8 ? pctEmp.toFixed(1) + '%' : '' }}</div>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11.5px">
-            <span style="color:var(--green);font-weight:600">Vendido: {{ fmtUSD(ventasEmpresa) }}</span>
-            <span style="color:var(--dgray)">Falta: <strong :style="{ color: faltaEmp > 0 ? 'var(--gold)' : 'var(--green)' }">{{ fmtUSD(faltaEmp) }}</strong></span>
-          </div>
-          <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:11px;color:var(--dgray)">
-            <template v-if="baseSug > 0">
-              <i class="ti ti-bulb"></i> Sugerencias sobre el mes anterior ({{ fmtUSD(baseSug) }}):
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin:2px" @click="sugerirMeta('conservadora')">Conservadora: {{ fmtUSD(Math.round(baseSug * 0.9 / 100) * 100) }}</button>
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin:2px" @click="sugerirMeta('moderada')">Moderada: {{ fmtUSD(Math.round(baseSug * 1.1 / 100) * 100) }}</button>
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin:2px" @click="sugerirMeta('agresiva')">Agresiva: {{ fmtUSD(Math.round(baseSug * 1.3 / 100) * 100) }}</button>
-            </template>
-            <template v-else><i class="ti ti-bulb"></i> Las sugerencias aparecen cuando haya ventas del mes anterior con qué compararse.</template>
-          </div>
-        </div>
-
-        <div style="background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Metas por trabajador</div>
-            <button class="btn btn-secondary btn-sm" style="font-size:10.5px" @click="abrirEquipo"><i class="ti ti-plus"></i> Agregar</button>
-          </div>
-          <div v-if="!listaTrab.length" style="padding:18px;text-align:center;color:var(--dgray);font-size:12px">
-            Todavía no hay trabajadores en <strong>{{ nombreEmp }}</strong>.<br>
-            <button class="btn btn-primary btn-sm" style="margin-top:8px" @click="abrirEquipo"><i class="ti ti-user-plus"></i> Agregar el primero</button>
-          </div>
-          <div v-for="t in filasTrab" :key="t.v" style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px">
-              <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                <i class="ti ti-user" style="color:var(--blue);flex-shrink:0"></i>
-                <span style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.v }}</span>
-                <span v-if="t.cumplido" style="background:var(--lgreen);color:var(--green);padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">✓ CUMPLIDA</span>
-                <span v-if="!t.enEquipo" style="background:#FFF8E1;color:#5D4037;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="Facturó pero no está en la lista de equipo">FUERA DEL EQUIPO</span>
-              </div>
-              <input type="number" :value="t.meta" step="500" min="0" class="val-input" style="width:90px;flex-shrink:0" @change="actualizarMetaVendedor(t.v, $event.target.value)">
-            </div>
-            <div style="background:var(--gray);border-radius:4px;height:14px;overflow:hidden">
-              <div :style="{ background: t.cumplido ? 'linear-gradient(90deg,var(--green),#4CAF50)' : 'linear-gradient(90deg,var(--blue),var(--navy))', height: '100%', width: t.pct + '%', transition: 'width 0.4s' }"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:11px;color:var(--dgray)">
-              <span>{{ fmtUSD(t.vendido) }}{{ t.meta > 0 ? ' (' + t.pct.toFixed(0) + '%)' : '' }}</span>
-              <span>{{ t.meta > 0 ? 'Falta ' + fmtUSD(t.falta) : 'Sin meta asignada' }}</span>
-            </div>
-          </div>
-          <!-- Si la suma de metas individuales no cuadra con la de la empresa -->
-          <div v-if="avisoSuma" :style="{ marginTop: '10px', fontSize: '11.5px', color: avisoSuma.corta ? '#5D4037' : 'var(--dgray)', background: avisoSuma.corta ? '#FFF8E1' : 'transparent', borderTop: '1px dashed var(--border)', borderRadius: '6px', padding: '8px 10px' }">
-            <i :class="'ti ti-' + (avisoSuma.corta ? 'alert-triangle' : 'info-circle')"></i>
-            La suma de las metas individuales es <strong>{{ fmtUSD(avisoSuma.suma) }}</strong> contra {{ fmtUSD(metaEmpresa) }} de la empresa.
-            <template v-if="avisoSuma.corta">Aunque <strong>todos cumplan</strong>, la empresa se queda {{ fmtUSD(Math.abs(avisoSuma.dif)) }} corta.</template>
-            <template v-else>Hay {{ fmtUSD(avisoSuma.dif) }} de colchón.</template>
-          </div>
-        </div>
-      </div>
-
-      <!-- COMPARATIVA MES vs MES -->
-      <div class="chart-card" style="margin-bottom:16px">
-        <h3><i class="ti ti-chart-line" style="color:var(--blue)"></i> Comparativa de ventas — Mes actual vs Mes anterior</h3>
-        <div style="padding:4px 2px">
-          <div v-for="b in compMeses.barras" :key="b.etiqueta" style="margin-bottom:12px">
-            <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:4px">
-              <span style="color:var(--dgray);text-transform:capitalize">{{ b.etiqueta }}</span>
-              <span style="font-weight:600;color:var(--navy)">{{ fmtUSD(b.val) }} · {{ b.n }} {{ b.n === 1 ? 'factura' : 'facturas' }}</span>
-            </div>
-            <div style="background:var(--gray);border-radius:5px;height:20px;overflow:hidden">
-              <div :style="{ background: b.color, height: '100%', width: (b.val / compMeses.tope * 100) + '%', transition: 'width .4s' }"></div>
-            </div>
-          </div>
-          <div v-if="compMeses.ant === 0 && compMeses.act === 0" style="font-size:11.5px;color:var(--dgray)">Sin ventas en ninguno de los dos meses.</div>
-          <div v-else-if="compMeses.ant === 0" style="font-size:11.5px;color:var(--dgray)">No hay mes anterior con ventas: todavía no se puede comparar.</div>
-          <div v-else style="font-size:12px;padding-top:8px;border-top:1px dashed var(--border)">
-            <span :style="{ color: compMeses.varPct >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600 }">{{ compMeses.varPct >= 0 ? '▲' : '▼' }} {{ Math.abs(compMeses.varPct).toFixed(1) }}%</span>
-            <span style="color:var(--dgray)"> respecto al mes anterior · diferencia {{ fmtUSD(Math.abs(compMeses.act - compMeses.ant)) }}</span>
-          </div>
-        </div>
-      </div>
-
+      <!-- PRODUCTOS MÁS VENDIDOS Y ÚLTIMAS VENTAS -->
       <div class="dash-grid">
         <div class="chart-card">
           <h3><i class="ti ti-chart-bar" style="color:var(--blue)"></i> Productos más vendidos del mes</h3>
@@ -340,7 +96,7 @@
       </div>
     </div>
 
-    <!-- ═══ COMPARATIVA ENTRE EMPRESAS (en el monolito todavía no está activa) ═══ -->
+    <!-- ═══ COMPARATIVA ENTRE EMPRESAS ═══ -->
     <div v-if="sub === 'comparativa'">
       <div class="card">
         <div class="card-tit"><i class="ti ti-arrows-left-right"></i> Venta Directa vs Distribuidora — Este mes</div>
@@ -348,37 +104,15 @@
       </div>
     </div>
 
-    <!-- ═══ RANKING DE CLIENTES (v13.2) ═══ -->
+    <!-- ═══ RANKING DE CLIENTES ═══ -->
     <div v-if="sub === 'ranking'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-trophy"></i> Ranking de clientes</div>
-        <div class="rp-ranking">
-          <div>
-            <h3 style="font-size:13px;color:var(--navy);font-weight:600;margin-bottom:10px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Top 5 compradores del mes · {{ nombreEmp }}</h3>
-            <div v-if="!ranking.top.length" style="padding:20px;text-align:center;color:var(--dgray);font-size:12.5px">Nadie ha comprado este mes en {{ nombreEmp }}</div>
-            <div v-for="(c, i) in ranking.top" :key="c.nombre" style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-                <span style="font-size:12.5px;font-weight:500"><span style="display:inline-block;width:20px">{{ ['🥇', '🥈', '🥉', '4', '5'][i] }}</span> {{ c.nombre }}</span>
-                <span style="font-weight:700;color:var(--navy);font-size:13px">{{ fmtUSD(c.mes) }}</span>
-              </div>
-              <div style="background:var(--gray);border-radius:4px;height:8px;margin-left:24px"><div :style="{ background: 'linear-gradient(90deg,var(--gold),#E0B020)', height: '100%', width: (c.mes / ranking.top[0].mes * 100).toFixed(0) + '%', borderRadius: '4px' }"></div></div>
-              <div style="font-size:10.5px;color:var(--dgray);margin-left:24px;margin-top:2px">{{ c.comprasMes }} {{ c.comprasMes === 1 ? 'compra' : 'compras' }} este mes · última {{ fechaCortaRk(c.ultima) }}</div>
-            </div>
-          </div>
-          <div>
-            <h3 style="font-size:13px;color:var(--red);font-weight:600;margin-bottom:10px"><i class="ti ti-alert-triangle"></i> Clientes que dejaron de comprar</h3>
-            <div v-if="!ranking.dormidos.length" style="padding:20px;text-align:center;color:var(--dgray);font-size:12.5px">Ningún cliente lleva más de 30 días sin comprar</div>
-            <div v-for="c in ranking.dormidos" :key="c.nombre" style="background:#FEF5F5;border:1px solid #F5C0C0;border-radius:8px;padding:10px 12px;margin-bottom:8px">
-              <div style="font-weight:600;font-size:12.5px;color:#222">{{ c.nombre }}</div>
-              <div style="font-size:11px;color:var(--red);font-weight:500;margin:2px 0">⚠ {{ c.dias }} días sin comprar</div>
-              <div style="font-size:10.5px;color:var(--dgray)">{{ c.comprasHist }} compras históricas · ticket promedio {{ fmtUSD(c.prom) }} · última {{ fechaCortaRk(c.ultima) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <CustomerRankingCard
+        :ranking="ranking"
+        :nombre-emp="nombreEmp"
+      />
     </div>
 
-    <!-- ═══ REORDEN (en el monolito se activa cuando haya historial de ventas real) ═══ -->
+    <!-- ═══ REORDEN ═══ -->
     <div v-if="sub === 'reorden'">
       <div class="card">
         <div class="card-tit"><i class="ti ti-package"></i> Productos que debes reordenar pronto</div>
@@ -386,38 +120,17 @@
       </div>
     </div>
 
-    <!-- ═══ RESPALDOS (v13.2) ═══ -->
+    <!-- ═══ RESPALDOS ═══ -->
     <div v-if="sub === 'backup'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-database"></i> Respaldos y seguridad de datos</div>
-        <div class="rp-2col">
-          <div style="background:var(--lgreen);border-radius:8px;padding:16px">
-            <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:6px"><i class="ti ti-cloud-check"></i> Respaldo automático en la nube</div>
-            <div style="font-size:12px;color:var(--dgray);line-height:1.6">
-              Estado: <strong style="color:var(--green)">● Activo</strong> — cada factura, cliente y producto se guarda en Supabase al instante.<br>
-              Cargado ahora: <strong>{{ store.productos.length }}</strong> productos · <strong>{{ store.clientes.length }}</strong> clientes · <strong>{{ store.todasFacturas.length }}</strong> facturas
-            </div>
-          </div>
-          <div style="background:var(--lblue);border-radius:8px;padding:16px">
-            <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px"><i class="ti ti-shield-check"></i> Por qué descargar igual</div>
-            <div style="font-size:12px;color:var(--dgray);line-height:1.6">
-              El respaldo en la nube te protege de que se dañe la computadora.<br>
-              El respaldo <strong>en tu mano</strong> te protege de un borrado por error o de perder el acceso a la cuenta.
-            </div>
-          </div>
-        </div>
-        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:14px">
-          <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">Descargar respaldo manual</div>
-          <div class="rp-3col">
-            <button class="btn btn-secondary" :disabled="!factsSemana.length" :title="factsSemana.length ? '' : 'No hay facturas esta semana'" @click="backupSemanal"><i class="ti ti-file-spreadsheet"></i> Resumen semanal ({{ factsSemana.length }})</button>
-            <button class="btn btn-secondary" @click="backupCompleto"><i class="ti ti-database-export"></i> Respaldo completo (.json)</button>
-            <button class="btn btn-secondary" :disabled="!store.productos.length" @click="backupInventario"><i class="ti ti-package"></i> Solo inventario ({{ store.productos.length }})</button>
-          </div>
-          <div style="background:#FFF8E1;border-left:3px solid var(--gold);border-radius:6px;padding:10px 14px;margin-top:14px;font-size:12px;color:#5D4037">
-            <i class="ti ti-info-circle"></i> <strong>Rutina sugerida:</strong> cada viernes descarga el "Resumen semanal" y guárdalo en una carpeta o pendrive. Los dos primeros abren con doble clic en Excel; el <strong>.json</strong> no se lee a simple vista, pero es el que sirve para reconstruir todo si hace falta.
-          </div>
-        </div>
-      </div>
+      <BackupCard
+        :productos-count="store.productos.length"
+        :clientes-count="store.clientes.length"
+        :facturas-count="store.todasFacturas.length"
+        :facts-semana-count="factsSemana.length"
+        @backup-semanal="backupSemanal"
+        @backup-completo="backupCompleto"
+        @backup-inventario="backupInventario"
+      />
     </div>
 
     <!-- MODAL EQUIPO DE TRABAJO (v13.2) -->
@@ -474,13 +187,19 @@ import { periodoDe } from '../services/fechas.js';
 import { descargarCSV, descargarArchivo, hoyArchivo } from '../services/monolito.js';
 import {
   resumenOrigen, agruparProductos, filasDetalleOrigen, costoRenglones, topProductos, rangoOrigen, fISO,
-  normalizarEquipo, claveEmpresa, etiquetaPeriodo
+  normalizarEquipo, claveEmpresa
 } from '../services/reportes.js';
+
+import PeriodFilter from '../components/reports/PeriodFilter.vue';
+import KpiGrid from '../components/reports/KpiGrid.vue';
+import ComparisonCards from '../components/reports/ComparisonCards.vue';
+import SalesGoalsCard from '../components/reports/SalesGoalsCard.vue';
+import CustomerRankingCard from '../components/reports/CustomerRankingCard.vue';
+import BackupCard from '../components/reports/BackupCard.vue';
 
 const store = useArjStore();
 const sub = ref('resumen');
 const nombreEmp = computed(() => (store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'));
-const pc = (x, b) => (b > 0 ? (x / b * 100).toFixed(1) + '%' : '—');
 
 // Fechas de corte locales (medianoche de hoy y día 1 del mes), igual que el monolito
 const cortes = () => {
@@ -568,7 +287,6 @@ const util = computed(() => {
   const r = {
     val: fmtUSD(u), sub: 'Ventas ' + fmtUSD(ingreso) + ' − costo ' + fmtUSD(costo),
     margenVal: margen.toFixed(1) + '%',
-    // Un renglón con fob 0 dispara el margen al 100%: se avisa en vez de mostrar un número bonito y falso
     margenSub: sinCosto > 0 ? 'Ojo: ' + sinCosto + (sinCosto === 1 ? ' renglón sin costo' : ' renglones sin costo') + ' — margen inflado' : 'Sobre lo efectivamente vendido'
   };
   if (cf <= 0) { r.peVal = fmtUSD(0); r.peSub = 'Configura los costos fijos'; }
@@ -894,7 +612,6 @@ const ranking = computed(() => {
     .sort((a, b) => b.dias - a.dias).slice(0, 6);
   return { top: topC, dormidos };
 });
-const fechaCortaRk = d => d.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
 
 // ═══ RESPALDOS (v13.2 / v13.36) ═══
 const factsSemana = computed(() => {
@@ -943,7 +660,6 @@ function backupSemanal() {
     const dto = f.descuento_manual || 0;
     const neto = Math.round((bruto - dto) * 100) / 100;
     const saldo = f.saldo_pendiente || 0;
-    // Abonado real = lo saldado del NETO (partir del bruto contaba el descuento como pago)
     const abon = Math.round((neto - saldo) * 100) / 100;
     const cv = (f.cobrar_verde != null && f.cobrar_verde > 0) ? f.cobrar_verde : null;
     if (f.estado !== 'anulada') {
@@ -997,16 +713,11 @@ function recargarTodo() {
 }
 onMounted(recargarTodo);
 watch(() => store.empresa, () => { detalleAbierto.value = false; recargarTodo(); });
-// Una venta nueva cambia la utilidad y el panel de origen
 watch(() => store.todasFacturas.length, () => cargarUtilidad());
 </script>
 
 <style scoped>
-.rp-in { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: inherit }
-.rp-ranking { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px }
-.rp-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
-.rp-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px }
 @media (max-width: 760px) {
-  .rp-ranking, .rp-2col, .rp-3col { grid-template-columns: 1fr }
+  .dash-grid { grid-template-columns: 1fr; }
 }
 </style>
