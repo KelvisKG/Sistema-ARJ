@@ -202,25 +202,24 @@ defineProps({
   margin-bottom: 18px;
 }
 
-/* Tarjeta estilo analítico de alta gama con fondo oscuro sutil */
+/* Tarjeta KPI usando variables del sistema */
 .kpi-card-dark {
-  background: #0E1726;
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 16px 18px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color var(--trans-fast), box-shadow var(--trans-fast);
   display: flex;
   flex-direction: column;
 }
 
 .kpi-card-dark:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.35);
+  border-color: var(--border);
+  box-shadow: var(--shadow-md);
 }
 
 /* Header de la tarjeta */
@@ -234,36 +233,36 @@ defineProps({
 .kpi-icon-wrap {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  backdrop-filter: blur(8px);
 }
 
 .icon-green {
-  background: rgba(16, 185, 129, 0.16);
-  color: #10B981;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: var(--lgreen);
+  color: var(--green);
+  border: 1px solid var(--green);
+  opacity: 0.9;
 }
 
 .icon-blue {
-  background: rgba(37, 99, 235, 0.16);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid var(--blue);
 }
 
 .icon-gold {
-  background: rgba(245, 158, 11, 0.16);
-  color: #FBBF24;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: var(--lgold);
+  color: var(--gold);
+  border: 1px solid var(--gold);
 }
 
 .icon-red {
-  background: rgba(239, 68, 68, 0.16);
-  color: #F87171;
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: var(--lred);
+  color: var(--red);
+  border: 1px solid var(--red);
 }
 
 /* Badges en formato píldora */
@@ -273,40 +272,40 @@ defineProps({
   text-transform: capitalize;
   letter-spacing: 0.02em;
   padding: 3px 9px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .pill-green {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34D399;
-  border: 1px solid rgba(16, 185, 129, 0.22);
+  background: var(--lgreen);
+  color: var(--green);
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .pill-blue {
-  background: rgba(56, 189, 248, 0.12);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.3);
 }
 
 .pill-gold {
-  background: rgba(245, 158, 11, 0.12);
-  color: #FBBF24;
-  border: 1px solid rgba(245, 158, 11, 0.22);
+  background: var(--lgold);
+  color: var(--gold);
+  border: 1px solid rgba(217, 119, 6, 0.3);
 }
 
 .pill-red {
-  background: rgba(239, 68, 68, 0.12);
-  color: #F87171;
-  border: 1px solid rgba(239, 68, 68, 0.22);
+  background: var(--lred);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 /* Label de métrica */
 .kpi-label {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: var(--dgray);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -317,7 +316,7 @@ defineProps({
 .kpi-val {
   font-size: 26px;
   font-weight: 800;
-  color: #F8FAFC;
+  color: var(--text);
   line-height: 1.15;
   letter-spacing: -0.03em;
   margin-bottom: 6px;
@@ -326,7 +325,7 @@ defineProps({
 .val-unit {
   font-size: 14px;
   font-weight: 600;
-  color: #94A3B8;
+  color: var(--dgray);
 }
 
 /* Subtítulos compactos */
@@ -343,11 +342,11 @@ defineProps({
 }
 
 .sub-active {
-  color: #CBD5E1;
+  color: var(--text);
 }
 
 .sub-muted {
-  color: #64748B;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

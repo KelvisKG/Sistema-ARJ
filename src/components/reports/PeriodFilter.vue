@@ -97,10 +97,9 @@ function onSelectChange(val) {
 
 <style scoped>
 .period-filter-card-dark {
-  background: #0E1726;
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 14px 18px;
   margin-bottom: 18px;
   display: flex;
@@ -108,7 +107,7 @@ function onSelectChange(val) {
   align-items: center;
   flex-wrap: wrap;
   gap: 14px;
-  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-md);
 }
 
 .period-info {
@@ -120,10 +119,10 @@ function onSelectChange(val) {
 .period-icon-wrap {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: rgba(37, 99, 235, 0.16);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: var(--radius-md);
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,7 +139,7 @@ function onSelectChange(val) {
 
 .period-title {
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text);
   font-size: 14px;
   letter-spacing: -0.01em;
 }
@@ -151,10 +150,10 @@ function onSelectChange(val) {
   text-transform: capitalize;
   letter-spacing: 0.02em;
   padding: 2px 10px;
-  border-radius: 9999px;
-  background: rgba(245, 158, 11, 0.14);
-  color: #FBBF24;
-  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: var(--radius-full);
+  background: var(--lgold);
+  color: var(--gold);
+  border: 1px solid rgba(217, 119, 6, 0.28);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -162,7 +161,7 @@ function onSelectChange(val) {
 
 .period-sub {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -180,21 +179,21 @@ function onSelectChange(val) {
 
 .rp-select-dark {
   appearance: none;
-  background: #1E293B;
-  color: #F8FAFC;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 9999px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
   padding: 6px 32px 6px 14px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--trans-fast);
   outline: none;
 }
 
 .rp-select-dark:hover, .rp-select-dark:focus {
-  border-color: rgba(56, 189, 248, 0.5);
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 .select-chevron {
@@ -202,7 +201,7 @@ function onSelectChange(val) {
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94A3B8;
+  color: var(--dgray);
   pointer-events: none;
   font-size: 11px;
 }
@@ -214,41 +213,42 @@ function onSelectChange(val) {
 }
 
 .rp-date-dark {
-  background: #1E293B;
-  color: #F8FAFC;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 5px 8px;
   font-size: 11.5px;
   outline: none;
-  color-scheme: dark;
+  color-scheme: light dark;
 }
 
 .rp-date-dark:focus {
-  border-color: rgba(56, 189, 248, 0.5);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 .period-separator {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: var(--dgray);
 }
 
 .btn-apply-dark {
-  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  background: var(--blue);
   color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
+  border: none;
+  border-radius: var(--radius-sm);
   padding: 5px 12px;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  transition: var(--trans-fast);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
 }
 
 .btn-apply-dark:hover:not(:disabled) {
   filter: brightness(1.1);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
 }
 
 .btn-apply-dark:disabled {

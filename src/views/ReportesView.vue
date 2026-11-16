@@ -29,11 +29,26 @@
         @aplicar="cargarOrigen"
       />
 
+      <!-- ══ ALERTA STOCK CRÍTICO (Si hay agotados) ══ -->
+      <div v-if="stockCritico.agotados > 0" class="stock-alert-banner">
+        <div class="stock-alert-left">
+          <i class="ti ti-alert-triangle"></i>
+          <div>
+            <strong>{{ stockCritico.agotados }} producto{{ stockCritico.agotados !== 1 ? 's' : '' }} agotado{{ stockCritico.agotados !== 1 ? 's' : '' }}</strong>
+            <span class="stock-alert-msg">— Umbral crítico activo (≤ {{ stockCritico.umbral }} uds). Revisa inventario.</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" @click="sub = 'reorden'"><i class="ti ti-package"></i> Ver reorden</button>
+      </div>
+
       <!-- ══ HERO SECTION ══ -->
       <div class="hero-row">
         <!-- Columna izquierda: Revenue Hero Card -->
         <div class="hero-revenue-card">
-          <div class="hero-label"><i class="ti ti-report-money" style="margin-right:5px;color:#38BDF8;"></i>Ingresos del período</div>
+          <div class="hero-top-row">
+            <div class="hero-label"><i class="ti ti-report-money" style="margin-right:5px;color:var(--blue);"></i>Ingresos del período</div>
+            <span class="hero-company-pill">{{ nombreEmp }}</span>
+          </div>
           <div class="hero-amount">
             <span class="hero-currency">$</span>{{ (kpisPeriodo.totalVenta || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
           </div>
@@ -64,6 +79,23 @@
               <span class="hero-meta-val">{{ ventas.nHoy || 0 }}</span>
             </div>
           </div>
+
+          <!-- Barra de meta dentro del Hero (si hay meta) -->
+          <div v-if="metaEmpresa > 0" class="hero-goal-bar-wrap">
+            <div class="hero-goal-bar-header">
+              <span class="hero-goal-label"><i class="ti ti-target" style="color:var(--green);"></i> Meta {{ nombreEmp }} ({{ metasPer }})</span>
+              <span class="hero-goal-pct">{{ pctEmp.toFixed(1) }}%</span>
+            </div>
+            <div class="hero-goal-track">
+              <div class="hero-goal-fill" :style="{ width: Math.min(pctEmp, 100) + '%' }"></div>
+            </div>
+            <div class="hero-goal-sub">
+              <span>Vendido: <strong>{{ fmtUSD(ventasEmpresa) }}</strong></span>
+              <span>Meta: <strong>{{ fmtUSD(metaEmpresa) }}</strong></span>
+              <span v-if="faltaEmp > 0" class="text-gold">Faltan {{ fmtUSD(faltaEmp) }}</span>
+              <span v-else class="text-green">¡Meta superada!</span>
+            </div>
+          </div>
         </div>
 
         <!-- Columna derecha: Top clientes + últimas ventas -->
@@ -74,11 +106,11 @@
               <i class="ti ti-crown"></i>
               Top clientes del mes
             </div>
-            <div v-if="!ranking.top.length" class="empty-state-dark" style="padding:12px;font-size:12px;">
+            <div v-if="!ranking.top.length" class="empty-state-card" style="padding:12px;font-size:12px;">
               Sin ventas en el período
             </div>
             <div v-else>
-              <div v-for="(c, idx) in ranking.top.slice(0, 4)" :key="c.nombre" class="hero-client-row">
+              <div v-for="(c, idx) in ranking.top.slice(0, 3)" :key="c.nombre" class="hero-client-row">
                 <div class="client-avatar">{{ c.nombre.charAt(0).toUpperCase() }}</div>
                 <div class="client-info">
                   <div class="client-nm">{{ c.nombre }}</div>
@@ -95,11 +127,11 @@
               <i class="ti ti-receipt"></i>
               Últimas ventas
             </div>
-            <div v-if="!ventasRecientes.length" class="empty-state-dark" style="padding:12px;font-size:12px;">
+            <div v-if="!ventasRecientes.length" class="empty-state-card" style="padding:12px;font-size:12px;">
               Sin ventas recientes
             </div>
             <div v-else>
-              <div v-for="v in ventasRecientes.slice(0, 4)" :key="v.id" class="mini-sale-row">
+              <div v-for="v in ventasRecientes.slice(0, 3)" :key="v.id" class="mini-sale-row">
                 <div class="mini-sale-client">{{ v.cliente_nombre_snap || v.cliente }}</div>
                 <div class="mini-sale-val">{{ fmtUSD(v.total) }}</div>
               </div>
@@ -111,47 +143,48 @@
       <!-- ══ KPI STRIP ══ -->
       <div class="kpi-strip">
         <!-- 1. Margen catálogo -->
-        <div class="kpi-strip-card">
-          <div class="kpi-strip-label">Margen Catálogo</div>
+        <div class="kpi-strip-card" title="Margen teórico promedio de todo el catálogo a precio de lista vs costo landed">
+          <div class="kpi-strip-label"><i class="ti ti-percentage"></i> Margen Catálogo</div>
           <div class="kpi-strip-val">
             <span v-if="margenCatalogo != null">{{ margenCatalogo.toFixed(1) }}%</span>
-            <span v-else style="font-size:14px;color:#64748B;">—</span>
+            <span v-else style="font-size:14px;color:var(--text-muted);">—</span>
           </div>
           <div class="kpi-strip-sub">Teórico</div>
         </div>
         <!-- 2. Utilidad bruta -->
-        <div class="kpi-strip-card">
-          <div class="kpi-strip-label">Utilidad Bruta</div>
-          <div class="kpi-strip-val" style="font-size:17px;">{{ kpisPeriodo.utilVal }}</div>
-          <div class="kpi-strip-sub">{{ kpisPeriodo.utilSub }}</div>
+        <div class="kpi-strip-card" title="Utilidad bruta = Ventas del período − Costo landed congelado">
+          <div class="kpi-strip-label"><i class="ti ti-coin"></i> Utilidad Bruta</div>
+          <div class="kpi-strip-val" style="color:var(--green)">{{ kpisPeriodo.utilVal }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.utilSub">{{ kpisPeriodo.utilSub }}</div>
         </div>
         <!-- 3. Margen real -->
-        <div class="kpi-strip-card">
-          <div class="kpi-strip-label">Margen Real</div>
-          <div class="kpi-strip-val">{{ kpisPeriodo.margenVal }}</div>
-          <div class="kpi-strip-sub">{{ kpisPeriodo.margenSub }}</div>
+        <div class="kpi-strip-card" title="Margen efectivo sobre los productos realmente facturados">
+          <div class="kpi-strip-label"><i class="ti ti-chart-pie"></i> Margen Real</div>
+          <div class="kpi-strip-val" style="color:var(--gold)">{{ kpisPeriodo.margenVal }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.margenSub">{{ kpisPeriodo.margenSub }}</div>
         </div>
         <!-- 4. Punto de equilibrio -->
-        <div class="kpi-strip-card">
-          <div class="kpi-strip-label">Punto Equilibrio</div>
-          <div class="kpi-strip-val" style="font-size:17px;">{{ kpisPeriodo.peVal }}</div>
-          <div class="kpi-strip-sub">{{ kpisPeriodo.peSub }}</div>
+        <div class="kpi-strip-card" title="Monto de ventas necesario para cubrir los costos fijos al margen actual">
+          <div class="kpi-strip-label"><i class="ti ti-scale"></i> Punto Equilibrio</div>
+          <div class="kpi-strip-val">{{ kpisPeriodo.peVal }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.peSub">{{ kpisPeriodo.peSub }}</div>
         </div>
         <!-- 5. Costos fijos -->
-        <div class="kpi-strip-card">
-          <div class="kpi-strip-label">Costos Fijos</div>
-          <div class="kpi-strip-val" style="font-size:17px;">{{ fmtUSD(kpisPeriodo.cf || 0) }}</div>
-          <div class="kpi-strip-sub">{{ kpisPeriodo.cfSub }}</div>
+        <div class="kpi-strip-card" title="Costos fijos configurados para el período">
+          <div class="kpi-strip-label"><i class="ti ti-building-store"></i> Costos Fijos</div>
+          <div class="kpi-strip-val">{{ fmtUSD(kpisPeriodo.cf || 0) }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.cfSub">{{ kpisPeriodo.cfSub }}</div>
         </div>
         <!-- 6. Stock crítico -->
-        <div class="kpi-strip-card">
-          <div class="kpi-strip-label">Stock Crítico</div>
-          <div class="kpi-strip-val">{{ stockCritico.bajos || 0 }}</div>
+        <div class="kpi-strip-card" title="Productos con stock igual o inferior al umbral mínimo">
+          <div class="kpi-strip-label"><i class="ti ti-package"></i> Stock Crítico</div>
+          <div class="kpi-strip-val" :style="{ color: stockCritico.agotados > 0 ? 'var(--red)' : 'var(--text)' }">
+            {{ stockCritico.bajos || 0 }} <span style="font-size:12px;color:var(--text-muted);font-weight:600">bajos</span>
+          </div>
           <div class="kpi-strip-sub">
             <span
               v-if="stockCritico.agotados > 0"
-              class="kpi-strip-pill"
-              style="background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3);"
+              class="kpi-strip-pill pill-red"
             >{{ stockCritico.agotados }} agotado{{ stockCritico.agotados !== 1 ? 's' : '' }}</span>
             <span v-else>Sin agotados</span>
           </div>
@@ -277,45 +310,42 @@
 
     <!-- MODAL EQUIPO DE TRABAJO (v13.2) -->
     <div v-if="equipoAbierto" class="modal show" id="modal-equipo">
-      <div class="modal-content modal-content-dark" style="max-width:480px;text-align:left">
-        <div class="modal-header-dark">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span class="dash-icon-badge blue" style="width:32px;height:32px"><i class="ti ti-users"></i></span>
-            <h3 style="margin:0;font-size:17px;color:#F8FAFC;font-weight:700">Equipo de trabajo</h3>
-          </div>
-          <button class="btn-close-dark" @click="equipoAbierto = false"><i class="ti ti-x"></i></button>
+      <div class="modal-content" style="max-width:480px;text-align:left">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:12px">
+          <h3 style="margin:0;font-size:17px;color:var(--navy);font-weight:700"><i class="ti ti-users"></i> Equipo de trabajo</h3>
+          <button class="btn btn-secondary btn-sm" @click="equipoAbierto = false"><i class="ti ti-x"></i></button>
         </div>
-        <div class="modal-alert-dark">
-          <i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0;margin-top:2px"></i>
+        <div class="help-box" style="margin-bottom:14px;font-size:12px">
+          <i class="ti ti-info-circle"></i>
           <div>Esta lista es solo para <strong>ponerles metas</strong>. No crea usuarios que puedan entrar al sistema — eso se hace en Supabase.</div>
         </div>
-        <div class="modal-add-row">
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px">
           <div style="flex:1">
-            <label class="modal-label">Nombre</label>
-            <input v-model="eqNombre" type="text" class="modal-input" placeholder="Ej: PEDRO PEREZ" style="text-transform:uppercase" @keydown.enter.prevent="agregarAlEquipo">
+            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:4px">Nombre</label>
+            <input v-model="eqNombre" type="text" class="val-input" placeholder="Ej: PEDRO PEREZ" style="width:100%;text-transform:uppercase" @keydown.enter.prevent="agregarAlEquipo">
           </div>
           <div style="width:140px">
-            <label class="modal-label">Empresa</label>
-            <select v-model="eqEmpresa" class="modal-input">
+            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:4px">Empresa</label>
+            <select v-model="eqEmpresa" class="val-input" style="width:100%">
               <option value="directa">Venta Directa</option>
               <option value="dist">Distribuidora</option>
               <option value="ambas">Ambas</option>
             </select>
           </div>
-          <button class="btn-add-dark" @click="agregarAlEquipo"><i class="ti ti-plus"></i></button>
+          <button class="btn btn-primary" @click="agregarAlEquipo"><i class="ti ti-plus"></i></button>
         </div>
-        <div class="modal-team-list">
-          <div v-if="!equipo.length" class="empty-state-dark" style="padding:16px">Todavía no hay nadie en el equipo</div>
-          <div v-for="(t, i) in equipo" :key="t.nombre" class="team-member-row">
+        <div style="border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;max-height:260px;overflow-y:auto">
+          <div v-if="!equipo.length" style="padding:16px;text-align:center;color:var(--dgray);font-size:12px">Todavía no hay nadie en el equipo</div>
+          <div v-for="(t, i) in equipo" :key="t.nombre" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);gap:8px">
             <div style="min-width:0">
-              <div class="member-name">{{ t.nombre }}</div>
-              <div class="member-role">{{ { ambas: 'Ambas', directa: 'Venta Directa', dist: 'Distribuidora' }[t.empresa] || t.empresa }}</div>
+              <div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.nombre }}</div>
+              <div style="font-size:11px;color:var(--dgray)">{{ { ambas: 'Ambas', directa: 'Venta Directa', dist: 'Distribuidora' }[t.empresa] || t.empresa }}</div>
             </div>
-            <button class="btn-trash-dark" title="Quitar del equipo" @click="quitarDelEquipo(i)"><i class="ti ti-trash"></i></button>
+            <button class="btn btn-red btn-sm" title="Quitar del equipo" @click="quitarDelEquipo(i)"><i class="ti ti-trash"></i></button>
           </div>
         </div>
-        <div class="modal-footer-dark">
-          <button class="btn-secondary-dark" @click="equipoAbierto = false">Cerrar</button>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+          <button class="btn btn-secondary" @click="equipoAbierto = false">Cerrar</button>
         </div>
       </div>
     </div>
@@ -872,15 +902,22 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
   align-items: center;
   gap: 10px;
   margin-bottom: 4px;
+  color: var(--navy);
+  font-weight: 800;
 }
 .page-title i {
-  color: #38BDF8;
+  color: var(--blue);
+}
+.page-sub {
+  color: var(--dgray);
+  font-size: 13px;
 }
 
+/* Sub-navegación unificada con el sistema */
 .report-nav-bar {
   display: flex;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
   overflow-x: auto;
   flex-wrap: wrap;
   padding-bottom: 4px;
@@ -890,152 +927,262 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #101B2E;
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9999px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
   padding: 8px 16px;
-  color: #94A3B8;
+  color: var(--dgray);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: all var(--trans-fast);
+  box-shadow: var(--shadow-xs);
 }
 
 .nav-pill:hover {
-  color: #F8FAFC;
-  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+  border-color: var(--border-hover);
   transform: translateY(-1px);
 }
 
 .nav-pill.active {
-  background: #1E293B;
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%);
-  color: #38BDF8;
-  border-color: rgba(56, 189, 248, 0.4);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+  background: var(--lblue);
+  color: var(--blue);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Alerta stock crítico banner */
+.stock-alert-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--lred);
+  border: 1px solid var(--red);
+  border-left: 4px solid var(--red);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  color: var(--red);
+  font-size: 13px;
+}
+.stock-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stock-alert-left i {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.stock-alert-msg {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: 6px;
 }
 
 /* ══ HERO SECTION ══ */
 .hero-row {
   display: grid;
-  grid-template-columns: 1.8fr 1fr;
+  grid-template-columns: 1.65fr 1fr;
   gap: 16px;
   margin-bottom: 16px;
 }
-@media (max-width: 900px) { .hero-row { grid-template-columns: 1fr; } }
+@media (max-width: 960px) {
+  .hero-row { grid-template-columns: 1fr; }
+}
 
 .hero-revenue-card {
-  background: linear-gradient(145deg, #0D1B30 0%, #0A1428 50%, #071020 100%);
-  border: 1px solid rgba(56, 189, 248, 0.15);
-  border-radius: 18px;
-  padding: 28px 32px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
-.hero-revenue-card::before {
-  content: '';
-  position: absolute;
-  top: -60px; right: -60px;
-  width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 70%);
-  pointer-events: none;
-}
-.hero-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+
+.hero-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
-.hero-amount {
-  font-size: 48px;
-  font-weight: 800;
-  color: #F8FAFC;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  margin-bottom: 10px;
+
+.hero-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dgray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
 }
+
+.hero-company-pill {
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hero-amount {
+  font-size: 46px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
 .hero-amount .hero-currency {
   font-size: 28px;
   font-weight: 600;
-  color: #94A3B8;
+  color: var(--dgray);
   margin-right: 2px;
 }
+
 .hero-var-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 12px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 12px;
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
-.hero-var-pill.up { background: rgba(16,185,129,0.15); color: #34D399; border: 1px solid rgba(16,185,129,0.3); }
-.hero-var-pill.down { background: rgba(239,68,68,0.15); color: #F87171; border: 1px solid rgba(239,68,68,0.3); }
-.hero-var-pill.neutral { background: rgba(100,116,139,0.15); color: #94A3B8; border: 1px solid rgba(100,116,139,0.3); }
+.hero-var-pill.up { background: var(--lgreen); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+.hero-var-pill.down { background: var(--lred); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+.hero-var-pill.neutral { background: var(--gray); color: var(--dgray); border: 1px solid var(--border); }
+
 .hero-meta {
-  font-size: 12px;
-  color: #64748B;
-  margin-top: 8px;
   display: flex;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
 }
 .hero-meta-item { display: flex; flex-direction: column; gap: 2px; }
-.hero-meta-label { font-size: 10.5px; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; }
-.hero-meta-val { font-size: 14px; font-weight: 700; color: #CBD5E1; }
+.hero-meta-label { font-size: 11px; color: var(--dgray); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.hero-meta-val { font-size: 15px; font-weight: 800; color: var(--text); }
+
+/* Barra de progreso de meta dentro del hero */
+.hero-goal-bar-wrap {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.hero-goal-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.hero-goal-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dgray);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hero-goal-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--green);
+}
+.hero-goal-track {
+  background: var(--gray);
+  border-radius: var(--radius-full);
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.hero-goal-fill {
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.4s ease;
+}
+.hero-goal-sub {
+  font-size: 11px;
+  color: var(--dgray);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.text-gold { color: var(--gold) !important; font-weight: 700; }
+.text-green { color: var(--green) !important; font-weight: 700; }
 
 /* Panel lateral del hero */
 .hero-side-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
+
 .side-panel-card {
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  padding: 16px 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
   flex: 1;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
+
 .side-panel-title {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: #64748B;
+  color: var(--navy);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  margin-bottom: 12px;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.side-panel-title i { color: #38BDF8; font-size: 14px; }
+.side-panel-title i { color: var(--blue); font-size: 15px; }
 
 /* Top clientes en hero */
 .hero-client-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--gray);
 }
 .hero-client-row:last-child { border-bottom: none; }
+
 .client-avatar {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: linear-gradient(135deg, #1E3A5F 0%, #0D2544 100%);
-  border: 1px solid rgba(56,189,248,0.2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; color: #38BDF8; flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--lblue);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--blue);
+  flex-shrink: 0;
 }
 .client-info { flex: 1; min-width: 0; }
-.client-nm { font-size: 12px; font-weight: 600; color: #F8FAFC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.client-purchases { font-size: 10.5px; color: #64748B; }
-.client-monto { font-size: 13px; font-weight: 700; color: #34D399; white-space: nowrap; }
+.client-nm { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.client-purchases { font-size: 10.5px; color: var(--dgray); }
+.client-monto { font-size: 13px; font-weight: 700; color: var(--green); white-space: nowrap; }
 
 /* Últimas ventas mini */
 .mini-sale-row {
@@ -1043,11 +1190,11 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
   justify-content: space-between;
   align-items: center;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--gray);
 }
 .mini-sale-row:last-child { border-bottom: none; }
-.mini-sale-client { font-size: 12px; font-weight: 600; color: #CBD5E1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
-.mini-sale-val { font-size: 12px; font-weight: 700; color: #F8FAFC; }
+.mini-sale-client { font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+.mini-sale-val { font-size: 12.5px; font-weight: 700; color: var(--navy); }
 
 /* ══ KPI STRIP ══ */
 .kpi-strip {
@@ -1060,23 +1207,58 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
 @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
 
 .kpi-strip-card {
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  padding: 14px 16px;
-  transition: border-color 0.2s, transform 0.2s;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 86px;
+  transition: transform var(--trans-fast), box-shadow var(--trans-fast);
 }
-.kpi-strip-card:hover { border-color: rgba(255,255,255,0.18); transform: translateY(-1px); }
-.kpi-strip-label { font-size: 10px; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-.kpi-strip-val { font-size: 20px; font-weight: 800; color: #F8FAFC; letter-spacing: -0.02em; line-height: 1.1; }
-.kpi-strip-sub { font-size: 10px; color: #64748B; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpi-strip-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-hover);
+}
+.kpi-strip-label {
+  font-size: 11px;
+  color: var(--dgray);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.kpi-strip-label i { color: var(--blue); }
+.kpi-strip-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+.kpi-strip-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .kpi-strip-pill {
   display: inline-block;
   padding: 1px 7px;
-  border-radius: 9999px;
-  font-size: 9.5px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
   font-weight: 700;
-  margin-bottom: 4px;
+}
+.pill-red {
+  background: var(--lred);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 /* ══ FILA DE ANÁLISIS ══ */
@@ -1090,155 +1272,60 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
 
 /* Top productos panel */
 .top-prod-panel {
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 18px 20px;
-  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
-}
-
-/* Grid para analítica inferior */
-.dash-grid-analytics {
-  display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  gap: 16px;
-  margin-top: 18px;
-}
-
-@media (max-width: 900px) {
-  .dash-grid-analytics {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Dark card base */
-.dash-card-dark {
-  background: #0E1726;
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 18px 20px;
-  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
-  margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 .dash-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--gray);
 }
-
 .dash-title-wrap {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
-
 .dash-icon-badge {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  flex-shrink: 0;
+  background: var(--lblue);
+  color: var(--blue);
 }
-.dash-icon-badge.blue {
-  background: rgba(56, 189, 248, 0.12);
-  color: #38BDF8;
-}
-.dash-icon-badge.purple {
-  background: rgba(168, 85, 247, 0.12);
-  color: #A855F7;
-}
-
 .dash-card-title {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: #F8FAFC;
-  letter-spacing: 0.3px;
+  color: var(--navy);
 }
-
 .dash-card-subtitle {
   font-size: 11px;
-  color: #64748B;
+  color: var(--dgray);
   display: block;
   margin-top: 2px;
 }
-
 .dash-pill-badge {
   padding: 3px 10px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 700;
-}
-.dash-pill-badge.blue {
-  background: rgba(56, 189, 248, 0.12);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-}
-.dash-pill-badge.purple {
-  background: rgba(168, 85, 247, 0.12);
-  color: #C084FC;
-  border: 1px solid rgba(168, 85, 247, 0.25);
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.25);
 }
 
-/* Empty states */
-.empty-state-dark {
-  padding: 28px 16px;
-  text-align: center;
-  color: #64748B;
-  font-size: 13px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-.empty-state-dark i {
-  font-size: 26px;
-  opacity: 0.6;
-}
-
-.empty-card {
-  text-align: center;
-  padding: 48px 20px;
-}
-.empty-icon-wrap {
-  display: inline-flex;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  margin-bottom: 14px;
-}
-.empty-icon-wrap.blue {
-  background: rgba(56, 189, 248, 0.12);
-  color: #38BDF8;
-}
-.empty-icon-wrap.amber {
-  background: rgba(251, 191, 36, 0.12);
-  color: #FBBF24;
-}
-.empty-title {
-  color: #F8FAFC;
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: 700;
-}
-.empty-desc {
-  color: #94A3B8;
-  margin: 0;
-  font-size: 13px;
-}
-
-/* Top productos */
+/* Top productos list */
 .top-prods-list {
   display: flex;
   flex-direction: column;
@@ -1263,13 +1350,13 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
   min-width: 0;
 }
 .top-prod-rank {
-  color: #64748B;
+  color: var(--dgray);
   font-size: 11px;
   font-weight: 700;
   width: 22px;
 }
 .top-prod-name {
-  color: #F8FAFC;
+  color: var(--text);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -1282,229 +1369,66 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
   white-space: nowrap;
 }
 .top-prod-units {
-  background: rgba(255, 255, 255, 0.06);
-  color: #94A3B8;
+  background: var(--gray);
+  color: var(--dgray);
   padding: 1px 7px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
 }
 .top-prod-total {
-  color: #38BDF8;
+  color: var(--navy);
   font-weight: 700;
   font-size: 12.5px;
-  font-family: monospace;
 }
 .top-prod-bar-track {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 9999px;
+  background: var(--gray);
+  border-radius: var(--radius-full);
   height: 7px;
   overflow: hidden;
 }
 .top-prod-bar-fill {
-  background: linear-gradient(90deg, #38BDF8 0%, #2563EB 100%);
+  background: linear-gradient(90deg, var(--blue), var(--navy));
   height: 100%;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   transition: width 0.3s ease;
 }
 
-/* Últimas ventas */
-.recent-sales-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 380px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.recent-sale-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 9px 10px;
-  border-radius: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  transition: background 0.15s ease;
-}
-.recent-sale-row:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-.recent-sale-client {
-  min-width: 0;
-}
-.client-name {
-  color: #F8FAFC;
-  font-weight: 600;
-  font-size: 12.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.client-sub {
-  color: #64748B;
-  font-size: 11px;
-  margin-top: 2px;
-}
-.recent-sale-val {
-  color: #34D399;
-  font-weight: 700;
+/* Empty states */
+.empty-state-card {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--dgray);
   font-size: 13px;
-  font-family: monospace;
-  white-space: nowrap;
-  margin-left: 10px;
 }
-
-/* Modal dark styles */
-.modal-content-dark {
-  background: #0E1726 !important;
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6) !important;
-  color: #F8FAFC !important;
+.empty-card {
+  text-align: center;
+  padding: 48px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
-.modal-header-dark {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 12px;
-}
-.btn-close-dark {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94A3B8;
-  border-radius: 8px;
-  width: 30px;
-  height: 30px;
-  display: flex;
+.empty-icon-wrap {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-close-dark:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #F8FAFC;
-}
-.modal-alert-dark {
-  background: rgba(251, 191, 36, 0.08);
-  border-left: 3px solid #FBBF24;
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
-  font-size: 11.5px;
-  color: #FDE68A;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  line-height: 1.4;
-}
-.modal-add-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
+  font-size: 24px;
   margin-bottom: 14px;
 }
-.modal-label {
-  font-size: 11px;
-  color: #94A3B8;
-  font-weight: 500;
-  display: block;
-  margin-bottom: 4px;
+.empty-icon-wrap.blue { background: var(--lblue); color: var(--blue); }
+.empty-icon-wrap.amber { background: var(--lgold); color: var(--gold); }
+.empty-title {
+  color: var(--text);
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
 }
-.modal-input {
-  width: 100%;
-  background: #0A111E;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 8px 10px;
-  color: #F8FAFC;
-  font-size: 12.5px;
-  box-sizing: border-box;
-}
-.modal-input:focus {
-  outline: none;
-  border-color: #38BDF8;
-}
-.btn-add-dark {
-  background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
-  color: #FFF;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-weight: 600;
-  height: 35px;
-}
-.btn-add-dark:hover {
-  background: linear-gradient(135deg, #0369A1 0%, #075985 100%);
-}
-.modal-team-list {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  overflow: hidden;
-  max-height: 260px;
-  overflow-y: auto;
-  background: rgba(0, 0, 0, 0.2);
-}
-.team-member-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  gap: 8px;
-}
-.team-member-row:last-child {
-  border-bottom: none;
-}
-.member-name {
-  font-weight: 600;
+.empty-desc {
+  color: var(--dgray);
+  margin: 0;
   font-size: 13px;
-  color: #F8FAFC;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.member-role {
-  font-size: 11px;
-  color: #94A3B8;
-  margin-top: 1px;
-}
-.btn-trash-dark {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #F87171;
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-trash-dark:hover {
-  background: rgba(239, 68, 68, 0.25);
-  color: #FFF;
-}
-.modal-footer-dark {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 12px;
-}
-.btn-secondary-dark {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #94A3B8;
-  border-radius: 8px;
-  padding: 7px 16px;
-  cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.btn-secondary-dark:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #F8FAFC;
 }
 </style>

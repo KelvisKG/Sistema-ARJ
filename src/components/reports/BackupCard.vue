@@ -120,23 +120,24 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 </script>
 
 <style scoped>
+/* ── Card wrapper ───────────────────────────────────────────── */
 .dash-card-dark {
-  background: #0E1726;
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 18px 20px;
-  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-sm);
   margin-bottom: 18px;
 }
 
+/* ── Header ─────────────────────────────────────────────────── */
 .dash-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .dash-title-wrap {
@@ -148,33 +149,35 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 .dash-icon-badge {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
+  flex-shrink: 0;
 }
 
 .blue-glow {
-  background: rgba(37, 99, 235, 0.16);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid var(--blue);
 }
 
 .dash-card-title {
   font-size: 15px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--navy);
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .dash-card-sub {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
+/* ── Status grid (cloud + local) ───────────────────────────── */
 .backup-status-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -189,17 +192,27 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 }
 
 .backup-box-cloud {
-  background: rgba(16, 185, 129, 0.06);
-  border: 1px solid rgba(16, 185, 129, 0.18);
-  border-radius: 12px;
+  background: var(--lgreen);
+  border: 1px solid var(--green);
+  border-radius: var(--radius-md);
   padding: 14px 16px;
+  transition: box-shadow var(--trans-fast);
+}
+
+.backup-box-cloud:hover {
+  box-shadow: var(--shadow-sm);
 }
 
 .backup-box-hand {
-  background: rgba(37, 99, 235, 0.06);
-  border: 1px solid rgba(56, 189, 248, 0.18);
-  border-radius: 12px;
+  background: var(--lblue);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-md);
   padding: 14px 16px;
+  transition: box-shadow var(--trans-fast);
+}
+
+.backup-box-hand:hover {
+  box-shadow: var(--shadow-sm);
 }
 
 .box-title-row {
@@ -212,27 +225,29 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 .box-title {
   font-size: 13px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text);
 }
 
+/* ── Semantic icon colors ───────────────────────────────────── */
 .icon-green {
-  color: #34D399;
+  color: var(--green);
 }
 
 .icon-blue {
-  color: #38BDF8;
+  color: var(--blue);
 }
 
 .icon-gold {
-  color: #FBBF24;
+  color: var(--gold);
 }
 
 .box-description {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: var(--dgray);
   line-height: 1.5;
 }
 
+/* ── Count pills (record badges) ────────────────────────────── */
 .sync-count-strip {
   display: flex;
   gap: 6px;
@@ -242,28 +257,29 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 
 .count-pill {
   font-size: 10.5px;
-  padding: 2px 7px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 6px;
-  color: #CBD5E1;
+  padding: 2px 8px;
+  background: var(--lblue);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-full);
+  color: var(--blue);
 }
 
 .count-pill strong {
-  color: #34D399;
+  color: var(--blue);
 }
 
-/* Sección de descargas manuales */
+/* ── Manual downloads section ───────────────────────────────── */
 .manual-downloads-card {
-  background: #0B1220;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   padding: 16px;
 }
 
 .downloads-header-title {
   font-size: 12px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--navy);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 12px;
@@ -281,23 +297,29 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
   }
 }
 
+/* ── Backup action tiles ────────────────────────────────────── */
 .btn-backup-item {
-  background: #101B2E;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   padding: 12px 14px;
   display: flex;
   align-items: center;
   gap: 12px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.2s;
+  transition: border-color var(--trans-fast), background var(--trans-fast), transform var(--trans-fast), box-shadow var(--trans-fast);
 }
 
 .btn-backup-item:hover:not(:disabled) {
-  background: #17263F;
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
+  background: var(--lblue);
+  border-color: var(--blue);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-backup-item:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-backup-item:disabled {
@@ -308,13 +330,20 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 .btn-backup-icon {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
+  transition: background var(--trans-fast), border-color var(--trans-fast);
+}
+
+.btn-backup-item:hover:not(:disabled) .btn-backup-icon {
+  background: var(--lblue);
+  border-color: var(--blue);
 }
 
 .btn-backup-text {
@@ -325,23 +354,24 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 .backup-main-lbl {
   font-size: 12.5px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text);
 }
 
 .backup-sub-lbl {
   font-size: 10.5px;
-  color: #94A3B8;
+  color: var(--text-muted);
   margin-top: 1px;
 }
 
+/* ── Routine advice notice ──────────────────────────────────── */
 .routine-advice-box {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  border-radius: 8px;
+  background: var(--lgold);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-md);
   padding: 10px 14px;
   margin-top: 14px;
   font-size: 11.5px;
-  color: #FBBF24;
+  color: var(--gold);
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -349,23 +379,24 @@ defineEmits(['backup-semanal', 'backup-completo', 'backup-inventario']);
 }
 
 .routine-advice-box strong {
-  color: #FDE68A;
+  color: var(--gold);
+  font-weight: 700;
 }
 
-/* Píldoras reutilizables */
+/* ── Reusable pills ─────────────────────────────────────────── */
 .kpi-pill {
   font-size: 10px;
   font-weight: 700;
   padding: 2px 8px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .pill-green {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34D399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: var(--lgreen);
+  color: var(--green);
+  border: 1px solid var(--green);
 }
 </style>

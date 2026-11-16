@@ -127,12 +127,11 @@ function formatearFecha(d) {
 
 <style scoped>
 .dash-card-dark {
-  background: #0E1726;
-  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 18px 20px;
-  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-sm);
   margin-bottom: 18px;
 }
 
@@ -142,7 +141,7 @@ function formatearFecha(d) {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .dash-title-wrap {
@@ -154,7 +153,7 @@ function formatearFecha(d) {
 .dash-icon-badge {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -162,22 +161,22 @@ function formatearFecha(d) {
 }
 
 .gold-glow {
-  background: rgba(245, 158, 11, 0.16);
-  color: #FBBF24;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: var(--lgold);
+  color: var(--gold);
+  border: 1px solid rgba(217, 119, 6, 0.3);
 }
 
 .dash-card-title {
   font-size: 15px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--navy);
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .dash-card-sub {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: var(--dgray);
   margin-top: 2px;
 }
 
@@ -209,7 +208,7 @@ function formatearFecha(d) {
 .column-title {
   font-size: 13px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -223,16 +222,16 @@ function formatearFecha(d) {
 
 /* Ítems del ranking de clientes */
 .ranking-item-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   padding: 10px 12px;
-  transition: all 0.2s;
+  transition: var(--trans-fast);
 }
 
 .ranking-item-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--card-bg);
+  border-color: var(--gold);
 }
 
 .ranking-item-top {
@@ -259,7 +258,7 @@ function formatearFecha(d) {
 .customer-name {
   font-size: 12.5px;
   font-weight: 600;
-  color: #F8FAFC;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -268,22 +267,22 @@ function formatearFecha(d) {
 .customer-amount {
   font-size: 14px;
   font-weight: 800;
-  color: #FBBF24;
+  color: var(--gold);
   letter-spacing: -0.01em;
 }
 
 .ranking-track {
   height: 5px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 9999px;
+  background: var(--lgold);
+  border-radius: var(--radius-full);
   overflow: hidden;
   margin-bottom: 6px;
 }
 
 .ranking-fill {
   height: 100%;
-  background: linear-gradient(90deg, #F59E0B, #FBBF24);
-  border-radius: 9999px;
+  background: var(--gold);
+  border-radius: var(--radius-full);
   transition: width 0.4s ease;
 }
 
@@ -292,27 +291,34 @@ function formatearFecha(d) {
   justify-content: space-between;
   align-items: center;
   font-size: 10.5px;
-  color: #94A3B8;
+  color: var(--dgray);
 }
 
 .meta-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  background: var(--lblue);
+  color: var(--blue);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.meta-date {
+  color: var(--dgray);
 }
 
 /* Clientes dormidos */
 .dormant-item-card {
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.16);
-  border-radius: 10px;
+  background: var(--lred);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
   padding: 10px 12px;
-  transition: all 0.2s;
+  transition: var(--trans-fast);
 }
 
 .dormant-item-card:hover {
-  background: rgba(239, 68, 68, 0.09);
-  border-color: rgba(239, 68, 68, 0.25);
+  border-color: var(--red);
 }
 
 .dormant-item-top {
@@ -325,7 +331,7 @@ function formatearFecha(d) {
 .dormant-name {
   font-weight: 600;
   font-size: 12px;
-  color: #F8FAFC;
+  color: var(--text);
 }
 
 .dormant-meta-row {
@@ -333,18 +339,18 @@ function formatearFecha(d) {
   gap: 6px;
   align-items: center;
   font-size: 10.5px;
-  color: #94A3B8;
+  color: var(--dgray);
   flex-wrap: wrap;
 }
 
 .dormant-meta-row strong {
-  color: #CBD5E1;
+  color: var(--text);
 }
 
 .empty-state {
   padding: 20px;
   text-align: center;
-  color: #64748B;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -353,21 +359,21 @@ function formatearFecha(d) {
   font-size: 10px;
   font-weight: 700;
   padding: 2px 8px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .pill-gold {
-  background: rgba(245, 158, 11, 0.15);
-  color: #FBBF24;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: var(--lgold);
+  color: var(--gold);
+  border: 1px solid rgba(217, 119, 6, 0.3);
 }
 
 .pill-red {
-  background: rgba(239, 68, 68, 0.15);
-  color: #F87171;
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: var(--lred);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 </style>
