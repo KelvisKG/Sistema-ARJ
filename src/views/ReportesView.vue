@@ -5,14 +5,22 @@
         <h1 class="page-title"><i class="ti ti-chart-bar"></i> Reportes y Dashboard</h1>
         <p class="page-sub">Resumen del día · Comparativa entre empresas · Ranking · Reorden · Backup</p>
       </div>
+      <div class="dash-header-actions no-print">
+        <button class="btn btn-secondary btn-sm" title="Imprimir reporte o exportar PDF" @click="imprimirReporte">
+          <i class="ti ti-printer"></i> Imprimir Reporte
+        </button>
+      </div>
     </div>
 
     <!-- Sub-navegación de reportes en píldoras modernas -->
-    <div class="report-nav-bar">
+    <div class="report-nav-bar no-print">
       <button :class="['search-tab nav-pill', { active: sub === 'resumen' }]" @click="sub = 'resumen'"><i class="ti ti-dashboard"></i> Resumen</button>
       <button :class="['search-tab nav-pill', { active: sub === 'comparativa' }]" @click="sub = 'comparativa'"><i class="ti ti-arrows-left-right"></i> Comparar empresas</button>
       <button :class="['search-tab nav-pill', { active: sub === 'ranking' }]" @click="sub = 'ranking'"><i class="ti ti-trophy"></i> Ranking clientes</button>
-      <button :class="['search-tab nav-pill', { active: sub === 'reorden' }]" @click="sub = 'reorden'"><i class="ti ti-package"></i> Qué reordenar</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'reorden' }]" @click="sub = 'reorden'">
+        <i class="ti ti-package"></i> Qué reordenar
+        <span v-if="stockCritico.agotados > 0" class="tab-count-badge">{{ stockCritico.agotados }}</span>
+      </button>
       <button :class="['search-tab nav-pill', { active: sub === 'backup' }]" @click="sub = 'backup'"><i class="ti ti-database"></i> Respaldos</button>
     </div>
 
@@ -30,7 +38,7 @@
       />
 
       <!-- ══ ALERTA STOCK CRÍTICO (Si hay agotados) ══ -->
-      <div v-if="stockCritico.agotados > 0" class="stock-alert-banner">
+      <div v-if="stockCritico.agotados > 0" class="stock-alert-banner no-print">
         <div class="stock-alert-left">
           <i class="ti ti-alert-triangle"></i>
           <div>
@@ -66,6 +74,14 @@
               <span class="hero-meta-label">Facturas</span>
               <span class="hero-meta-val">{{ kpisPeriodo.nFacts || 0 }}</span>
             </div>
+            <div class="hero-meta-item" title="Promedio facturado por cliente/venta">
+              <span class="hero-meta-label">Ticket promedio</span>
+              <span class="hero-meta-val font-blue">{{ fmtUSD(ticketPromedio) }}</span>
+            </div>
+            <div class="hero-meta-item" title="Estimación de facturación al cierre del mes al ritmo actual">
+              <span class="hero-meta-label">Proyección mes</span>
+              <span class="hero-meta-val font-green">{{ fmtUSD(proyeccionMes) }}</span>
+            </div>
             <div class="hero-meta-item">
               <span class="hero-meta-label">Mes anterior</span>
               <span class="hero-meta-val">${{ (compMeses.ant || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
@@ -73,10 +89,6 @@
             <div class="hero-meta-item">
               <span class="hero-meta-label">Hoy</span>
               <span class="hero-meta-val">${{ (ventas.totHoy || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
-            </div>
-            <div class="hero-meta-item">
-              <span class="hero-meta-label">Facturas hoy</span>
-              <span class="hero-meta-val">{{ ventas.nHoy || 0 }}</span>
             </div>
           </div>
 
@@ -110,7 +122,13 @@
               Sin ventas en el período
             </div>
             <div v-else>
-              <div v-for="(c, idx) in ranking.top.slice(0, 3)" :key="c.nombre" class="hero-client-row">
+              <div
+                v-for="(c, idx) in ranking.top.slice(0, 3)"
+                :key="c.nombre"
+                class="hero-client-row clickable-row"
+                title="Clic para ver módulo de clientes"
+                @click="irAClientes"
+              >
                 <div class="client-avatar">{{ c.nombre.charAt(0).toUpperCase() }}</div>
                 <div class="client-info">
                   <div class="client-nm">{{ c.nombre }}</div>
@@ -131,9 +149,18 @@
               Sin ventas recientes
             </div>
             <div v-else>
-              <div v-for="v in ventasRecientes.slice(0, 3)" :key="v.id" class="mini-sale-row">
+              <div
+                v-for="v in ventasRecientes.slice(0, 3)"
+                :key="v.id"
+                class="mini-sale-row clickable-row"
+                title="Clic para ver detalle de la factura"
+                @click="verFactura(v)"
+              >
                 <div class="mini-sale-client">{{ v.cliente_nombre_snap || v.cliente }}</div>
-                <div class="mini-sale-val">{{ fmtUSD(v.total) }}</div>
+                <div class="mini-sale-val">
+                  {{ fmtUSD(v.total) }}
+                  <i class="ti ti-chevron-right chevron-mini"></i>
+                </div>
               </div>
             </div>
           </div>
@@ -191,6 +218,12 @@
         </div>
       </div>
 
+      <!-- ══ CUADRO ESTADÍSTICO: DINÁMICA DIARIA DE FACTURACIÓN ══ -->
+      <SalesDynamicChart
+        :facturas="validas.filter(f => f.empresa === store.empresa)"
+        :etiqueta="origen.etiqueta"
+      />
+
       <!-- ══ FILA DE ANÁLISIS (2 columnas) ══ -->
       <div class="analysis-row">
         <!-- Izquierda: Importado vs Local + Comparativa meses -->
@@ -214,30 +247,50 @@
               <span class="dash-icon-badge blue"><i class="ti ti-chart-bar"></i></span>
               <div>
                 <h3 class="dash-card-title">Productos más vendidos</h3>
-                <span class="dash-card-subtitle">Ranking por volumen en el período</span>
+                <span class="dash-card-subtitle">Ranking por {{ criterioTop === 'total' ? 'monto en USD' : 'unidades vendidas' }}</span>
               </div>
             </div>
-            <span class="dash-pill-badge blue">{{ top.length }} items</span>
+            <div class="top-prod-toggle">
+              <button
+                :class="['toggle-pill', { active: criterioTop === 'total' }]"
+                @click="criterioTop = 'total'"
+              >
+                Por $
+              </button>
+              <button
+                :class="['toggle-pill', { active: criterioTop === 'cant' }]"
+                @click="criterioTop = 'cant'"
+              >
+                Por Uds
+              </button>
+            </div>
           </div>
 
-          <div v-if="!top.length" class="empty-state-dark">
-            <i class="ti ti-chart-pie-off"></i>
-            <span>Sin ventas registradas en este período</span>
+          <div v-if="!topOrdenado.length" class="empty-state-card">
+            <i class="ti ti-chart-pie-off" style="font-size:24px;opacity:0.5;margin-bottom:6px"></i>
+            <div>Sin ventas registradas en este período</div>
           </div>
           <div v-else class="top-prods-list">
-            <div v-for="(p, idx) in top.slice(0, 8)" :key="p.cod" class="top-prod-row">
+            <div v-for="(p, idx) in topOrdenado.slice(0, 8)" :key="p.cod" class="top-prod-row">
               <div class="top-prod-header">
                 <div class="top-prod-info">
                   <span class="top-prod-rank">#{{ idx + 1 }}</span>
                   <span class="top-prod-name" :title="p.desc || p.cod">{{ p.desc || p.cod }}</span>
                 </div>
                 <div class="top-prod-numbers">
-                  <span class="top-prod-units">{{ p.cant }} ud</span>
-                  <span class="top-prod-total">{{ fmtUSD(p.total) }}</span>
+                  <span class="top-prod-units" :class="{ 'units-highlight': criterioTop === 'cant' }">{{ p.cant }} ud</span>
+                  <span class="top-prod-total" :class="{ 'total-highlight': criterioTop === 'total' }">{{ fmtUSD(p.total) }}</span>
                 </div>
               </div>
               <div class="top-prod-bar-track">
-                <div class="top-prod-bar-fill" :style="{ width: (p.total / (top[0].total || 1)) * 100 + '%' }"></div>
+                <div
+                  class="top-prod-bar-fill"
+                  :style="{
+                    width: criterioTop === 'total'
+                      ? (p.total / (topOrdenado[0].total || 1)) * 100 + '%'
+                      : (p.cant / (topOrdenado[0].cant || 1)) * 100 + '%'
+                  }"
+                ></div>
               </div>
             </div>
           </div>
@@ -265,15 +318,12 @@
       />
     </div>
 
-    <!-- ═══ COMPARATIVA ENTRE EMPRESAS ═══ -->
+    <!-- ═══ COMPARATIVA ENTRE EMPRESAS (Activada con datos reales) ═══ -->
     <div v-if="sub === 'comparativa'">
-      <div class="dash-card-dark empty-card">
-        <div class="empty-icon-wrap blue">
-          <i class="ti ti-arrows-left-right"></i>
-        </div>
-        <h3 class="empty-title">Venta Directa vs Distribuidora — Este mes</h3>
-        <p class="empty-desc">Sin ventas registradas todavía</p>
-      </div>
+      <CompanyComparison
+        :todas-facturas="store.todasFacturas"
+        :etiqueta-periodo="origen.etiqueta"
+      />
     </div>
 
     <!-- ═══ RANKING DE CLIENTES ═══ -->
@@ -284,15 +334,13 @@
       />
     </div>
 
-    <!-- ═══ REORDEN ═══ -->
+    <!-- ═══ REORDEN (Activado con asistente de compras) ═══ -->
     <div v-if="sub === 'reorden'">
-      <div class="dash-card-dark empty-card">
-        <div class="empty-icon-wrap amber">
-          <i class="ti ti-package"></i>
-        </div>
-        <h3 class="empty-title">Productos que debes reordenar pronto</h3>
-        <p class="empty-desc">El cálculo de reorden se activará cuando haya historial de ventas real</p>
-      </div>
+      <ReorderReport
+        :productos="store.productos"
+        :empresa="store.empresa"
+        :ventas-items="itsMes || []"
+      />
     </div>
 
     <!-- ═══ RESPALDOS ═══ -->
@@ -372,10 +420,46 @@ import ComparisonCards from '../components/reports/ComparisonCards.vue';
 import SalesGoalsCard from '../components/reports/SalesGoalsCard.vue';
 import CustomerRankingCard from '../components/reports/CustomerRankingCard.vue';
 import BackupCard from '../components/reports/BackupCard.vue';
+import ReorderReport from '../components/reports/ReorderReport.vue';
+import CompanyComparison from '../components/reports/CompanyComparison.vue';
+import SalesDynamicChart from '../components/reports/SalesDynamicChart.vue';
 
 const store = useArjStore();
 const sub = ref('resumen');
 const nombreEmp = computed(() => (store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'));
+
+// Criterio para ordenar productos más vendidos: por total $ o por cantidad de unidades
+const criterioTop = ref('total');
+
+// Proyección de facturación al cierre de mes (Run-Rate)
+const proyeccionMes = computed(() => {
+  const hoy = new Date();
+  const dia = hoy.getDate();
+  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+  if (dia === 0) return 0;
+  const vend = ventasEmpresa.value || 0;
+  return (vend / dia) * diasMes;
+});
+
+// Ticket promedio por venta
+const ticketPromedio = computed(() => {
+  const total = kpisPeriodo.value.totalVenta || 0;
+  const n = kpisPeriodo.value.nFacts || 0;
+  return n > 0 ? total / n : 0;
+});
+
+function verFactura(f) {
+  store.facturaReciente = f;
+  store.modalFacturaActivo = true;
+}
+
+function irAClientes() {
+  store.cambiarVista('clientes');
+}
+
+function imprimirReporte() {
+  window.print();
+}
 
 // Fechas de corte locales (medianoche de hoy y día 1 del mes), igual que el monolito
 const cortes = () => {
@@ -588,6 +672,14 @@ const top = computed(() => {
     return topProductos(origen.value.data.its);
   }
   return (itsMes.value && itsMes.value.length ? topProductos(itsMes.value) : []);
+});
+
+const topOrdenado = computed(() => {
+  const list = [...top.value];
+  if (criterioTop.value === 'cant') {
+    return list.sort((a, b) => (b.cant || 0) - (a.cant || 0));
+  }
+  return list.sort((a, b) => (b.total || 0) - (a.total || 0));
 });
 const bloquesOrigen = computed(() => (R.value ? [
   { key: 'importado', nom: 'Importado', c: R.value.g.importado, col: '#EAF0F8', icono: 'ship', v: R.value.VR.importado },
@@ -895,6 +987,11 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
 <style scoped>
 /* Encabezado y sub-navegación */
 .dash-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 16px;
 }
 .page-title {
@@ -911,6 +1008,16 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
 .page-sub {
   color: var(--dgray);
   font-size: 13px;
+}
+
+.tab-count-badge {
+  background: var(--red);
+  color: #FFF;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: var(--radius-full);
+  padding: 1px 6px;
+  margin-left: 4px;
 }
 
 /* Sub-navegación unificada con el sistema */
@@ -1430,5 +1537,63 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
   color: var(--dgray);
   margin: 0;
   font-size: 13px;
+}
+
+/* Interactions & Print additions */
+.clickable-row {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  transition: background var(--trans-fast), transform var(--trans-fast);
+}
+.clickable-row:hover {
+  background: var(--gray);
+  transform: translateX(2px);
+}
+.chevron-mini {
+  font-size: 10px;
+  color: var(--dgray);
+  margin-left: 4px;
+}
+.top-prod-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--gray);
+  padding: 2px;
+  border-radius: var(--radius-full);
+}
+.toggle-pill {
+  border: none;
+  background: transparent;
+  color: var(--dgray);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--trans-fast);
+}
+.toggle-pill.active {
+  background: var(--card-bg);
+  color: var(--blue);
+  box-shadow: var(--shadow-xs);
+}
+.units-highlight {
+  background: var(--lblue) !important;
+  color: var(--blue) !important;
+  font-weight: 700 !important;
+}
+.total-highlight {
+  color: var(--navy) !important;
+  font-weight: 800 !important;
+}
+@media print {
+  .no-print { display: none !important; }
+  .page { padding: 0 !important; }
+  .hero-revenue-card, .side-panel-card, .kpi-strip-card, .top-prod-panel, .sales-chart-card {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #CCC !important;
+  }
 }
 </style>
