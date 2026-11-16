@@ -1,15 +1,19 @@
 <template>
   <div class="page active" id="page-dashboard">
-    <h1 class="page-title"><i class="ti ti-chart-bar"></i> Reportes y Dashboard</h1>
-    <p class="page-sub">Resumen del día · Comparativa entre empresas · Ranking · Reorden · Backup</p>
+    <div class="dash-header-section">
+      <div class="dash-header-title">
+        <h1 class="page-title"><i class="ti ti-chart-bar"></i> Reportes y Dashboard</h1>
+        <p class="page-sub">Resumen del día · Comparativa entre empresas · Ranking · Reorden · Backup</p>
+      </div>
+    </div>
 
-    <!-- Sub-navegación de reportes -->
-    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);overflow-x:auto;flex-wrap:wrap">
-      <button :class="['search-tab', { active: sub === 'resumen' }]" @click="sub = 'resumen'"><i class="ti ti-dashboard"></i> Resumen</button>
-      <button :class="['search-tab', { active: sub === 'comparativa' }]" @click="sub = 'comparativa'"><i class="ti ti-arrows-left-right"></i> Comparar empresas</button>
-      <button :class="['search-tab', { active: sub === 'ranking' }]" @click="sub = 'ranking'"><i class="ti ti-trophy"></i> Ranking clientes</button>
-      <button :class="['search-tab', { active: sub === 'reorden' }]" @click="sub = 'reorden'"><i class="ti ti-package"></i> Qué reordenar</button>
-      <button :class="['search-tab', { active: sub === 'backup' }]" @click="sub = 'backup'"><i class="ti ti-database"></i> Respaldos</button>
+    <!-- Sub-navegación de reportes en píldoras modernas -->
+    <div class="report-nav-bar">
+      <button :class="['search-tab nav-pill', { active: sub === 'resumen' }]" @click="sub = 'resumen'"><i class="ti ti-dashboard"></i> Resumen</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'comparativa' }]" @click="sub = 'comparativa'"><i class="ti ti-arrows-left-right"></i> Comparar empresas</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'ranking' }]" @click="sub = 'ranking'"><i class="ti ti-trophy"></i> Ranking clientes</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'reorden' }]" @click="sub = 'reorden'"><i class="ti ti-package"></i> Qué reordenar</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'backup' }]" @click="sub = 'backup'"><i class="ti ti-database"></i> Respaldos</button>
     </div>
 
     <!-- ═══ RESUMEN ═══ -->
@@ -70,27 +74,66 @@
       />
 
       <!-- PRODUCTOS MÁS VENDIDOS Y ÚLTIMAS VENTAS -->
-      <div class="dash-grid">
-        <div class="chart-card">
-          <h3><i class="ti ti-chart-bar" style="color:var(--blue)"></i> Productos más vendidos del mes</h3>
-          <div v-if="!top.length" style="padding:20px;text-align:center;color:var(--dgray);font-size:13px">Sin ventas este mes</div>
-          <div v-else style="padding:4px 2px">
-            <div v-for="p in top" :key="p.cod" style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;gap:8px">
-                <span style="font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.desc || p.cod }}</span>
-                <span style="color:var(--dgray);white-space:nowrap">{{ p.cant }} ud · {{ fmtUSD(p.total) }}</span>
+      <div class="dash-grid-analytics">
+        <div class="dash-card-dark">
+          <div class="dash-card-header">
+            <div class="dash-title-wrap">
+              <span class="dash-icon-badge blue"><i class="ti ti-chart-bar"></i></span>
+              <div>
+                <h3 class="dash-card-title">Productos más vendidos</h3>
+                <span class="dash-card-subtitle">Ranking por volumen de facturación en el período</span>
               </div>
-              <div style="background:var(--gray);border-radius:4px;height:14px;overflow:hidden">
-                <div :style="{ background: 'linear-gradient(90deg,var(--blue),var(--navy))', height: '100%', width: (p.total / (top[0].total || 1)) * 100 + '%' }"></div>
+            </div>
+            <span class="dash-pill-badge blue">{{ top.length }} items</span>
+          </div>
+
+          <div v-if="!top.length" class="empty-state-dark">
+            <i class="ti ti-chart-pie-off"></i>
+            <span>Sin ventas registradas en este período</span>
+          </div>
+          <div v-else class="top-prods-list">
+            <div v-for="(p, idx) in top" :key="p.cod" class="top-prod-row">
+              <div class="top-prod-header">
+                <div class="top-prod-info">
+                  <span class="top-prod-rank">#{{ idx + 1 }}</span>
+                  <span class="top-prod-name" :title="p.desc || p.cod">{{ p.desc || p.cod }}</span>
+                </div>
+                <div class="top-prod-numbers">
+                  <span class="top-prod-units">{{ p.cant }} ud</span>
+                  <span class="top-prod-total">{{ fmtUSD(p.total) }}</span>
+                </div>
+              </div>
+              <div class="top-prod-bar-track">
+                <div class="top-prod-bar-fill" :style="{ width: (p.total / (top[0].total || 1)) * 100 + '%' }"></div>
               </div>
             </div>
           </div>
         </div>
-        <div class="list-card">
-          <h3><i class="ti ti-receipt" style="color:var(--blue)"></i> Últimas ventas</h3>
-          <div v-for="v in ventasRecientes" :key="v.id" class="list-row">
-            <div class="nombre"><div style="font-weight:600">{{ v.cliente }}</div><div style="font-size:11px;color:var(--dgray)">{{ v.num }} · {{ fechaReciente(v.fecha_raw) }} · {{ v.vendedor }}</div></div>
-            <div class="valor">{{ fmtUSD(v.total) }}</div>
+
+        <div class="dash-card-dark">
+          <div class="dash-card-header">
+            <div class="dash-title-wrap">
+              <span class="dash-icon-badge purple"><i class="ti ti-receipt"></i></span>
+              <div>
+                <h3 class="dash-card-title">Últimas ventas</h3>
+                <span class="dash-card-subtitle">Registro en tiempo real</span>
+              </div>
+            </div>
+            <span class="dash-pill-badge purple">Recientes</span>
+          </div>
+
+          <div v-if="!ventasRecientes.length" class="empty-state-dark">
+            <i class="ti ti-receipt-off"></i>
+            <span>Sin ventas recientes registradas</span>
+          </div>
+          <div v-else class="recent-sales-list">
+            <div v-for="v in ventasRecientes" :key="v.id" class="recent-sale-row">
+              <div class="recent-sale-client">
+                <div class="client-name">{{ v.cliente }}</div>
+                <div class="client-sub">{{ v.num }} · {{ fechaReciente(v.fecha_raw) }} · {{ v.vendedor }}</div>
+              </div>
+              <div class="recent-sale-val">{{ fmtUSD(v.total) }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -98,9 +141,12 @@
 
     <!-- ═══ COMPARATIVA ENTRE EMPRESAS ═══ -->
     <div v-if="sub === 'comparativa'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-arrows-left-right"></i> Venta Directa vs Distribuidora — Este mes</div>
-        <div style="padding:20px;text-align:center;color:var(--dgray);font-size:13px">Sin ventas registradas todavía</div>
+      <div class="dash-card-dark empty-card">
+        <div class="empty-icon-wrap blue">
+          <i class="ti ti-arrows-left-right"></i>
+        </div>
+        <h3 class="empty-title">Venta Directa vs Distribuidora — Este mes</h3>
+        <p class="empty-desc">Sin ventas registradas todavía</p>
       </div>
     </div>
 
@@ -114,9 +160,12 @@
 
     <!-- ═══ REORDEN ═══ -->
     <div v-if="sub === 'reorden'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-package"></i> Productos que debes reordenar pronto</div>
-        <div style="padding:20px;text-align:center;color:var(--dgray);font-size:13px">El cálculo de reorden se activará cuando haya historial de ventas real</div>
+      <div class="dash-card-dark empty-card">
+        <div class="empty-icon-wrap amber">
+          <i class="ti ti-package"></i>
+        </div>
+        <h3 class="empty-title">Productos que debes reordenar pronto</h3>
+        <p class="empty-desc">El cálculo de reorden se activará cuando haya historial de ventas real</p>
       </div>
     </div>
 
@@ -135,41 +184,45 @@
 
     <!-- MODAL EQUIPO DE TRABAJO (v13.2) -->
     <div v-if="equipoAbierto" class="modal show" id="modal-equipo">
-      <div class="modal-content" style="max-width:460px;text-align:left">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:12px">
-          <h3 style="margin:0;font-size:18px;color:var(--navy);font-weight:600"><i class="ti ti-users"></i> Equipo de trabajo</h3>
-          <button class="btn btn-secondary btn-sm" @click="equipoAbierto = false"><i class="ti ti-x"></i></button>
-        </div>
-        <div style="background:#FFF8E1;border-left:3px solid var(--gold);border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:11.5px;color:#5D4037">
-          <i class="ti ti-info-circle"></i> Esta lista es solo para <strong>ponerles metas</strong>. No crea usuarios que puedan entrar al sistema — eso se hace en Supabase.
-        </div>
-        <div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:12px">
-          <div style="flex:1">
-            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:3px">Nombre</label>
-            <input v-model="eqNombre" type="text" class="val-input" placeholder="Ej: PEDRO PEREZ" style="width:100%;text-transform:uppercase" @keydown.enter.prevent="agregarAlEquipo">
+      <div class="modal-content modal-content-dark" style="max-width:480px;text-align:left">
+        <div class="modal-header-dark">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="dash-icon-badge blue" style="width:32px;height:32px"><i class="ti ti-users"></i></span>
+            <h3 style="margin:0;font-size:17px;color:#F8FAFC;font-weight:700">Equipo de trabajo</h3>
           </div>
-          <div style="width:130px">
-            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:3px">Empresa</label>
-            <select v-model="eqEmpresa" class="val-input" style="width:100%">
+          <button class="btn-close-dark" @click="equipoAbierto = false"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-alert-dark">
+          <i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0;margin-top:2px"></i>
+          <div>Esta lista es solo para <strong>ponerles metas</strong>. No crea usuarios que puedan entrar al sistema — eso se hace en Supabase.</div>
+        </div>
+        <div class="modal-add-row">
+          <div style="flex:1">
+            <label class="modal-label">Nombre</label>
+            <input v-model="eqNombre" type="text" class="modal-input" placeholder="Ej: PEDRO PEREZ" style="text-transform:uppercase" @keydown.enter.prevent="agregarAlEquipo">
+          </div>
+          <div style="width:140px">
+            <label class="modal-label">Empresa</label>
+            <select v-model="eqEmpresa" class="modal-input">
               <option value="directa">Venta Directa</option>
               <option value="dist">Distribuidora</option>
               <option value="ambas">Ambas</option>
             </select>
           </div>
-          <button class="btn btn-primary" @click="agregarAlEquipo"><i class="ti ti-plus"></i></button>
+          <button class="btn-add-dark" @click="agregarAlEquipo"><i class="ti ti-plus"></i></button>
         </div>
-        <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:280px;overflow-y:auto">
-          <div v-if="!equipo.length" style="padding:16px;text-align:center;color:var(--dgray);font-size:12px">Todavía no hay nadie en el equipo</div>
-          <div v-for="(t, i) in equipo" :key="t.nombre" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);gap:8px">
+        <div class="modal-team-list">
+          <div v-if="!equipo.length" class="empty-state-dark" style="padding:16px">Todavía no hay nadie en el equipo</div>
+          <div v-for="(t, i) in equipo" :key="t.nombre" class="team-member-row">
             <div style="min-width:0">
-              <div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.nombre }}</div>
-              <div style="font-size:10.5px;color:var(--dgray)">{{ { ambas: 'Ambas', directa: 'Venta Directa', dist: 'Distribuidora' }[t.empresa] || t.empresa }}</div>
+              <div class="member-name">{{ t.nombre }}</div>
+              <div class="member-role">{{ { ambas: 'Ambas', directa: 'Venta Directa', dist: 'Distribuidora' }[t.empresa] || t.empresa }}</div>
             </div>
-            <button class="btn btn-red btn-sm" title="Quitar del equipo" @click="quitarDelEquipo(i)"><i class="ti ti-trash"></i></button>
+            <button class="btn-trash-dark" title="Quitar del equipo" @click="quitarDelEquipo(i)"><i class="ti ti-trash"></i></button>
           </div>
         </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--gray);padding-top:12px">
-          <button class="btn btn-secondary" @click="equipoAbierto = false">Cerrar</button>
+        <div class="modal-footer-dark">
+          <button class="btn-secondary-dark" @click="equipoAbierto = false">Cerrar</button>
         </div>
       </div>
     </div>
@@ -717,7 +770,468 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
 </script>
 
 <style scoped>
-@media (max-width: 760px) {
-  .dash-grid { grid-template-columns: 1fr; }
+/* Encabezado y sub-navegación */
+.dash-header-section {
+  margin-bottom: 16px;
+}
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.page-title i {
+  color: #38BDF8;
+}
+
+.report-nav-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+}
+
+.nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #101B2E;
+  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  padding: 8px 16px;
+  color: #94A3B8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.nav-pill:hover {
+  color: #F8FAFC;
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.nav-pill.active {
+  background: #1E293B;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%);
+  color: #38BDF8;
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+/* Grid para analítica inferior */
+.dash-grid-analytics {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .dash-grid-analytics {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark card base */
+.dash-card-dark {
+  background: #0E1726;
+  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
+  margin-bottom: 18px;
+}
+
+.dash-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dash-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dash-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.dash-icon-badge.blue {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38BDF8;
+}
+.dash-icon-badge.purple {
+  background: rgba(168, 85, 247, 0.12);
+  color: #A855F7;
+}
+
+.dash-card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #F8FAFC;
+  letter-spacing: 0.3px;
+}
+
+.dash-card-subtitle {
+  font-size: 11px;
+  color: #64748B;
+  display: block;
+  margin-top: 2px;
+}
+
+.dash-pill-badge {
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.dash-pill-badge.blue {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38BDF8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+.dash-pill-badge.purple {
+  background: rgba(168, 85, 247, 0.12);
+  color: #C084FC;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+/* Empty states */
+.empty-state-dark {
+  padding: 28px 16px;
+  text-align: center;
+  color: #64748B;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.empty-state-dark i {
+  font-size: 26px;
+  opacity: 0.6;
+}
+
+.empty-card {
+  text-align: center;
+  padding: 48px 20px;
+}
+.empty-icon-wrap {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 14px;
+}
+.empty-icon-wrap.blue {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38BDF8;
+}
+.empty-icon-wrap.amber {
+  background: rgba(251, 191, 36, 0.12);
+  color: #FBBF24;
+}
+.empty-title {
+  color: #F8FAFC;
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.empty-desc {
+  color: #94A3B8;
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Top productos */
+.top-prods-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.top-prod-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.top-prod-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.top-prod-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.top-prod-rank {
+  color: #64748B;
+  font-size: 11px;
+  font-weight: 700;
+  width: 22px;
+}
+.top-prod-name {
+  color: #F8FAFC;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-prod-numbers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.top-prod-units {
+  background: rgba(255, 255, 255, 0.06);
+  color: #94A3B8;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.top-prod-total {
+  color: #38BDF8;
+  font-weight: 700;
+  font-size: 12.5px;
+  font-family: monospace;
+}
+.top-prod-bar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  height: 7px;
+  overflow: hidden;
+}
+.top-prod-bar-fill {
+  background: linear-gradient(90deg, #38BDF8 0%, #2563EB 100%);
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+/* Últimas ventas */
+.recent-sales-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.recent-sale-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+.recent-sale-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.recent-sale-client {
+  min-width: 0;
+}
+.client-name {
+  color: #F8FAFC;
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.client-sub {
+  color: #64748B;
+  font-size: 11px;
+  margin-top: 2px;
+}
+.recent-sale-val {
+  color: #34D399;
+  font-weight: 700;
+  font-size: 13px;
+  font-family: monospace;
+  white-space: nowrap;
+  margin-left: 10px;
+}
+
+/* Modal dark styles */
+.modal-content-dark {
+  background: #0E1726 !important;
+  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6) !important;
+  color: #F8FAFC !important;
+}
+.modal-header-dark {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 12px;
+}
+.btn-close-dark {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94A3B8;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-close-dark:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #F8FAFC;
+}
+.modal-alert-dark {
+  background: rgba(251, 191, 36, 0.08);
+  border-left: 3px solid #FBBF24;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 11.5px;
+  color: #FDE68A;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+}
+.modal-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+.modal-label {
+  font-size: 11px;
+  color: #94A3B8;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 4px;
+}
+.modal-input {
+  width: 100%;
+  background: #0A111E;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #F8FAFC;
+  font-size: 12.5px;
+  box-sizing: border-box;
+}
+.modal-input:focus {
+  outline: none;
+  border-color: #38BDF8;
+}
+.btn-add-dark {
+  background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+  color: #FFF;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  height: 35px;
+}
+.btn-add-dark:hover {
+  background: linear-gradient(135deg, #0369A1 0%, #075985 100%);
+}
+.modal-team-list {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.2);
+}
+.team-member-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 8px;
+}
+.team-member-row:last-child {
+  border-bottom: none;
+}
+.member-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member-role {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-top: 1px;
+}
+.btn-trash-dark {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #F87171;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-trash-dark:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #FFF;
+}
+.modal-footer-dark {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+}
+.btn-secondary-dark {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94A3B8;
+  border-radius: 8px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.btn-secondary-dark:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #F8FAFC;
 }
 </style>
