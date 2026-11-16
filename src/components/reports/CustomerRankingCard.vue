@@ -17,7 +17,7 @@
       <div class="ranking-column">
         <div class="column-header">
           <span class="column-title">
-            <i class="ti ti-crown" style="color:#FBBF24"></i> Top 5 Compradores del Mes
+            <i class="ti ti-crown" style="color:var(--gold)"></i> Top 5 Compradores del Mes
           </span>
           <span v-if="ranking.top.length" class="kpi-pill pill-gold">
             {{ ranking.top.length }} líderes
@@ -66,7 +66,7 @@
       <!-- 2. Clientes que dejaron de comprar -->
       <div class="ranking-column">
         <div class="column-header">
-          <span class="column-title" style="color:#F87171">
+          <span class="column-title" style="color:var(--red)">
             <i class="ti ti-user-x"></i> Clientes que dejaron de comprar
           </span>
           <span v-if="ranking.dormidos.length" class="kpi-pill pill-red">
