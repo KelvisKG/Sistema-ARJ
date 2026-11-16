@@ -29,31 +29,189 @@
         @aplicar="cargarOrigen"
       />
 
-      <!-- TARJETAS DE KPIS PRINCIPALES -->
-      <KpiGrid
-        :rango="rango"
-        :origen-etiqueta="origen.etiqueta"
-        :tot-hoy="ventas.totHoy"
-        :n-hoy="ventas.nHoy"
-        :kpis-periodo="kpisPeriodo"
-        :margen-catalogo="margenCatalogo"
-        :stock-critico="stockCritico"
-        :total-productos="store.productos.length"
-      />
+      <!-- ══ HERO SECTION ══ -->
+      <div class="hero-row">
+        <!-- Columna izquierda: Revenue Hero Card -->
+        <div class="hero-revenue-card">
+          <div class="hero-label"><i class="ti ti-report-money" style="margin-right:5px;color:#38BDF8;"></i>Ingresos del período</div>
+          <div class="hero-amount">
+            <span class="hero-currency">$</span>{{ (kpisPeriodo.totalVenta || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+          </div>
+          <div>
+            <span
+              class="hero-var-pill"
+              :class="compMeses.varPct > 0 ? 'up' : compMeses.varPct < 0 ? 'down' : 'neutral'"
+            >
+              <i :class="compMeses.varPct > 0 ? 'ti ti-trending-up' : compMeses.varPct < 0 ? 'ti ti-trending-down' : 'ti ti-minus'"></i>
+              {{ compMeses.varPct > 0 ? '+' : '' }}{{ (compMeses.varPct || 0).toFixed(1) }}% vs mes anterior
+            </span>
+          </div>
+          <div class="hero-meta">
+            <div class="hero-meta-item">
+              <span class="hero-meta-label">Facturas</span>
+              <span class="hero-meta-val">{{ kpisPeriodo.nFacts || 0 }}</span>
+            </div>
+            <div class="hero-meta-item">
+              <span class="hero-meta-label">Mes anterior</span>
+              <span class="hero-meta-val">${{ (compMeses.ant || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+            </div>
+            <div class="hero-meta-item">
+              <span class="hero-meta-label">Hoy</span>
+              <span class="hero-meta-val">${{ (ventas.totHoy || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+            </div>
+            <div class="hero-meta-item">
+              <span class="hero-meta-label">Facturas hoy</span>
+              <span class="hero-meta-val">{{ ventas.nHoy || 0 }}</span>
+            </div>
+          </div>
+        </div>
 
-      <!-- TARJETAS DE COMPARACIÓN (Importado vs Local y Mes actual vs Mes anterior) -->
-      <ComparisonCards
-        :origen="origen"
-        :r="R"
-        :bloques-origen="bloquesOrigen"
-        :tablas-detalle="tablasDetalle"
-        :detalle-abierto="detalleAbierto"
-        :comp-meses="compMeses"
-        @toggle-detalle="detalleAbierto = !detalleAbierto"
-        @descargar-csv="descargarDetalleOrigen"
-      />
+        <!-- Columna derecha: Top clientes + últimas ventas -->
+        <div class="hero-side-panel">
+          <!-- Top clientes del mes -->
+          <div class="side-panel-card">
+            <div class="side-panel-title">
+              <i class="ti ti-crown"></i>
+              Top clientes del mes
+            </div>
+            <div v-if="!ranking.top.length" class="empty-state-dark" style="padding:12px;font-size:12px;">
+              Sin ventas en el período
+            </div>
+            <div v-else>
+              <div v-for="(c, idx) in ranking.top.slice(0, 4)" :key="c.nombre" class="hero-client-row">
+                <div class="client-avatar">{{ c.nombre.charAt(0).toUpperCase() }}</div>
+                <div class="client-info">
+                  <div class="client-nm">{{ c.nombre }}</div>
+                  <div class="client-purchases">{{ c.comprasMes }} compra{{ c.comprasMes !== 1 ? 's' : '' }} este mes</div>
+                </div>
+                <div class="client-monto">${{ (c.mes || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+              </div>
+            </div>
+          </div>
 
-      <!-- METAS DE VENTA -->
+          <!-- Últimas ventas -->
+          <div class="side-panel-card">
+            <div class="side-panel-title">
+              <i class="ti ti-receipt"></i>
+              Últimas ventas
+            </div>
+            <div v-if="!ventasRecientes.length" class="empty-state-dark" style="padding:12px;font-size:12px;">
+              Sin ventas recientes
+            </div>
+            <div v-else>
+              <div v-for="v in ventasRecientes.slice(0, 4)" :key="v.id" class="mini-sale-row">
+                <div class="mini-sale-client">{{ v.cliente_nombre_snap || v.cliente }}</div>
+                <div class="mini-sale-val">{{ fmtUSD(v.total) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ KPI STRIP ══ -->
+      <div class="kpi-strip">
+        <!-- 1. Margen catálogo -->
+        <div class="kpi-strip-card">
+          <div class="kpi-strip-label">Margen Catálogo</div>
+          <div class="kpi-strip-val">
+            <span v-if="margenCatalogo != null">{{ margenCatalogo.toFixed(1) }}%</span>
+            <span v-else style="font-size:14px;color:#64748B;">—</span>
+          </div>
+          <div class="kpi-strip-sub">Teórico</div>
+        </div>
+        <!-- 2. Utilidad bruta -->
+        <div class="kpi-strip-card">
+          <div class="kpi-strip-label">Utilidad Bruta</div>
+          <div class="kpi-strip-val" style="font-size:17px;">{{ kpisPeriodo.utilVal }}</div>
+          <div class="kpi-strip-sub">{{ kpisPeriodo.utilSub }}</div>
+        </div>
+        <!-- 3. Margen real -->
+        <div class="kpi-strip-card">
+          <div class="kpi-strip-label">Margen Real</div>
+          <div class="kpi-strip-val">{{ kpisPeriodo.margenVal }}</div>
+          <div class="kpi-strip-sub">{{ kpisPeriodo.margenSub }}</div>
+        </div>
+        <!-- 4. Punto de equilibrio -->
+        <div class="kpi-strip-card">
+          <div class="kpi-strip-label">Punto Equilibrio</div>
+          <div class="kpi-strip-val" style="font-size:17px;">{{ kpisPeriodo.peVal }}</div>
+          <div class="kpi-strip-sub">{{ kpisPeriodo.peSub }}</div>
+        </div>
+        <!-- 5. Costos fijos -->
+        <div class="kpi-strip-card">
+          <div class="kpi-strip-label">Costos Fijos</div>
+          <div class="kpi-strip-val" style="font-size:17px;">{{ fmtUSD(kpisPeriodo.cf || 0) }}</div>
+          <div class="kpi-strip-sub">{{ kpisPeriodo.cfSub }}</div>
+        </div>
+        <!-- 6. Stock crítico -->
+        <div class="kpi-strip-card">
+          <div class="kpi-strip-label">Stock Crítico</div>
+          <div class="kpi-strip-val">{{ stockCritico.bajos || 0 }}</div>
+          <div class="kpi-strip-sub">
+            <span
+              v-if="stockCritico.agotados > 0"
+              class="kpi-strip-pill"
+              style="background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3);"
+            >{{ stockCritico.agotados }} agotado{{ stockCritico.agotados !== 1 ? 's' : '' }}</span>
+            <span v-else>Sin agotados</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ FILA DE ANÁLISIS (2 columnas) ══ -->
+      <div class="analysis-row">
+        <!-- Izquierda: Importado vs Local + Comparativa meses -->
+        <div>
+          <ComparisonCards
+            :origen="origen"
+            :r="R"
+            :bloques-origen="bloquesOrigen"
+            :tablas-detalle="tablasDetalle"
+            :detalle-abierto="detalleAbierto"
+            :comp-meses="compMeses"
+            @toggle-detalle="detalleAbierto = !detalleAbierto"
+            @descargar-csv="descargarDetalleOrigen"
+          />
+        </div>
+
+        <!-- Derecha: Productos más vendidos -->
+        <div class="top-prod-panel">
+          <div class="dash-card-header">
+            <div class="dash-title-wrap">
+              <span class="dash-icon-badge blue"><i class="ti ti-chart-bar"></i></span>
+              <div>
+                <h3 class="dash-card-title">Productos más vendidos</h3>
+                <span class="dash-card-subtitle">Ranking por volumen en el período</span>
+              </div>
+            </div>
+            <span class="dash-pill-badge blue">{{ top.length }} items</span>
+          </div>
+
+          <div v-if="!top.length" class="empty-state-dark">
+            <i class="ti ti-chart-pie-off"></i>
+            <span>Sin ventas registradas en este período</span>
+          </div>
+          <div v-else class="top-prods-list">
+            <div v-for="(p, idx) in top.slice(0, 8)" :key="p.cod" class="top-prod-row">
+              <div class="top-prod-header">
+                <div class="top-prod-info">
+                  <span class="top-prod-rank">#{{ idx + 1 }}</span>
+                  <span class="top-prod-name" :title="p.desc || p.cod">{{ p.desc || p.cod }}</span>
+                </div>
+                <div class="top-prod-numbers">
+                  <span class="top-prod-units">{{ p.cant }} ud</span>
+                  <span class="top-prod-total">{{ fmtUSD(p.total) }}</span>
+                </div>
+              </div>
+              <div class="top-prod-bar-track">
+                <div class="top-prod-bar-fill" :style="{ width: (p.total / (top[0].total || 1)) * 100 + '%' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ FILA INFERIOR: Metas de ventas ══ -->
       <SalesGoalsCard
         v-model:metas-per="metasPer"
         :nombre-emp="nombreEmp"
@@ -72,71 +230,6 @@
         @actualizar-meta-vendedor="actualizarMetaVendedor"
         @sugerir-meta="sugerirMeta"
       />
-
-      <!-- PRODUCTOS MÁS VENDIDOS Y ÚLTIMAS VENTAS -->
-      <div class="dash-grid-analytics">
-        <div class="dash-card-dark">
-          <div class="dash-card-header">
-            <div class="dash-title-wrap">
-              <span class="dash-icon-badge blue"><i class="ti ti-chart-bar"></i></span>
-              <div>
-                <h3 class="dash-card-title">Productos más vendidos</h3>
-                <span class="dash-card-subtitle">Ranking por volumen de facturación en el período</span>
-              </div>
-            </div>
-            <span class="dash-pill-badge blue">{{ top.length }} items</span>
-          </div>
-
-          <div v-if="!top.length" class="empty-state-dark">
-            <i class="ti ti-chart-pie-off"></i>
-            <span>Sin ventas registradas en este período</span>
-          </div>
-          <div v-else class="top-prods-list">
-            <div v-for="(p, idx) in top" :key="p.cod" class="top-prod-row">
-              <div class="top-prod-header">
-                <div class="top-prod-info">
-                  <span class="top-prod-rank">#{{ idx + 1 }}</span>
-                  <span class="top-prod-name" :title="p.desc || p.cod">{{ p.desc || p.cod }}</span>
-                </div>
-                <div class="top-prod-numbers">
-                  <span class="top-prod-units">{{ p.cant }} ud</span>
-                  <span class="top-prod-total">{{ fmtUSD(p.total) }}</span>
-                </div>
-              </div>
-              <div class="top-prod-bar-track">
-                <div class="top-prod-bar-fill" :style="{ width: (p.total / (top[0].total || 1)) * 100 + '%' }"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="dash-card-dark">
-          <div class="dash-card-header">
-            <div class="dash-title-wrap">
-              <span class="dash-icon-badge purple"><i class="ti ti-receipt"></i></span>
-              <div>
-                <h3 class="dash-card-title">Últimas ventas</h3>
-                <span class="dash-card-subtitle">Registro en tiempo real</span>
-              </div>
-            </div>
-            <span class="dash-pill-badge purple">Recientes</span>
-          </div>
-
-          <div v-if="!ventasRecientes.length" class="empty-state-dark">
-            <i class="ti ti-receipt-off"></i>
-            <span>Sin ventas recientes registradas</span>
-          </div>
-          <div v-else class="recent-sales-list">
-            <div v-for="v in ventasRecientes" :key="v.id" class="recent-sale-row">
-              <div class="recent-sale-client">
-                <div class="client-name">{{ v.cliente }}</div>
-                <div class="client-sub">{{ v.num }} · {{ fechaReciente(v.fecha_raw) }} · {{ v.vendedor }}</div>
-              </div>
-              <div class="recent-sale-val">{{ fmtUSD(v.total) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- ═══ COMPARATIVA ENTRE EMPRESAS ═══ -->
@@ -822,6 +915,186 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
   color: #38BDF8;
   border-color: rgba(56, 189, 248, 0.4);
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+/* ══ HERO SECTION ══ */
+.hero-row {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) { .hero-row { grid-template-columns: 1fr; } }
+
+.hero-revenue-card {
+  background: linear-gradient(145deg, #0D1B30 0%, #0A1428 50%, #071020 100%);
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  border-radius: 18px;
+  padding: 28px 32px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.hero-revenue-card::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.hero-amount {
+  font-size: 48px;
+  font-weight: 800;
+  color: #F8FAFC;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  margin-bottom: 10px;
+}
+.hero-amount .hero-currency {
+  font-size: 28px;
+  font-weight: 600;
+  color: #94A3B8;
+  margin-right: 2px;
+}
+.hero-var-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.hero-var-pill.up { background: rgba(16,185,129,0.15); color: #34D399; border: 1px solid rgba(16,185,129,0.3); }
+.hero-var-pill.down { background: rgba(239,68,68,0.15); color: #F87171; border: 1px solid rgba(239,68,68,0.3); }
+.hero-var-pill.neutral { background: rgba(100,116,139,0.15); color: #94A3B8; border: 1px solid rgba(100,116,139,0.3); }
+.hero-meta {
+  font-size: 12px;
+  color: #64748B;
+  margin-top: 8px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.hero-meta-item { display: flex; flex-direction: column; gap: 2px; }
+.hero-meta-label { font-size: 10.5px; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; }
+.hero-meta-val { font-size: 14px; font-weight: 700; color: #CBD5E1; }
+
+/* Panel lateral del hero */
+.hero-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.side-panel-card {
+  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 16px 18px;
+  flex: 1;
+}
+.side-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.side-panel-title i { color: #38BDF8; font-size: 14px; }
+
+/* Top clientes en hero */
+.hero-client-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.hero-client-row:last-child { border-bottom: none; }
+.client-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, #1E3A5F 0%, #0D2544 100%);
+  border: 1px solid rgba(56,189,248,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #38BDF8; flex-shrink: 0;
+}
+.client-info { flex: 1; min-width: 0; }
+.client-nm { font-size: 12px; font-weight: 600; color: #F8FAFC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.client-purchases { font-size: 10.5px; color: #64748B; }
+.client-monto { font-size: 13px; font-weight: 700; color: #34D399; white-space: nowrap; }
+
+/* Últimas ventas mini */
+.mini-sale-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.mini-sale-row:last-child { border-bottom: none; }
+.mini-sale-client { font-size: 12px; font-weight: 600; color: #CBD5E1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.mini-sale-val { font-size: 12px; font-weight: 700; color: #F8FAFC; }
+
+/* ══ KPI STRIP ══ */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+@media (max-width: 1100px) { .kpi-strip { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi-strip-card {
+  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.kpi-strip-card:hover { border-color: rgba(255,255,255,0.18); transform: translateY(-1px); }
+.kpi-strip-label { font-size: 10px; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+.kpi-strip-val { font-size: 20px; font-weight: 800; color: #F8FAFC; letter-spacing: -0.02em; line-height: 1.1; }
+.kpi-strip-sub { font-size: 10px; color: #64748B; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpi-strip-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+/* ══ FILA DE ANÁLISIS ══ */
+.analysis-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) { .analysis-row { grid-template-columns: 1fr; } }
+
+/* Top productos panel */
+.top-prod-panel {
+  background: linear-gradient(145deg, #101B2E 0%, #0A111E 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
 }
 
 /* Grid para analítica inferior */
