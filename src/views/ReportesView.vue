@@ -364,6 +364,8 @@
       <CustomerRankingCard
         :ranking="ranking"
         :nombre-emp="nombreEmp"
+        :todas-facturas="store.todasFacturas"
+        :clientes="store.clientes"
       />
     </div>
 
