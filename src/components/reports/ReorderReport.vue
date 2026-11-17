@@ -125,18 +125,20 @@
       </div>
 
       <div class="toolbar-right-group">
-        <!-- Selector de Umbral de Alerta -->
-        <div class="umbral-select-wrap">
-          <span class="umbral-label">Umbral:</span>
-          <div class="umbral-buttons">
+        <!-- Selector de Umbral de Alerta Rediseñado -->
+        <div class="umbral-selector-card">
+          <span class="umbral-title">
+            <i class="ti ti-bell-ringing" style="color:var(--gold)"></i> Stock crítico:
+          </span>
+          <div class="umbral-seg-group">
             <button
               v-for="u in [5, 10, 15, 20]"
               :key="u"
-              :class="['umbral-btn', { active: umbralPersonalizado === u }]"
+              :class="['umbral-seg-btn', { active: umbralPersonalizado === u }]"
               @click="umbralPersonalizado = u"
-              :title="'Alerta para productos con stock menor o igual a ' + u + ' unidades'"
+              :title="'Mostrar productos con stock menor o igual a ' + u + ' unidades'"
             >
-              &le;{{ u }}
+              &le;{{ u }} uds
             </button>
           </div>
         </div>
@@ -255,9 +257,10 @@
               </div>
             </td>
 
-            <!-- Stock Actual -->
+            <!-- Stock Actual con indicador visual -->
             <td style="text-align:center">
               <span class="stock-pill" :class="item.stock <= 0 ? 'stock-cero' : 'stock-bajo'">
+                <span class="stock-dot" :class="item.stock <= 0 ? 'dot-red' : 'dot-gold'"></span>
                 {{ item.stock }} ud{{ item.stock !== 1 ? 's' : '' }}
               </span>
             </td>
@@ -787,44 +790,56 @@ function exportarCSV() {
   font-size: 11px;
 }
 
-/* Selector de Umbral */
-.umbral-select-wrap {
+/* Selector de Umbral Rediseñado */
+.umbral-selector-card {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   background: var(--gray);
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  padding: 2px 8px 2px 10px;
+  padding: 3px 6px 3px 12px;
 }
 
-.umbral-label {
-  font-size: 11px;
+.umbral-title {
+  font-size: 11.5px;
   font-weight: 700;
-  color: var(--dgray);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
 
-.umbral-buttons {
+.umbral-seg-group {
   display: flex;
-  gap: 2px;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-full);
+  padding: 2px;
 }
 
-.umbral-btn {
+.umbral-seg-btn {
   background: transparent;
   border: none;
   border-radius: var(--radius-full);
-  padding: 2px 6px;
-  font-size: 10.5px;
+  padding: 4px 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--dgray);
   cursor: pointer;
-  transition: var(--trans-fast);
+  transition: all var(--trans-fast);
+  white-space: nowrap;
 }
 
-.umbral-btn.active {
-  background: var(--card-bg);
-  color: var(--gold);
-  box-shadow: var(--shadow-xs);
+.umbral-seg-btn:hover {
+  color: var(--text);
+}
+
+.umbral-seg-btn.active {
+  background: var(--blue);
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
 }
 
 /* Buscador */
@@ -873,11 +888,48 @@ function exportarCSV() {
   user-select: none;
 }
 
+/* Checkbox personalizado elegante (elimina el cuadro blanco nativo) */
 .custom-check {
-  width: 16px;
-  height: 16px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  background: var(--card-bg);
   cursor: pointer;
-  accent-color: var(--blue);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all var(--trans-fast);
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.custom-check:hover {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.custom-check:checked {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.custom-check:checked::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  border: solid #FFFFFF;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+}
+
+.custom-check:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
 .selection-meta {
@@ -960,13 +1012,26 @@ function exportarCSV() {
 .origen-local     { background: var(--lgold); color: var(--gold); }
 
 .stock-pill {
-  padding: 3px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
   border-radius: var(--radius-full);
   font-weight: 700;
   font-size: 11px;
 }
 .stock-cero { background: var(--lred); color: var(--red); }
 .stock-bajo { background: var(--lgold); color: var(--gold); }
+
+.stock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-red  { background: var(--red); box-shadow: 0 0 5px rgba(239, 68, 68, 0.6); }
+.dot-gold { background: var(--gold); box-shadow: 0 0 5px rgba(217, 119, 6, 0.5); }
 
 /* Runway / Cobertura Pill */
 .runway-pill {
