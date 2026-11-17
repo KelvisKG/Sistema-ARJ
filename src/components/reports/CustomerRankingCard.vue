@@ -799,12 +799,13 @@ function generarUrlWhatsApp(cliente) {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  transition: var(--trans-fast);
+  transition: border-color var(--trans-fast), transform var(--trans-fast), box-shadow var(--trans-fast);
 }
 
 .ranking-item-card:hover {
-  background: var(--card-bg);
   border-color: var(--gold);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .ranking-item-top {
