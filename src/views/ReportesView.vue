@@ -385,9 +385,13 @@
         :clientes-count="store.clientes.length"
         :facturas-count="store.todasFacturas.length"
         :facts-semana-count="factsSemana.length"
+        :facts-mes-count="validas.length"
         @backup-semanal="backupSemanal"
+        @backup-facturas="backupFacturas"
         @backup-completo="backupCompleto"
         @backup-inventario="backupInventario"
+        @backup-clientes="backupClientes"
+        @backup-cxc="backupCuentasCobrar"
       />
     </div>
 
@@ -1048,6 +1052,139 @@ function backupCompleto() {
   descargarArchivo('ARJ_respaldo_completo_' + hoyArchivo() + '.json', JSON.stringify(dump, null, 2), 'application/json');
   store.logBitacora('inventario', 'Descargó respaldo completo del sistema', true);
   store.notif('Respaldo completo descargado', 'success');
+}
+
+// Backup de Facturas con selector de rango (semana / mes / todas)
+function backupFacturas(rango = 'mes') {
+  const hoy = new Date();
+  let facts = [];
+  let rangoTxt = '';
+
+  if (rango === 'semana') {
+    facts = factsSemana.value;
+    rangoTxt = 'ultimos_7_dias';
+  } else if (rango === 'todas') {
+    facts = store.todasFacturas;
+    rangoTxt = 'historico_completo';
+  } else {
+    const { mes0 } = cortes();
+    facts = store.todasFacturas.filter(f => f.fecha_raw && new Date(f.fecha_raw) >= mes0);
+    rangoTxt = 'mes_actual';
+  }
+
+  if (!facts.length) {
+    store.notif('No hay facturas en el período seleccionado', 'error');
+    return;
+  }
+
+  const filas = [
+    ['REPORTE DE FACTURACION ARJ — ' + rangoTxt.toUpperCase() + ' — Generado: ' + hoy.toLocaleString('es-VE')],
+    ['Los montos $BCV y los $verdes son unidades distintas. NO se suman entre si.'],
+    [],
+    ['Factura', 'Fecha', 'Empresa', 'Cliente', 'Vendedor', 'Tipo', 'Estado',
+      'Bruto $BCV', 'Descuento $BCV', 'Neto $BCV', 'Cobrado en $verde', 'Abonado $BCV', 'Saldo $BCV', 'Motivo del descuento']
+  ];
+
+  let totBruto = 0, totDto = 0, totNeto = 0, totVerde = 0, totSaldo = 0, totAbon = 0, nVerde = 0;
+  facts.forEach(f => {
+    const bruto = f.total || 0;
+    const dto = f.descuento_manual || 0;
+    const neto = Math.round((bruto - dto) * 100) / 100;
+    const saldo = f.saldo_pendiente || 0;
+    const abon = Math.round((neto - saldo) * 100) / 100;
+    const cv = (f.cobrar_verde != null && f.cobrar_verde > 0) ? f.cobrar_verde : null;
+    if (f.estado !== 'anulada') {
+      totBruto += bruto; totDto += dto; totNeto += neto; totSaldo += saldo; totAbon += abon;
+      if (cv != null) { totVerde += cv; nVerde++; }
+    }
+    filas.push([
+      f.num, f.fecha, f.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora',
+      f.cliente_nombre_snap || f.cliente, f.vendedor || '', f.tipo_pago || '', (f.estado || '').toUpperCase(),
+      bruto.toFixed(2), dto.toFixed(2), neto.toFixed(2), cv != null ? cv.toFixed(2) : '',
+      abon.toFixed(2), saldo.toFixed(2), f.motivo_descuento || ''
+    ]);
+  });
+
+  filas.push([]);
+  filas.push(['TOTAL BRUTO $BCV (sin anuladas)', '', '', '', '', '', '', totBruto.toFixed(2)]);
+  filas.push(['TOTAL DESCUENTOS $BCV', '', '', '', '', '', '', totDto.toFixed(2)]);
+  filas.push(['TOTAL NETO FACTURADO $BCV', '', '', '', '', '', '', totNeto.toFixed(2)]);
+  filas.push(['TOTAL COBRADO $BCV', '', '', '', '', '', '', totAbon.toFixed(2)]);
+  filas.push(['TOTAL POR COBRAR $BCV', '', '', '', '', '', '', totSaldo.toFixed(2)]);
+  if (totVerde > 0) {
+    filas.push([]);
+    filas.push(['TOTAL ACORDADO EN $VERDE (' + nVerde + ' factura(s))', '', '', '', '', '', '', '', '', '', totVerde.toFixed(2)]);
+  }
+
+  descargarCSV('ARJ_facturacion_' + rangoTxt + '_' + hoyArchivo() + '.csv', filas);
+  store.logBitacora('inventario', 'Descargó reporte de facturación ' + rangoTxt + ' (' + facts.length + ' facturas)', false);
+  store.notif(facts.length + ' facturas descargadas en CSV', 'success');
+}
+
+// Backup de Clientes
+function backupClientes() {
+  if (!store.clientes.length) {
+    store.notif('No hay clientes registrados', 'error');
+    return;
+  }
+  const filas = [
+    ['DIRECTORIO DE CLIENTES — SISTEMA ARJ — ' + new Date().toLocaleString('es-VE')],
+    [],
+    ['ID', 'Nombre / Razon Social', 'RIF / Cedula', 'Telefono', 'Nivel de Precio', 'Direccion', 'Email']
+  ];
+  store.clientes.forEach(c => {
+    filas.push([
+      c.id || '',
+      c.nombre || '',
+      c.rif || '',
+      c.tel || '',
+      c.tier || 'T1',
+      c.direccion || '',
+      c.email || ''
+    ]);
+  });
+  descargarCSV('ARJ_directorio_clientes_' + hoyArchivo() + '.csv', filas);
+  store.logBitacora('clientes', 'Descargó directorio de clientes (' + store.clientes.length + ' clientes)', false);
+  store.notif(store.clientes.length + ' clientes descargados en CSV', 'success');
+}
+
+// Backup de Cuentas por Cobrar (Deudores)
+function backupCuentasCobrar() {
+  const deudas = store.todasFacturas.filter(f => f.estado !== 'anulada' && (Number(f.saldo_pendiente) || 0) > 0.01);
+  if (!deudas.length) {
+    store.notif('No hay cuentas por cobrar pendientes', 'info');
+    return;
+  }
+  const hoy = new Date();
+  const filas = [
+    ['CUENTAS POR COBRAR Y CARTERA DE DEUDORES — SISTEMA ARJ — ' + hoy.toLocaleString('es-VE')],
+    [],
+    ['Factura', 'Fecha Emision', 'Empresa', 'Cliente', 'Telefono', 'Total Factura USD', 'Saldo Pendiente USD', 'Dias de Emision', 'Tipo de Pago']
+  ];
+  let totPendiente = 0;
+  deudas.forEach(f => {
+    const saldo = Number(f.saldo_pendiente) || 0;
+    totPendiente += saldo;
+    const fch = f.fecha_raw ? new Date(f.fecha_raw) : null;
+    const dias = fch ? Math.floor((hoy - fch) / (1000 * 60 * 60 * 24)) : '—';
+    const cliObj = store.clientes.find(c => c.id === f.cliente_id || (c.nombre && c.nombre === f.cliente));
+    filas.push([
+      f.num || '',
+      f.fecha || '',
+      f.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora',
+      f.cliente_nombre_snap || f.cliente || '',
+      cliObj?.tel || '',
+      (Number(f.total) || 0).toFixed(2),
+      saldo.toFixed(2),
+      dias,
+      f.tipo_pago || 'Crédito'
+    ]);
+  });
+  filas.push([]);
+  filas.push(['TOTAL SALDO POR COBRAR USD', '', '', '', '', '', totPendiente.toFixed(2)]);
+  descargarCSV('ARJ_cuentas_por_cobrar_' + hoyArchivo() + '.csv', filas);
+  store.logBitacora('cxc', 'Descargó cartera de cuentas por cobrar (' + deudas.length + ' facturas pendientes)', false);
+  store.notif(deudas.length + ' cuentas pendientes descargadas en CSV', 'success');
 }
 
 // ═══ Carga y recarga ═══
