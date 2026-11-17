@@ -92,6 +92,39 @@
             </div>
           </div>
 
+          <!-- ══ INDICADOR DE LIQUIDEZ (Caja vs Cuentas por Cobrar) ══ -->
+          <div v-if="!liquidezMes.sinDatos" class="liquidity-bar-wrap">
+            <div class="liquidity-header">
+              <span class="liquidity-label"><i class="ti ti-droplet"></i> Liquidez del mes</span>
+              <div class="liquidity-legend">
+                <span class="liq-dot dot-green"></span>
+                <span class="liq-legend-text">Cobrado {{ liquidezMes.pctCobrado.toFixed(0) }}%</span>
+                <span class="liq-dot dot-gold" style="margin-left:10px"></span>
+                <span class="liq-legend-text">Pendiente {{ liquidezMes.pctPendiente.toFixed(0) }}%</span>
+              </div>
+            </div>
+            <div class="liquidity-track">
+              <div
+                class="liquidity-fill liq-cobrado"
+                :style="{ width: Math.min(liquidezMes.pctCobrado, 100) + '%' }"
+                :title="'Cobrado en caja/banco: ' + fmtUSD(liquidezMes.cobrado)"
+              ></div>
+              <div
+                class="liquidity-fill liq-pendiente"
+                :style="{ width: Math.min(liquidezMes.pctPendiente, 100) + '%' }"
+                :title="'Cuentas por cobrar pendientes: ' + fmtUSD(liquidezMes.pendiente)"
+              ></div>
+            </div>
+            <div class="liquidity-amounts">
+              <span class="liq-amount-cobrado">
+                <i class="ti ti-cash"></i> {{ fmtUSD(liquidezMes.cobrado) }} en caja
+              </span>
+              <span class="liq-amount-pendiente">
+                <i class="ti ti-clock"></i> {{ fmtUSD(liquidezMes.pendiente) }} por cobrar
+              </span>
+            </div>
+          </div>
+
           <!-- Barra de meta dentro del Hero (si hay meta) -->
           <div v-if="metaEmpresa > 0" class="hero-goal-bar-wrap">
             <div class="hero-goal-bar-header">
@@ -448,6 +481,34 @@ const ticketPromedio = computed(() => {
   return n > 0 ? total / n : 0;
 });
 
+// ═══ LIQUIDEZ DEL MES: Cobrado en caja vs Pendiente en CxC ═══
+// Calcula directamente desde las facturas en memoria del mes activo.
+// No genera ninguna consulta adicional a Supabase.
+const liquidezMes = computed(() => {
+  const { mes0 } = cortes();
+  let totalFacturado = 0;
+  let totalPendiente = 0;
+  validas.value
+    .filter(f => f.empresa === store.empresa && new Date(f.fecha_raw) >= mes0)
+    .forEach(f => {
+      const t = f.total || 0;
+      const p = f.saldo_pendiente || 0;
+      totalFacturado += t;
+      totalPendiente += p;
+    });
+  const cobrado = Math.max(0, totalFacturado - totalPendiente);
+  const pctCobrado = totalFacturado > 0 ? (cobrado / totalFacturado) * 100 : 0;
+  const pctPendiente = totalFacturado > 0 ? (totalPendiente / totalFacturado) * 100 : 0;
+  return {
+    totalFacturado,
+    cobrado,
+    pendiente: totalPendiente,
+    pctCobrado,
+    pctPendiente,
+    sinDatos: totalFacturado === 0
+  };
+});
+
 function verFactura(f) {
   store.facturaReciente = f;
   store.modalFacturaActivo = true;
@@ -511,11 +572,19 @@ const fijos = computed(() => {
 
 // ═══ UTILIDAD BRUTA Y PUNTO DE EQUILIBRIO (cargarUtilidadMes) ═══
 // Lee factura_items: fob y factor CONGELADOS al emitir. Ingreso = KPI "Ventas este mes".
+// Mejora v14.1: si el rango activo es "mes", reutiliza los items ya descargados
+// por cargarOrigen() en lugar de hacer una segunda consulta redundante a Supabase.
 const itsMes = ref(null);   // null = sin conexión / error · [] = sin ventas
 const errorIts = ref('');
 async function cargarUtilidad() {
   errorIts.value = '';
   if (!store.supabaseConectado) { itsMes.value = null; return; }
+  // Caché unificada: si el rango de análisis ya cargó los items del mes actual,
+  // se reutilizan directamente sin una segunda llamada a Supabase.
+  if (rango.value === 'mes' && origen.value.estado === 'listo' && origen.value.data?.its) {
+    itsMes.value = origen.value.data.its;
+    return;
+  }
   const { mes0 } = cortes();
   const ids = validas.value.filter(f => f.empresa === store.empresa && new Date(f.fecha_raw) >= mes0).map(f => f.id).filter(Boolean);
   if (!ids.length) { itsMes.value = []; return; }
@@ -589,6 +658,11 @@ async function cargarOrigen() {
     if (store.empresa !== empresaConsultada) return;
     const lbl = d.nFacts ? r.etiqueta + ' · ' + d.nFacts + ' factura(s)' : r.etiqueta;
     origen.value = { estado: 'listo', lbl, etiqueta: r.etiqueta, data: d.nFacts ? { ...d, etiqueta: r.etiqueta } : null };
+    // Caché unificada v14.1: si el rango es "mes", reutilizar items descargados
+    // en itsMes para que cargarUtilidad() no duplique la consulta.
+    if (rango.value === 'mes' && store.empresa === empresaConsultada) {
+      itsMes.value = d.its || [];
+    }
   } catch (e) {
     origen.value = { estado: 'error', lbl: r.etiqueta, etiqueta: r.etiqueta, data: null, error: e.message || String(e) };
   }
@@ -1595,5 +1669,91 @@ watch(() => store.todasFacturas.length, () => cargarUtilidad());
     box-shadow: none !important;
     border: 1px solid #CCC !important;
   }
+}
+
+/* ═══ Indicador de Liquidez ═══ */
+.liquidity-bar-wrap {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.liquidity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.liquidity-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dgray);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.liquidity-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--dgray);
+}
+.liq-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-green { background: var(--green); }
+.dot-gold  { background: var(--gold); }
+.liq-legend-text { font-weight: 600; }
+.liquidity-track {
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--gray);
+  overflow: hidden;
+  gap: 1px;
+}
+.liquidity-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+  flex-shrink: 0;
+}
+.liq-cobrado {
+  background: linear-gradient(90deg, var(--green), #34D399);
+  border-radius: var(--radius-full) 0 0 var(--radius-full);
+}
+.liq-pendiente {
+  background: linear-gradient(90deg, #F59E0B, var(--gold));
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+}
+.liquidity-amounts {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.liq-amount-cobrado {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.liq-amount-pendiente {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>
