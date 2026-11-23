@@ -1,442 +1,418 @@
 <template>
   <div class="page active" id="page-dashboard">
-    <h1 class="page-title"><i class="ti ti-chart-bar"></i> Reportes y Dashboard</h1>
-    <p class="page-sub">Resumen del día · Comparativa entre empresas · Ranking · Reorden · Backup</p>
+    <div class="dash-header-section">
+      <div class="dash-header-title">
+        <h1 class="page-title"><i class="ti ti-chart-bar"></i> Reportes y Dashboard</h1>
+        <p class="page-sub">Resumen del día · Comparativa entre empresas · Ranking · Reorden · Backup</p>
+      </div>
+      <div class="dash-header-actions no-print">
+        <button class="btn btn-secondary btn-sm" title="Imprimir reporte o exportar PDF" @click="imprimirReporte">
+          <i class="ti ti-printer"></i> Imprimir Reporte
+        </button>
+      </div>
+    </div>
 
-    <!-- Sub-navegación de reportes -->
-    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);overflow-x:auto;flex-wrap:wrap">
-      <button :class="['search-tab', { active: sub === 'resumen' }]" @click="sub = 'resumen'"><i class="ti ti-dashboard"></i> Resumen</button>
-      <button :class="['search-tab', { active: sub === 'comparativa' }]" @click="sub = 'comparativa'"><i class="ti ti-arrows-left-right"></i> Comparar empresas</button>
-      <button :class="['search-tab', { active: sub === 'ranking' }]" @click="sub = 'ranking'"><i class="ti ti-trophy"></i> Ranking clientes</button>
-      <button :class="['search-tab', { active: sub === 'reorden' }]" @click="sub = 'reorden'"><i class="ti ti-package"></i> Qué reordenar</button>
-      <button :class="['search-tab', { active: sub === 'backup' }]" @click="sub = 'backup'"><i class="ti ti-database"></i> Respaldos</button>
+    <!-- Sub-navegación de reportes en píldoras modernas -->
+    <div class="report-nav-bar no-print">
+      <button :class="['search-tab nav-pill', { active: sub === 'resumen' }]" @click="sub = 'resumen'"><i class="ti ti-dashboard"></i> Resumen</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'comparativa' }]" @click="sub = 'comparativa'"><i class="ti ti-arrows-left-right"></i> Comparar empresas</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'ranking' }]" @click="sub = 'ranking'"><i class="ti ti-trophy"></i> Ranking clientes</button>
+      <button :class="['search-tab nav-pill', { active: sub === 'reorden' }]" @click="sub = 'reorden'">
+        <i class="ti ti-package"></i> Qué reordenar
+        <span v-if="stockCritico.agotados > 0" class="tab-count-badge">{{ stockCritico.agotados }}</span>
+      </button>
+      <button :class="['search-tab nav-pill', { active: sub === 'backup' }]" @click="sub = 'backup'"><i class="ti ti-database"></i> Respaldos</button>
     </div>
 
     <!-- ═══ RESUMEN ═══ -->
     <div v-show="sub === 'resumen'">
-      <!-- SELECTOR DE PERÍODO GLOBAL PARA DASHBOARD Y KPIS -->
-      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <i class="ti ti-calendar-stats" style="font-size:22px;color:var(--navy)"></i>
+      <!-- SELECTOR DE PERÍODO GLOBAL -->
+      <PeriodFilter
+        v-model:rango="rango"
+        v-model:custDesde="custDesde"
+        v-model:custHasta="custHasta"
+        :etiqueta="origen.etiqueta"
+        :cargando="origen.estado === 'cargando'"
+        @cambio="cambioRango"
+        @aplicar="cargarOrigen"
+      />
+
+      <!-- ══ ALERTA STOCK CRÍTICO (Si hay agotados) ══ -->
+      <div v-if="stockCritico.agotados > 0" class="stock-alert-banner no-print">
+        <div class="stock-alert-left">
+          <i class="ti ti-alert-triangle"></i>
           <div>
-            <div style="font-weight:700;color:var(--navy);font-size:14px">
-              Período seleccionado: <span style="color:var(--gold);text-transform:capitalize">{{ origen.etiqueta }}</span>
-            </div>
-            <div style="font-size:11.5px;color:var(--dgray)">
-              Todos los indicadores de ventas, utilidad, margen y gráficas se actualizan según el rango seleccionado
-            </div>
+            <strong>{{ stockCritico.agotados }} producto{{ stockCritico.agotados !== 1 ? 's' : '' }} agotado{{ stockCritico.agotados !== 1 ? 's' : '' }}</strong>
+            <span class="stock-alert-msg">— Umbral crítico activo (≤ {{ stockCritico.umbral }} uds). Revisa inventario.</span>
           </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <label style="font-size:12px;font-weight:600;color:var(--navy)">Período:</label>
-          <select v-model="rango" class="rp-in" @change="cambioRango" style="font-weight:600;color:var(--navy)">
-            <option value="mes">Este mes</option>
-            <option value="mes_ant">Mes pasado</option>
-            <option value="3m">Últimos 3 meses</option>
-            <option value="6m">Últimos 6 meses</option>
-            <option value="12m">Últimos 12 meses</option>
-            <option value="anio">Este año</option>
-            <option value="todo">Todo el histórico</option>
-            <option value="custom">Personalizado…</option>
-          </select>
-          <span v-if="rango === 'custom'" style="display:inline-flex;gap:6px;align-items:center">
-            <input v-model="custDesde" type="date" class="rp-in">
-            <span style="font-size:11.5px;color:var(--dgray)">a</span>
-            <input v-model="custHasta" type="date" class="rp-in">
-            <button class="btn btn-primary btn-sm" @click="cargarOrigen">Aplicar</button>
-          </span>
-        </div>
+        <button class="btn btn-secondary btn-sm" @click="sub = 'reorden'"><i class="ti ti-package"></i> Ver reorden</button>
       </div>
 
-      <div class="kpi-grid">
-        <div class="kpi-card green">
-          <div class="kpi-icon"><i class="ti ti-trending-up"></i></div>
-          <div class="kpi-label">Ventas hoy</div>
-          <div class="kpi-val">{{ fmtUSD(ventas.totHoy) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ ventas.nHoy === 0 ? 'Sin ventas hoy' : ventas.nHoy + (ventas.nHoy === 1 ? ' factura' : ' facturas') }}</div>
-        </div>
-        <div class="kpi-card blue">
-          <div class="kpi-icon"><i class="ti ti-calendar"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Ventas este mes' : 'Ventas del período' }}</div>
-          <div class="kpi-val">{{ fmtUSD(kpisPeriodo.totalVenta) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">
-            {{ kpisPeriodo.nFacts === 0 ? 'Sin ventas en ' + origen.etiqueta : kpisPeriodo.nFacts + (kpisPeriodo.nFacts === 1 ? ' factura' : ' facturas') + ' · ' + origen.etiqueta }}
+      <!-- ══ HERO SECTION ══ -->
+      <div class="hero-row">
+        <!-- Columna izquierda: Revenue Hero Card -->
+        <div class="hero-revenue-card">
+          <div class="hero-top-row">
+            <div class="hero-label"><i class="ti ti-report-money" style="margin-right:5px;color:var(--blue);"></i>Ingresos del período</div>
+            <span class="hero-company-pill">{{ nombreEmp }}</span>
           </div>
-        </div>
-        <div class="kpi-card gold">
-          <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
-          <div class="kpi-label">Margen del catálogo</div>
-          <div class="kpi-val">{{ margenCatalogo == null ? '0%' : margenCatalogo.toFixed(1) + '%' }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ margenCatalogo == null ? 'Sin datos aún' : 'Teórico — todo a precio de lista' }}</div>
-        </div>
-        <div class="kpi-card red">
-          <div class="kpi-icon"><i class="ti ti-package"></i></div>
-          <div class="kpi-label">Stock crítico</div>
-          <div class="kpi-val">{{ stockCritico.bajos }}</div>
-          <div class="kpi-sub">1 a {{ stockCritico.umbral }} ud · {{ stockCritico.agotados }} agotados de {{ store.productos.length }}</div>
-        </div>
-        <div class="kpi-card green">
-          <div class="kpi-icon"><i class="ti ti-coin"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Utilidad bruta del mes' : 'Utilidad bruta del período' }}</div>
-          <div class="kpi-val">{{ kpisPeriodo.utilVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.utilSub }}</div>
-        </div>
-        <div class="kpi-card gold">
-          <div class="kpi-icon"><i class="ti ti-percentage"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Margen real vendido' : 'Margen real del período' }}</div>
-          <div class="kpi-val">{{ kpisPeriodo.margenVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.margenSub }}</div>
-        </div>
-        <div class="kpi-card blue">
-          <div class="kpi-icon"><i class="ti ti-scale"></i></div>
-          <div class="kpi-label">Punto de equilibrio</div>
-          <div class="kpi-val">{{ kpisPeriodo.peVal }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.peSub }}</div>
-        </div>
-        <div class="kpi-card red">
-          <div class="kpi-icon"><i class="ti ti-building-store"></i></div>
-          <div class="kpi-label">{{ rango === 'mes' ? 'Costos fijos del mes' : 'Costos fijos del período' }}</div>
-          <div class="kpi-val">{{ fmtUSD(kpisPeriodo.cf) }}</div>
-          <div class="kpi-sub" style="color:var(--dgray);font-weight:600">{{ kpisPeriodo.cfSub }}</div>
-        </div>
-      </div>
-
-      <!-- VENTAS POR ORIGEN (v13.28) · selector de período (v13.35) -->
-      <div class="chart-card" style="margin-bottom:16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-          <h3 style="margin:0"><i class="ti ti-world" style="color:var(--blue)"></i> Importado vs Local
-            <span style="font-weight:500;color:var(--dgray)">— {{ origen.lbl.charAt(0).toUpperCase() + origen.lbl.slice(1) }}</span></h3>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <select v-model="rango" class="rp-in" @change="cambioRango">
-              <option value="mes">Este mes</option>
-              <option value="mes_ant">Mes pasado</option>
-              <option value="3m">Últimos 3 meses</option>
-              <option value="6m">Últimos 6 meses</option>
-              <option value="12m">Últimos 12 meses</option>
-              <option value="anio">Este año</option>
-              <option value="todo">Todo el histórico</option>
-              <option value="custom">Personalizado…</option>
-            </select>
-            <span v-if="rango === 'custom'" style="display:inline-flex;gap:6px;align-items:center">
-              <input v-model="custDesde" type="date" class="rp-in">
-              <span style="font-size:11.5px;color:var(--dgray)">a</span>
-              <input v-model="custHasta" type="date" class="rp-in">
-              <button class="btn btn-primary btn-sm" @click="cargarOrigen">Aplicar</button>
+          <div class="hero-amount">
+            <span class="hero-currency">$</span>{{ (kpisPeriodo.totalVenta || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+          </div>
+          <div>
+            <span
+              class="hero-var-pill"
+              :class="compMeses.varPct > 0 ? 'up' : compMeses.varPct < 0 ? 'down' : 'neutral'"
+            >
+              <i :class="compMeses.varPct > 0 ? 'ti ti-trending-up' : compMeses.varPct < 0 ? 'ti ti-trending-down' : 'ti ti-minus'"></i>
+              {{ compMeses.varPct > 0 ? '+' : '' }}{{ (compMeses.varPct || 0).toFixed(1) }}% vs mes anterior
             </span>
           </div>
+          <div class="hero-meta">
+            <div class="hero-meta-item">
+              <span class="hero-meta-label">Facturas</span>
+              <span class="hero-meta-val">{{ kpisPeriodo.nFacts || 0 }}</span>
+            </div>
+            <div class="hero-meta-item" title="Promedio facturado por cliente/venta">
+              <span class="hero-meta-label">Ticket promedio</span>
+              <span class="hero-meta-val font-blue">{{ fmtUSD(ticketPromedio) }}</span>
+            </div>
+            <div class="hero-meta-item" title="Estimación de facturación al cierre del mes al ritmo actual">
+              <span class="hero-meta-label">Proyección mes</span>
+              <span class="hero-meta-val font-green">{{ fmtUSD(proyeccionMes) }}</span>
+            </div>
+            <div class="hero-meta-item">
+              <span class="hero-meta-label">Mes anterior</span>
+              <span class="hero-meta-val">${{ (compMeses.ant || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+            </div>
+            <div class="hero-meta-item">
+              <span class="hero-meta-label">Hoy</span>
+              <span class="hero-meta-val">${{ (ventas.totHoy || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+            </div>
+          </div>
+
+          <!-- ══ INDICADOR DE LIQUIDEZ (Caja vs Cuentas por Cobrar) ══ -->
+          <div v-if="!liquidezMes.sinDatos" class="liquidity-bar-wrap">
+            <div class="liquidity-header">
+              <span class="liquidity-label"><i class="ti ti-droplet"></i> Liquidez del mes</span>
+              <div class="liquidity-legend">
+                <span class="liq-dot dot-green"></span>
+                <span class="liq-legend-text">Cobrado {{ liquidezMes.pctCobrado.toFixed(0) }}%</span>
+                <span class="liq-dot dot-gold" style="margin-left:10px"></span>
+                <span class="liq-legend-text">Pendiente {{ liquidezMes.pctPendiente.toFixed(0) }}%</span>
+              </div>
+            </div>
+            <div class="liquidity-track">
+              <div
+                class="liquidity-fill liq-cobrado"
+                :style="{ width: Math.min(liquidezMes.pctCobrado, 100) + '%' }"
+                :title="'Cobrado en caja/banco: ' + fmtUSD(liquidezMes.cobrado)"
+              ></div>
+              <div
+                class="liquidity-fill liq-pendiente"
+                :style="{ width: Math.min(liquidezMes.pctPendiente, 100) + '%' }"
+                :title="'Cuentas por cobrar pendientes: ' + fmtUSD(liquidezMes.pendiente)"
+              ></div>
+            </div>
+            <div class="liquidity-amounts">
+              <span class="liq-amount-cobrado">
+                <i class="ti ti-cash"></i> {{ fmtUSD(liquidezMes.cobrado) }} en caja
+              </span>
+              <span class="liq-amount-pendiente">
+                <i class="ti ti-clock"></i> {{ fmtUSD(liquidezMes.pendiente) }} por cobrar
+              </span>
+            </div>
+          </div>
+
+          <!-- Barra de meta dentro del Hero (si hay meta) -->
+          <div v-if="metaEmpresa > 0" class="hero-goal-bar-wrap">
+            <div class="hero-goal-bar-header">
+              <span class="hero-goal-label"><i class="ti ti-target" style="color:var(--green);"></i> Meta {{ nombreEmp }} ({{ metasPer }})</span>
+              <span class="hero-goal-pct">{{ pctEmp.toFixed(1) }}%</span>
+            </div>
+            <div class="hero-goal-track">
+              <div class="hero-goal-fill" :style="{ width: Math.min(pctEmp, 100) + '%' }"></div>
+            </div>
+            <div class="hero-goal-sub">
+              <span>Vendido: <strong>{{ fmtUSD(ventasEmpresa) }}</strong></span>
+              <span>Meta: <strong>{{ fmtUSD(metaEmpresa) }}</strong></span>
+              <span v-if="faltaEmp > 0" class="text-gold">Faltan {{ fmtUSD(faltaEmp) }}</span>
+              <span v-else class="text-green">¡Meta superada!</span>
+            </div>
+          </div>
         </div>
 
-        <div v-if="origen.estado === 'cargando'" style="padding:14px;text-align:center;color:var(--dgray)"><i class="ti ti-loader"></i> Leyendo {{ origen.etiqueta }}…</div>
-        <div v-else-if="origen.estado === 'error'" style="padding:14px;text-align:center;color:var(--red)">{{ origen.error }}</div>
-        <div v-else-if="origen.estado === 'sinconexion'" style="padding:14px;text-align:center;color:var(--dgray)">Sin conexión a la base.</div>
-        <div v-else-if="!origen.data || !origen.data.its.length" style="padding:14px;text-align:center;color:var(--dgray)">Sin ventas en {{ origen.etiqueta }}.</div>
-        <template v-else>
-          <div style="display:flex;flex-wrap:wrap;gap:10px">
-            <div v-for="b in bloquesOrigen" :key="b.key" :style="{ flex: '1 1 210px', background: b.col, borderRadius: '8px', padding: '10px 12px' }">
-              <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.4px;font-weight:600"><i :class="'ti ti-' + b.icono"></i> {{ b.nom }}</div>
-              <div style="font-size:20px;font-weight:800;color:var(--navy);line-height:1.25">{{ fmtUSD(b.c.venta) }}</div>
-              <div style="font-size:11.5px;color:var(--dgray);margin-bottom:6px">{{ pc(b.c.venta, R.tot.venta) }} de la venta &middot; {{ b.c.uds.toLocaleString('es-VE') }} uds &middot; {{ b.c.lineas }} renglones</div>
-              <div style="height:5px;background:#FFF;border-radius:3px;overflow:hidden;margin-bottom:6px">
-                <div :style="{ height: '100%', width: (R.tot.venta > 0 ? b.c.venta / R.tot.venta * 100 : 0).toFixed(1) + '%', background: 'var(--gold)' }"></div></div>
-              <div style="font-size:12px;line-height:1.6">Costo <strong>{{ fmtUSD(b.c.costo) }}</strong><br>
-                Utilidad <strong :style="{ color: b.c.util >= 0 ? '#1E7B34' : '#B00020' }">{{ fmtUSD(b.c.util) }}</strong> &middot; margen <strong>{{ b.c.mg.toFixed(1) }}%</strong><br>
-                <span style="color:var(--dgray)">Aporta {{ pc(b.c.util, R.tot.util) }} de la utilidad</span>
-                <!-- Desglose de caja: lo que YA está y lo que falta por cobrar son cosas distintas -->
-                <div v-if="b.v && (b.v.enMano > 0 || b.v.porCobrar > 0)" style="margin-top:8px;padding-top:7px;border-top:1px solid rgba(0,0,0,.08)">
-                  <div style="color:#1E7B34;font-weight:700;font-size:13px">✓ Ya en caja: {{ fmtUSD(b.v.enMano) }}</div>
-                  <div v-if="b.v.efectivo > 0 || b.v.usdt > 0" style="font-size:11px;color:var(--dgray);margin-top:1px">
-                    {{ [b.v.efectivo > 0 ? fmtUSD(b.v.efectivo) + ' efectivo' : '', b.v.usdt > 0 ? fmtUSD(b.v.usdt) + ' a convertir en USDT' : ''].filter(Boolean).join(' · ') }}</div>
-                  <template v-if="b.v.porCobrar > 0">
-                    <div style="color:#BF8F00;font-weight:600;font-size:12.5px;margin-top:5px">⏳ Por cobrar: {{ fmtUSD(b.v.porCobrar) }}</div>
-                    <div style="font-size:11px;color:var(--dgray);margin-top:1px">Aún no es plata. Sujeto a que la brecha se mueva.</div>
-                  </template>
+        <!-- Columna derecha: Top clientes + últimas ventas -->
+        <div class="hero-side-panel">
+          <!-- Top clientes del mes -->
+          <div class="side-panel-card">
+            <div class="side-panel-title">
+              <i class="ti ti-crown"></i>
+              Top clientes del mes
+            </div>
+            <div v-if="!ranking.top.length" class="empty-state-card" style="padding:12px;font-size:12px;">
+              Sin ventas en el período
+            </div>
+            <div v-else>
+              <div
+                v-for="(c, idx) in ranking.top.slice(0, 3)"
+                :key="c.nombre"
+                class="hero-client-row clickable-row"
+                title="Clic para ver módulo de clientes"
+                @click="irAClientes"
+              >
+                <div class="client-avatar">{{ c.nombre.charAt(0).toUpperCase() }}</div>
+                <div class="client-info">
+                  <div class="client-nm">{{ c.nombre }}</div>
+                  <div class="client-purchases">{{ c.comprasMes }} compra{{ c.comprasMes !== 1 ? 's' : '' }} este mes</div>
+                </div>
+                <div class="client-monto">${{ (c.mes || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Últimas ventas -->
+          <div class="side-panel-card">
+            <div class="side-panel-title">
+              <i class="ti ti-receipt"></i>
+              Últimas ventas
+            </div>
+            <div v-if="!ventasRecientes.length" class="empty-state-card" style="padding:12px;font-size:12px;">
+              Sin ventas recientes
+            </div>
+            <div v-else>
+              <div
+                v-for="v in ventasRecientes.slice(0, 3)"
+                :key="v.id"
+                class="mini-sale-row clickable-row"
+                title="Clic para ver detalle de la factura"
+                @click="verFactura(v)"
+              >
+                <div class="mini-sale-client">{{ v.cliente_nombre_snap || v.cliente }}</div>
+                <div class="mini-sale-val">
+                  {{ fmtUSD(v.total) }}
+                  <i class="ti ti-chevron-right chevron-mini"></i>
                 </div>
               </div>
             </div>
           </div>
-          <div v-if="R.g.local.venta > 0 && R.g.importado.venta > 0" style="margin-top:9px;font-size:12px;color:var(--dgray);line-height:1.5">
-            El margen de <strong>{{ R.g.importado.mg - R.g.local.mg >= 0 ? 'importado' : 'local' }}</strong> es
-            {{ Math.abs(R.g.importado.mg - R.g.local.mg).toFixed(1) }} puntos mayor. Utilidad total del mes: <strong>{{ fmtUSD(R.tot.util) }}</strong>.</div>
-          <div v-if="R.deducidos > 0 || R.sinCosto > 0" style="margin-top:8px;padding:8px 10px;border-radius:6px;background:#FFF4E5;border-left:3px solid #BF8F00;font-size:11.5px;line-height:1.5">
-            <div v-if="R.deducidos > 0">⚠ <strong>{{ R.deducidos }} renglón(es) sin origen guardado</strong> — clasificados por el factor congelado, es una deducción</div>
-            <div v-if="R.sinCosto > 0">⚠ <strong>{{ R.sinCosto }} renglón(es) sin costo</strong> — su margen sale inflado</div>
-          </div>
-          <div v-if="R.VR.nPend > 0" style="margin-top:10px;padding:8px 10px;border-radius:6px;background:#FFF9E6;border-left:3px solid #BF8F00;font-size:11.5px;line-height:1.5">
-            <strong>{{ R.VR.nPend }} factura(s) sin cobrar del todo.</strong> Lo de "por cobrar" no está en tu caja:
-            mientras esos bolívares no entren, la brecha sigue corriendo y el objetivo en USDT baja cada día.</div>
-          <div v-if="R.VR.sinTasa > 0" style="margin-top:8px;font-size:11px;color:var(--dgray)">{{ R.VR.sinTasa }} factura(s) sin tasas congeladas: no entran en el cálculo de caja.</div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-sm" style="background:var(--navy);color:#FFF" @click="detalleAbierto = !detalleAbierto"><i class="ti ti-list-search"></i> Ver qué productos son</button>
-            <button class="btn btn-sm btn-secondary" @click="descargarDetalleOrigen"><i class="ti ti-download"></i> Descargar detalle CSV</button>
-          </div>
-        </template>
-
-        <!-- Detalle por producto -->
-        <div v-if="detalleAbierto" style="margin-top:12px">
-          <div v-if="!origen.data || !origen.data.its.length" style="padding:14px;text-align:center;color:var(--dgray);font-size:12.5px">Escoge un período con ventas y vuelve a abrir el detalle.</div>
-          <template v-else>
-            <div v-for="t in tablasDetalle" :key="t.key" style="margin-bottom:14px">
-              <div :style="{ fontSize: '12px', fontWeight: 700, color: 'var(--navy)', background: t.col, padding: '6px 9px', borderRadius: '6px 6px 0 0' }">
-                <i :class="'ti ti-' + t.icono"></i> {{ t.titulo }} — {{ t.lista.length }} producto(s) · {{ fmtUSD(t.tV) }} $BCV · ≈ {{ fmtUSD(t.tW) }} verde</div>
-              <div style="overflow-x:auto">
-                <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-                  <thead><tr style="background:#F7F7F7;color:var(--dgray)">
-                    <th style="text-align:left;padding:5px 7px">Código</th><th style="text-align:left;padding:5px 7px">Descripción</th>
-                    <th style="text-align:right;padding:5px 7px">Uds</th><th style="text-align:right;padding:5px 7px">Venta $BCV</th>
-                    <th style="text-align:right;padding:5px 7px">$verde facturado</th><th style="text-align:right;padding:5px 7px">Costo</th>
-                    <th style="text-align:right;padding:5px 7px">Utilidad</th><th style="text-align:right;padding:5px 7px">Margen</th></tr></thead>
-                  <tbody>
-                    <tr v-for="p in t.lista.slice(0, 60)" :key="p.cod + p.desc" style="border-bottom:1px solid var(--border)">
-                      <td style="padding:4px 7px;font-family:monospace">{{ p.cod }}</td>
-                      <td style="padding:4px 7px">{{ p.desc }}</td>
-                      <td style="padding:4px 7px;text-align:right">{{ p.uds.toLocaleString('es-VE') }}</td>
-                      <td style="padding:4px 7px;text-align:right;font-weight:600">{{ fmtUSD(p.venta) }}</td>
-                      <td style="padding:4px 7px;text-align:right;color:#1E7B34">{{ p.sinTasa ? '—' : fmtUSD(p.verde) }}</td>
-                      <td style="padding:4px 7px;text-align:right;color:var(--dgray)">{{ fmtUSD(p.costo) }}</td>
-                      <td :style="{ padding: '4px 7px', textAlign: 'right', color: p.venta - p.costo >= 0 ? '#1E7B34' : '#B00020' }">{{ fmtUSD(p.venta - p.costo) }}</td>
-                      <td style="padding:4px 7px;text-align:right">{{ (p.venta > 0 ? (p.venta - p.costo) / p.venta * 100 : 0).toFixed(1) }}%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-if="t.lista.length > 60" style="font-size:11px;color:var(--dgray);padding:5px 7px">Mostrando los 60 de mayor venta. El CSV los trae todos.</div>
-            </div>
-            <div style="font-size:11px;color:var(--dgray);line-height:1.5;padding:6px 2px">
-              La columna <strong>$verde facturado</strong> es el equivalente de lo <em>facturado</em> con la brecha congelada
-              de cada factura, esté cobrado o no, y sin descontar. No es caja. La caja real, ya separada entre cobrado y
-              pendiente, está en el recuadro de arriba.</div>
-          </template>
         </div>
       </div>
 
-      <!-- METAS DE VENTA -->
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:15px;color:var(--navy);font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-target"></i> Metas de venta del mes</h2>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:11.5px;color:var(--dgray)">Período:</span>
-            <select v-model="metasPer" class="val-input" style="width:150px">
-              <option v-for="x in opcionesPeriodo" :key="x" :value="x">{{ etiquetaPeriodo(x) }}</option>
-            </select>
-            <span v-if="esMesCerrado" style="background:#FFF8E1;color:#5D4037;padding:2px 8px;border-radius:8px;font-size:10.5px;font-weight:600">MES CERRADO</span>
+      <!-- ══ KPI STRIP ══ -->
+      <div class="kpi-strip">
+        <!-- 1. Margen catálogo -->
+        <div class="kpi-strip-card" title="Margen teórico promedio de todo el catálogo a precio de lista vs costo landed">
+          <div class="kpi-strip-label"><i class="ti ti-percentage"></i> Margen Catálogo</div>
+          <div class="kpi-strip-val">
+            <span v-if="margenCatalogo != null">{{ margenCatalogo.toFixed(1) }}%</span>
+            <span v-else style="font-size:14px;color:var(--text-muted);">—</span>
           </div>
-          <button class="btn btn-secondary btn-sm" @click="abrirEquipo"><i class="ti ti-users-plus"></i> Gestionar equipo</button>
+          <div class="kpi-strip-sub">Teórico</div>
         </div>
-        <div v-if="esMesCerrado" style="background:#FFF8E1;border-left:3px solid var(--gold);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11.5px;color:#5D4037">
-          <i class="ti ti-info-circle"></i> Estás viendo un mes distinto al actual. Las barras de "vendido" siempre muestran el <strong>mes en curso</strong>; solo la meta cambia de período.
+        <!-- 2. Utilidad bruta -->
+        <div class="kpi-strip-card" title="Utilidad bruta = Ventas del período − Costo landed congelado">
+          <div class="kpi-strip-label"><i class="ti ti-coin"></i> Utilidad Bruta</div>
+          <div class="kpi-strip-val" style="color:var(--green)">{{ kpisPeriodo.utilVal }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.utilSub">{{ kpisPeriodo.utilSub }}</div>
         </div>
-
-        <div style="background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div>
-              <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Meta empresa</div>
-              <div style="font-size:14px;font-weight:600;color:var(--navy)">{{ nombreEmp }}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:11.5px;color:var(--dgray)">Meta:</span>
-              <input type="number" class="val-input" :value="metaEmpresa" step="500" min="0" style="width:110px" @change="actualizarMetaEmpresa($event.target.value)">
-            </div>
-          </div>
-          <div style="background:var(--gray);border-radius:5px;height:24px;position:relative;overflow:hidden">
-            <div :style="{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,var(--green),#4CAF50)', width: pctEmp + '%', transition: 'width 0.4s', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '8px', color: '#FFF', fontSize: '11px', fontWeight: 600 }">{{ pctEmp > 8 ? pctEmp.toFixed(1) + '%' : '' }}</div>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11.5px">
-            <span style="color:var(--green);font-weight:600">Vendido: {{ fmtUSD(ventasEmpresa) }}</span>
-            <span style="color:var(--dgray)">Falta: <strong :style="{ color: faltaEmp > 0 ? 'var(--gold)' : 'var(--green)' }">{{ fmtUSD(faltaEmp) }}</strong></span>
-          </div>
-          <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:11px;color:var(--dgray)">
-            <template v-if="baseSug > 0">
-              <i class="ti ti-bulb"></i> Sugerencias sobre el mes anterior ({{ fmtUSD(baseSug) }}):
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin:2px" @click="sugerirMeta('conservadora')">Conservadora: {{ fmtUSD(Math.round(baseSug * 0.9 / 100) * 100) }}</button>
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin:2px" @click="sugerirMeta('moderada')">Moderada: {{ fmtUSD(Math.round(baseSug * 1.1 / 100) * 100) }}</button>
-              <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin:2px" @click="sugerirMeta('agresiva')">Agresiva: {{ fmtUSD(Math.round(baseSug * 1.3 / 100) * 100) }}</button>
-            </template>
-            <template v-else><i class="ti ti-bulb"></i> Las sugerencias aparecen cuando haya ventas del mes anterior con qué compararse.</template>
-          </div>
+        <!-- 3. Margen real -->
+        <div class="kpi-strip-card" title="Margen efectivo sobre los productos realmente facturados">
+          <div class="kpi-strip-label"><i class="ti ti-chart-pie"></i> Margen Real</div>
+          <div class="kpi-strip-val" style="color:var(--gold)">{{ kpisPeriodo.margenVal }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.margenSub">{{ kpisPeriodo.margenSub }}</div>
         </div>
-
-        <div style="background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500">Metas por trabajador</div>
-            <button class="btn btn-secondary btn-sm" style="font-size:10.5px" @click="abrirEquipo"><i class="ti ti-plus"></i> Agregar</button>
+        <!-- 4. Punto de equilibrio -->
+        <div class="kpi-strip-card" title="Monto de ventas necesario para cubrir los costos fijos al margen actual">
+          <div class="kpi-strip-label"><i class="ti ti-scale"></i> Punto Equilibrio</div>
+          <div class="kpi-strip-val">{{ kpisPeriodo.peVal }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.peSub">{{ kpisPeriodo.peSub }}</div>
+        </div>
+        <!-- 5. Costos fijos -->
+        <div class="kpi-strip-card" title="Costos fijos configurados para el período">
+          <div class="kpi-strip-label"><i class="ti ti-building-store"></i> Costos Fijos</div>
+          <div class="kpi-strip-val">{{ fmtUSD(kpisPeriodo.cf || 0) }}</div>
+          <div class="kpi-strip-sub" :title="kpisPeriodo.cfSub">{{ kpisPeriodo.cfSub }}</div>
+        </div>
+        <!-- 6. Stock crítico -->
+        <div class="kpi-strip-card" title="Productos con stock igual o inferior al umbral mínimo">
+          <div class="kpi-strip-label"><i class="ti ti-package"></i> Stock Crítico</div>
+          <div class="kpi-strip-val" :style="{ color: stockCritico.agotados > 0 ? 'var(--red)' : 'var(--text)' }">
+            {{ stockCritico.bajos || 0 }} <span style="font-size:12px;color:var(--text-muted);font-weight:600">bajos</span>
           </div>
-          <div v-if="!listaTrab.length" style="padding:18px;text-align:center;color:var(--dgray);font-size:12px">
-            Todavía no hay trabajadores en <strong>{{ nombreEmp }}</strong>.<br>
-            <button class="btn btn-primary btn-sm" style="margin-top:8px" @click="abrirEquipo"><i class="ti ti-user-plus"></i> Agregar el primero</button>
-          </div>
-          <div v-for="t in filasTrab" :key="t.v" style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px">
-              <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                <i class="ti ti-user" style="color:var(--blue);flex-shrink:0"></i>
-                <span style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.v }}</span>
-                <span v-if="t.cumplido" style="background:var(--lgreen);color:var(--green);padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">✓ CUMPLIDA</span>
-                <span v-if="!t.enEquipo" style="background:#FFF8E1;color:#5D4037;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="Facturó pero no está en la lista de equipo">FUERA DEL EQUIPO</span>
-              </div>
-              <input type="number" :value="t.meta" step="500" min="0" class="val-input" style="width:90px;flex-shrink:0" @change="actualizarMetaVendedor(t.v, $event.target.value)">
-            </div>
-            <div style="background:var(--gray);border-radius:4px;height:14px;overflow:hidden">
-              <div :style="{ background: t.cumplido ? 'linear-gradient(90deg,var(--green),#4CAF50)' : 'linear-gradient(90deg,var(--blue),var(--navy))', height: '100%', width: t.pct + '%', transition: 'width 0.4s' }"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:11px;color:var(--dgray)">
-              <span>{{ fmtUSD(t.vendido) }}{{ t.meta > 0 ? ' (' + t.pct.toFixed(0) + '%)' : '' }}</span>
-              <span>{{ t.meta > 0 ? 'Falta ' + fmtUSD(t.falta) : 'Sin meta asignada' }}</span>
-            </div>
-          </div>
-          <!-- Si la suma de metas individuales no cuadra con la de la empresa -->
-          <div v-if="avisoSuma" :style="{ marginTop: '10px', fontSize: '11.5px', color: avisoSuma.corta ? '#5D4037' : 'var(--dgray)', background: avisoSuma.corta ? '#FFF8E1' : 'transparent', borderTop: '1px dashed var(--border)', borderRadius: '6px', padding: '8px 10px' }">
-            <i :class="'ti ti-' + (avisoSuma.corta ? 'alert-triangle' : 'info-circle')"></i>
-            La suma de las metas individuales es <strong>{{ fmtUSD(avisoSuma.suma) }}</strong> contra {{ fmtUSD(metaEmpresa) }} de la empresa.
-            <template v-if="avisoSuma.corta">Aunque <strong>todos cumplan</strong>, la empresa se queda {{ fmtUSD(Math.abs(avisoSuma.dif)) }} corta.</template>
-            <template v-else>Hay {{ fmtUSD(avisoSuma.dif) }} de colchón.</template>
+          <div class="kpi-strip-sub">
+            <span
+              v-if="stockCritico.agotados > 0"
+              class="kpi-strip-pill pill-red"
+            >{{ stockCritico.agotados }} agotado{{ stockCritico.agotados !== 1 ? 's' : '' }}</span>
+            <span v-else>Sin agotados</span>
           </div>
         </div>
       </div>
 
-      <!-- COMPARATIVA MES vs MES -->
-      <div class="chart-card" style="margin-bottom:16px">
-        <h3><i class="ti ti-chart-line" style="color:var(--blue)"></i> Comparativa de ventas — Mes actual vs Mes anterior</h3>
-        <div style="padding:4px 2px">
-          <div v-for="b in compMeses.barras" :key="b.etiqueta" style="margin-bottom:12px">
-            <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:4px">
-              <span style="color:var(--dgray);text-transform:capitalize">{{ b.etiqueta }}</span>
-              <span style="font-weight:600;color:var(--navy)">{{ fmtUSD(b.val) }} · {{ b.n }} {{ b.n === 1 ? 'factura' : 'facturas' }}</span>
+      <!-- ══ CUADRO ESTADÍSTICO: DINÁMICA DIARIA DE FACTURACIÓN ══ -->
+      <SalesDynamicChart
+        :facturas="validas.filter(f => f.empresa === store.empresa)"
+        :etiqueta="origen.etiqueta"
+      />
+
+      <!-- ══ FILA DE ANÁLISIS (2 columnas) ══ -->
+      <div class="analysis-row">
+        <!-- Izquierda: Importado vs Local + Comparativa meses -->
+        <div>
+          <ComparisonCards
+            :origen="origen"
+            :r="R"
+            :bloques-origen="bloquesOrigen"
+            :tablas-detalle="tablasDetalle"
+            :detalle-abierto="detalleAbierto"
+            :comp-meses="compMeses"
+            @toggle-detalle="detalleAbierto = !detalleAbierto"
+            @descargar-csv="descargarDetalleOrigen"
+          />
+        </div>
+
+        <!-- Derecha: Productos más vendidos -->
+        <div class="top-prod-panel">
+          <div class="dash-card-header">
+            <div class="dash-title-wrap">
+              <span class="dash-icon-badge blue"><i class="ti ti-chart-bar"></i></span>
+              <div>
+                <h3 class="dash-card-title">Productos más vendidos</h3>
+                <span class="dash-card-subtitle">Ranking por {{ criterioTop === 'total' ? 'monto en USD' : 'unidades vendidas' }}</span>
+              </div>
             </div>
-            <div style="background:var(--gray);border-radius:5px;height:20px;overflow:hidden">
-              <div :style="{ background: b.color, height: '100%', width: (b.val / compMeses.tope * 100) + '%', transition: 'width .4s' }"></div>
+            <div class="top-prod-toggle">
+              <button
+                :class="['toggle-pill', { active: criterioTop === 'total' }]"
+                @click="criterioTop = 'total'"
+              >
+                Por $
+              </button>
+              <button
+                :class="['toggle-pill', { active: criterioTop === 'cant' }]"
+                @click="criterioTop = 'cant'"
+              >
+                Por Uds
+              </button>
             </div>
           </div>
-          <div v-if="compMeses.ant === 0 && compMeses.act === 0" style="font-size:11.5px;color:var(--dgray)">Sin ventas en ninguno de los dos meses.</div>
-          <div v-else-if="compMeses.ant === 0" style="font-size:11.5px;color:var(--dgray)">No hay mes anterior con ventas: todavía no se puede comparar.</div>
-          <div v-else style="font-size:12px;padding-top:8px;border-top:1px dashed var(--border)">
-            <span :style="{ color: compMeses.varPct >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600 }">{{ compMeses.varPct >= 0 ? '▲' : '▼' }} {{ Math.abs(compMeses.varPct).toFixed(1) }}%</span>
-            <span style="color:var(--dgray)"> respecto al mes anterior · diferencia {{ fmtUSD(Math.abs(compMeses.act - compMeses.ant)) }}</span>
+
+          <div v-if="!topOrdenado.length" class="empty-state-card">
+            <i class="ti ti-chart-pie-off" style="font-size:24px;opacity:0.5;margin-bottom:6px"></i>
+            <div>Sin ventas registradas en este período</div>
+          </div>
+          <div v-else class="top-prods-list">
+            <div v-for="(p, idx) in topOrdenado.slice(0, 8)" :key="p.cod" class="top-prod-row">
+              <div class="top-prod-header">
+                <div class="top-prod-info">
+                  <span class="top-prod-rank">#{{ idx + 1 }}</span>
+                  <span class="top-prod-name" :title="p.desc || p.cod">{{ p.desc || p.cod }}</span>
+                </div>
+                <div class="top-prod-numbers">
+                  <span class="top-prod-units" :class="{ 'units-highlight': criterioTop === 'cant' }">{{ p.cant }} ud</span>
+                  <span class="top-prod-total" :class="{ 'total-highlight': criterioTop === 'total' }">{{ fmtUSD(p.total) }}</span>
+                </div>
+              </div>
+              <div class="top-prod-bar-track">
+                <div
+                  class="top-prod-bar-fill"
+                  :style="{
+                    width: criterioTop === 'total'
+                      ? (p.total / (topOrdenado[0].total || 1)) * 100 + '%'
+                      : (p.cant / (topOrdenado[0].cant || 1)) * 100 + '%'
+                  }"
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="dash-grid">
-        <div class="chart-card">
-          <h3><i class="ti ti-chart-bar" style="color:var(--blue)"></i> Productos más vendidos del mes</h3>
-          <div v-if="!top.length" style="padding:20px;text-align:center;color:var(--dgray);font-size:13px">Sin ventas este mes</div>
-          <div v-else style="padding:4px 2px">
-            <div v-for="p in top" :key="p.cod" style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;gap:8px">
-                <span style="font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.desc || p.cod }}</span>
-                <span style="color:var(--dgray);white-space:nowrap">{{ p.cant }} ud · {{ fmtUSD(p.total) }}</span>
-              </div>
-              <div style="background:var(--gray);border-radius:4px;height:14px;overflow:hidden">
-                <div :style="{ background: 'linear-gradient(90deg,var(--blue),var(--navy))', height: '100%', width: (p.total / (top[0].total || 1)) * 100 + '%' }"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="list-card">
-          <h3><i class="ti ti-receipt" style="color:var(--blue)"></i> Últimas ventas</h3>
-          <div v-for="v in ventasRecientes" :key="v.id" class="list-row">
-            <div class="nombre"><div style="font-weight:600">{{ v.cliente }}</div><div style="font-size:11px;color:var(--dgray)">{{ v.num }} · {{ fechaReciente(v.fecha_raw) }} · {{ v.vendedor }}</div></div>
-            <div class="valor">{{ fmtUSD(v.total) }}</div>
-          </div>
-        </div>
-      </div>
+      <!-- ══ FILA INFERIOR: Metas de ventas ══ -->
+      <SalesGoalsCard
+        v-model:metas-per="metasPer"
+        :nombre-emp="nombreEmp"
+        :opciones-periodo="opcionesPeriodo"
+        :es-mes-cerrado="esMesCerrado"
+        :meta-empresa="metaEmpresa"
+        :pct-emp="pctEmp"
+        :ventas-empresa="ventasEmpresa"
+        :falta-emp="faltaEmp"
+        :base-sug="baseSug"
+        :lista-trab="listaTrab"
+        :filas-trab="filasTrab"
+        :aviso-suma="avisoSuma"
+        @abrir-equipo="abrirEquipo"
+        @actualizar-meta-empresa="actualizarMetaEmpresa"
+        @actualizar-meta-vendedor="actualizarMetaVendedor"
+        @sugerir-meta="sugerirMeta"
+      />
     </div>
 
-    <!-- ═══ COMPARATIVA ENTRE EMPRESAS (en el monolito todavía no está activa) ═══ -->
+    <!-- ═══ COMPARATIVA ENTRE EMPRESAS (Activada con datos reales) ═══ -->
     <div v-if="sub === 'comparativa'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-arrows-left-right"></i> Venta Directa vs Distribuidora — Este mes</div>
-        <div style="padding:20px;text-align:center;color:var(--dgray);font-size:13px">Sin ventas registradas todavía</div>
-      </div>
+      <CompanyComparison
+        :todas-facturas="store.todasFacturas"
+        :etiqueta-periodo="origen.etiqueta"
+      />
     </div>
 
-    <!-- ═══ RANKING DE CLIENTES (v13.2) ═══ -->
+    <!-- ═══ RANKING DE CLIENTES ═══ -->
     <div v-if="sub === 'ranking'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-trophy"></i> Ranking de clientes</div>
-        <div class="rp-ranking">
-          <div>
-            <h3 style="font-size:13px;color:var(--navy);font-weight:600;margin-bottom:10px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Top 5 compradores del mes · {{ nombreEmp }}</h3>
-            <div v-if="!ranking.top.length" style="padding:20px;text-align:center;color:var(--dgray);font-size:12.5px">Nadie ha comprado este mes en {{ nombreEmp }}</div>
-            <div v-for="(c, i) in ranking.top" :key="c.nombre" style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-                <span style="font-size:12.5px;font-weight:500"><span style="display:inline-block;width:20px">{{ ['🥇', '🥈', '🥉', '4', '5'][i] }}</span> {{ c.nombre }}</span>
-                <span style="font-weight:700;color:var(--navy);font-size:13px">{{ fmtUSD(c.mes) }}</span>
-              </div>
-              <div style="background:var(--gray);border-radius:4px;height:8px;margin-left:24px"><div :style="{ background: 'linear-gradient(90deg,var(--gold),#E0B020)', height: '100%', width: (c.mes / ranking.top[0].mes * 100).toFixed(0) + '%', borderRadius: '4px' }"></div></div>
-              <div style="font-size:10.5px;color:var(--dgray);margin-left:24px;margin-top:2px">{{ c.comprasMes }} {{ c.comprasMes === 1 ? 'compra' : 'compras' }} este mes · última {{ fechaCortaRk(c.ultima) }}</div>
-            </div>
-          </div>
-          <div>
-            <h3 style="font-size:13px;color:var(--red);font-weight:600;margin-bottom:10px"><i class="ti ti-alert-triangle"></i> Clientes que dejaron de comprar</h3>
-            <div v-if="!ranking.dormidos.length" style="padding:20px;text-align:center;color:var(--dgray);font-size:12.5px">Ningún cliente lleva más de 30 días sin comprar</div>
-            <div v-for="c in ranking.dormidos" :key="c.nombre" style="background:#FEF5F5;border:1px solid #F5C0C0;border-radius:8px;padding:10px 12px;margin-bottom:8px">
-              <div style="font-weight:600;font-size:12.5px;color:#222">{{ c.nombre }}</div>
-              <div style="font-size:11px;color:var(--red);font-weight:500;margin:2px 0">⚠ {{ c.dias }} días sin comprar</div>
-              <div style="font-size:10.5px;color:var(--dgray)">{{ c.comprasHist }} compras históricas · ticket promedio {{ fmtUSD(c.prom) }} · última {{ fechaCortaRk(c.ultima) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <CustomerRankingCard
+        :ranking="ranking"
+        :nombre-emp="nombreEmp"
+        :todas-facturas="store.todasFacturas"
+        :clientes="store.clientes"
+      />
     </div>
 
-    <!-- ═══ REORDEN (en el monolito se activa cuando haya historial de ventas real) ═══ -->
+    <!-- ═══ REORDEN (Activado con asistente de compras) ═══ -->
     <div v-if="sub === 'reorden'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-package"></i> Productos que debes reordenar pronto</div>
-        <div style="padding:20px;text-align:center;color:var(--dgray);font-size:13px">El cálculo de reorden se activará cuando haya historial de ventas real</div>
-      </div>
+      <ReorderReport
+        :productos="store.productos"
+        :empresa="store.empresa"
+        :ventas-items="itsMes || []"
+      />
     </div>
 
-    <!-- ═══ RESPALDOS (v13.2) ═══ -->
+    <!-- ═══ RESPALDOS ═══ -->
     <div v-if="sub === 'backup'">
-      <div class="card">
-        <div class="card-tit"><i class="ti ti-database"></i> Respaldos y seguridad de datos</div>
-        <div class="rp-2col">
-          <div style="background:var(--lgreen);border-radius:8px;padding:16px">
-            <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:6px"><i class="ti ti-cloud-check"></i> Respaldo automático en la nube</div>
-            <div style="font-size:12px;color:var(--dgray);line-height:1.6">
-              Estado: <strong style="color:var(--green)">● Activo</strong> — cada factura, cliente y producto se guarda en Supabase al instante.<br>
-              Cargado ahora: <strong>{{ store.productos.length }}</strong> productos · <strong>{{ store.clientes.length }}</strong> clientes · <strong>{{ store.todasFacturas.length }}</strong> facturas
-            </div>
-          </div>
-          <div style="background:var(--lblue);border-radius:8px;padding:16px">
-            <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px"><i class="ti ti-shield-check"></i> Por qué descargar igual</div>
-            <div style="font-size:12px;color:var(--dgray);line-height:1.6">
-              El respaldo en la nube te protege de que se dañe la computadora.<br>
-              El respaldo <strong>en tu mano</strong> te protege de un borrado por error o de perder el acceso a la cuenta.
-            </div>
-          </div>
-        </div>
-        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:14px">
-          <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">Descargar respaldo manual</div>
-          <div class="rp-3col">
-            <button class="btn btn-secondary" :disabled="!factsSemana.length" :title="factsSemana.length ? '' : 'No hay facturas esta semana'" @click="backupSemanal"><i class="ti ti-file-spreadsheet"></i> Resumen semanal ({{ factsSemana.length }})</button>
-            <button class="btn btn-secondary" @click="backupCompleto"><i class="ti ti-database-export"></i> Respaldo completo (.json)</button>
-            <button class="btn btn-secondary" :disabled="!store.productos.length" @click="backupInventario"><i class="ti ti-package"></i> Solo inventario ({{ store.productos.length }})</button>
-          </div>
-          <div style="background:#FFF8E1;border-left:3px solid var(--gold);border-radius:6px;padding:10px 14px;margin-top:14px;font-size:12px;color:#5D4037">
-            <i class="ti ti-info-circle"></i> <strong>Rutina sugerida:</strong> cada viernes descarga el "Resumen semanal" y guárdalo en una carpeta o pendrive. Los dos primeros abren con doble clic en Excel; el <strong>.json</strong> no se lee a simple vista, pero es el que sirve para reconstruir todo si hace falta.
-          </div>
-        </div>
-      </div>
+      <BackupCard
+        :productos-count="store.productos.length"
+        :clientes-count="store.clientes.length"
+        :facturas-count="store.todasFacturas.length"
+        :facts-semana-count="factsSemana.length"
+        :facts-mes-count="validas.length"
+        @backup-semanal="backupSemanal"
+        @backup-facturas="backupFacturas"
+        @backup-completo="backupCompleto"
+        @backup-inventario="backupInventario"
+        @backup-clientes="backupClientes"
+        @backup-cxc="backupCuentasCobrar"
+      />
     </div>
 
     <!-- MODAL EQUIPO DE TRABAJO (v13.2) -->
     <div v-if="equipoAbierto" class="modal show" id="modal-equipo">
-      <div class="modal-content" style="max-width:460px;text-align:left">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:12px">
-          <h3 style="margin:0;font-size:18px;color:var(--navy);font-weight:600"><i class="ti ti-users"></i> Equipo de trabajo</h3>
+      <div class="modal-content" style="max-width:480px;text-align:left">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:12px">
+          <h3 style="margin:0;font-size:17px;color:var(--navy);font-weight:700"><i class="ti ti-users"></i> Equipo de trabajo</h3>
           <button class="btn btn-secondary btn-sm" @click="equipoAbierto = false"><i class="ti ti-x"></i></button>
         </div>
-        <div style="background:#FFF8E1;border-left:3px solid var(--gold);border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:11.5px;color:#5D4037">
-          <i class="ti ti-info-circle"></i> Esta lista es solo para <strong>ponerles metas</strong>. No crea usuarios que puedan entrar al sistema — eso se hace en Supabase.
+        <div class="help-box" style="margin-bottom:14px;font-size:12px">
+          <i class="ti ti-info-circle"></i>
+          <div>Esta lista es solo para <strong>ponerles metas</strong>. No crea usuarios que puedan entrar al sistema — eso se hace en Supabase.</div>
         </div>
-        <div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:12px">
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px">
           <div style="flex:1">
-            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:3px">Nombre</label>
+            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:4px">Nombre</label>
             <input v-model="eqNombre" type="text" class="val-input" placeholder="Ej: PEDRO PEREZ" style="width:100%;text-transform:uppercase" @keydown.enter.prevent="agregarAlEquipo">
           </div>
-          <div style="width:130px">
-            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:3px">Empresa</label>
+          <div style="width:140px">
+            <label style="font-size:11px;color:var(--dgray);font-weight:500;display:block;margin-bottom:4px">Empresa</label>
             <select v-model="eqEmpresa" class="val-input" style="width:100%">
               <option value="directa">Venta Directa</option>
               <option value="dist">Distribuidora</option>
@@ -445,17 +421,17 @@
           </div>
           <button class="btn btn-primary" @click="agregarAlEquipo"><i class="ti ti-plus"></i></button>
         </div>
-        <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:280px;overflow-y:auto">
+        <div style="border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;max-height:260px;overflow-y:auto">
           <div v-if="!equipo.length" style="padding:16px;text-align:center;color:var(--dgray);font-size:12px">Todavía no hay nadie en el equipo</div>
-          <div v-for="(t, i) in equipo" :key="t.nombre" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);gap:8px">
+          <div v-for="(t, i) in equipo" :key="t.nombre" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);gap:8px">
             <div style="min-width:0">
-              <div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.nombre }}</div>
-              <div style="font-size:10.5px;color:var(--dgray)">{{ { ambas: 'Ambas', directa: 'Venta Directa', dist: 'Distribuidora' }[t.empresa] || t.empresa }}</div>
+              <div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.nombre }}</div>
+              <div style="font-size:11px;color:var(--dgray)">{{ { ambas: 'Ambas', directa: 'Venta Directa', dist: 'Distribuidora' }[t.empresa] || t.empresa }}</div>
             </div>
             <button class="btn btn-red btn-sm" title="Quitar del equipo" @click="quitarDelEquipo(i)"><i class="ti ti-trash"></i></button>
           </div>
         </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--gray);padding-top:12px">
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
           <button class="btn btn-secondary" @click="equipoAbierto = false">Cerrar</button>
         </div>
       </div>
@@ -474,13 +450,83 @@ import { periodoDe } from '../services/fechas.js';
 import { descargarCSV, descargarArchivo, hoyArchivo } from '../services/monolito.js';
 import {
   resumenOrigen, agruparProductos, filasDetalleOrigen, costoRenglones, topProductos, rangoOrigen, fISO,
-  normalizarEquipo, claveEmpresa, etiquetaPeriodo
+  normalizarEquipo, claveEmpresa
 } from '../services/reportes.js';
+
+import PeriodFilter from '../components/reports/PeriodFilter.vue';
+import KpiGrid from '../components/reports/KpiGrid.vue';
+import ComparisonCards from '../components/reports/ComparisonCards.vue';
+import SalesGoalsCard from '../components/reports/SalesGoalsCard.vue';
+import CustomerRankingCard from '../components/reports/CustomerRankingCard.vue';
+import BackupCard from '../components/reports/BackupCard.vue';
+import ReorderReport from '../components/reports/ReorderReport.vue';
+import CompanyComparison from '../components/reports/CompanyComparison.vue';
+import SalesDynamicChart from '../components/reports/SalesDynamicChart.vue';
 
 const store = useArjStore();
 const sub = ref('resumen');
 const nombreEmp = computed(() => (store.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora'));
-const pc = (x, b) => (b > 0 ? (x / b * 100).toFixed(1) + '%' : '—');
+
+// Criterio para ordenar productos más vendidos: por total $ o por cantidad de unidades
+const criterioTop = ref('total');
+
+// Proyección de facturación al cierre de mes (Run-Rate)
+const proyeccionMes = computed(() => {
+  const hoy = new Date();
+  const dia = hoy.getDate();
+  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+  if (dia === 0) return 0;
+  const vend = ventasEmpresa.value || 0;
+  return (vend / dia) * diasMes;
+});
+
+// Ticket promedio por venta
+const ticketPromedio = computed(() => {
+  const total = kpisPeriodo.value.totalVenta || 0;
+  const n = kpisPeriodo.value.nFacts || 0;
+  return n > 0 ? total / n : 0;
+});
+
+// ═══ LIQUIDEZ DEL MES: Cobrado en caja vs Pendiente en CxC ═══
+// Calcula directamente desde las facturas en memoria del mes activo.
+// No genera ninguna consulta adicional a Supabase.
+const liquidezMes = computed(() => {
+  const { mes0 } = cortes();
+  let totalFacturado = 0;
+  let totalPendiente = 0;
+  validas.value
+    .filter(f => f.empresa === store.empresa && new Date(f.fecha_raw) >= mes0)
+    .forEach(f => {
+      const t = f.total || 0;
+      const p = f.saldo_pendiente || 0;
+      totalFacturado += t;
+      totalPendiente += p;
+    });
+  const cobrado = Math.max(0, totalFacturado - totalPendiente);
+  const pctCobrado = totalFacturado > 0 ? (cobrado / totalFacturado) * 100 : 0;
+  const pctPendiente = totalFacturado > 0 ? (totalPendiente / totalFacturado) * 100 : 0;
+  return {
+    totalFacturado,
+    cobrado,
+    pendiente: totalPendiente,
+    pctCobrado,
+    pctPendiente,
+    sinDatos: totalFacturado === 0
+  };
+});
+
+function verFactura(f) {
+  store.facturaReciente = f;
+  store.modalFacturaActivo = true;
+}
+
+function irAClientes() {
+  store.cambiarVista('clientes');
+}
+
+function imprimirReporte() {
+  window.print();
+}
 
 // Fechas de corte locales (medianoche de hoy y día 1 del mes), igual que el monolito
 const cortes = () => {
@@ -532,11 +578,19 @@ const fijos = computed(() => {
 
 // ═══ UTILIDAD BRUTA Y PUNTO DE EQUILIBRIO (cargarUtilidadMes) ═══
 // Lee factura_items: fob y factor CONGELADOS al emitir. Ingreso = KPI "Ventas este mes".
+// Mejora v14.1: si el rango activo es "mes", reutiliza los items ya descargados
+// por cargarOrigen() en lugar de hacer una segunda consulta redundante a Supabase.
 const itsMes = ref(null);   // null = sin conexión / error · [] = sin ventas
 const errorIts = ref('');
 async function cargarUtilidad() {
   errorIts.value = '';
   if (!store.supabaseConectado) { itsMes.value = null; return; }
+  // Caché unificada: si el rango de análisis ya cargó los items del mes actual,
+  // se reutilizan directamente sin una segunda llamada a Supabase.
+  if (rango.value === 'mes' && origen.value.estado === 'listo' && origen.value.data?.its) {
+    itsMes.value = origen.value.data.its;
+    return;
+  }
   const { mes0 } = cortes();
   const ids = validas.value.filter(f => f.empresa === store.empresa && new Date(f.fecha_raw) >= mes0).map(f => f.id).filter(Boolean);
   if (!ids.length) { itsMes.value = []; return; }
@@ -568,7 +622,6 @@ const util = computed(() => {
   const r = {
     val: fmtUSD(u), sub: 'Ventas ' + fmtUSD(ingreso) + ' − costo ' + fmtUSD(costo),
     margenVal: margen.toFixed(1) + '%',
-    // Un renglón con fob 0 dispara el margen al 100%: se avisa en vez de mostrar un número bonito y falso
     margenSub: sinCosto > 0 ? 'Ojo: ' + sinCosto + (sinCosto === 1 ? ' renglón sin costo' : ' renglones sin costo') + ' — margen inflado' : 'Sobre lo efectivamente vendido'
   };
   if (cf <= 0) { r.peVal = fmtUSD(0); r.peSub = 'Configura los costos fijos'; }
@@ -611,6 +664,11 @@ async function cargarOrigen() {
     if (store.empresa !== empresaConsultada) return;
     const lbl = d.nFacts ? r.etiqueta + ' · ' + d.nFacts + ' factura(s)' : r.etiqueta;
     origen.value = { estado: 'listo', lbl, etiqueta: r.etiqueta, data: d.nFacts ? { ...d, etiqueta: r.etiqueta } : null };
+    // Caché unificada v14.1: si el rango es "mes", reutilizar items descargados
+    // en itsMes para que cargarUtilidad() no duplique la consulta.
+    if (rango.value === 'mes' && store.empresa === empresaConsultada) {
+      itsMes.value = d.its || [];
+    }
   } catch (e) {
     origen.value = { estado: 'error', lbl: r.etiqueta, etiqueta: r.etiqueta, data: null, error: e.message || String(e) };
   }
@@ -694,6 +752,14 @@ const top = computed(() => {
     return topProductos(origen.value.data.its);
   }
   return (itsMes.value && itsMes.value.length ? topProductos(itsMes.value) : []);
+});
+
+const topOrdenado = computed(() => {
+  const list = [...top.value];
+  if (criterioTop.value === 'cant') {
+    return list.sort((a, b) => (b.cant || 0) - (a.cant || 0));
+  }
+  return list.sort((a, b) => (b.total || 0) - (a.total || 0));
 });
 const bloquesOrigen = computed(() => (R.value ? [
   { key: 'importado', nom: 'Importado', c: R.value.g.importado, col: '#EAF0F8', icono: 'ship', v: R.value.VR.importado },
@@ -894,7 +960,6 @@ const ranking = computed(() => {
     .sort((a, b) => b.dias - a.dias).slice(0, 6);
   return { top: topC, dormidos };
 });
-const fechaCortaRk = d => d.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
 
 // ═══ RESPALDOS (v13.2 / v13.36) ═══
 const factsSemana = computed(() => {
@@ -943,7 +1008,6 @@ function backupSemanal() {
     const dto = f.descuento_manual || 0;
     const neto = Math.round((bruto - dto) * 100) / 100;
     const saldo = f.saldo_pendiente || 0;
-    // Abonado real = lo saldado del NETO (partir del bruto contaba el descuento como pago)
     const abon = Math.round((neto - saldo) * 100) / 100;
     const cv = (f.cobrar_verde != null && f.cobrar_verde > 0) ? f.cobrar_verde : null;
     if (f.estado !== 'anulada') {
@@ -990,6 +1054,139 @@ function backupCompleto() {
   store.notif('Respaldo completo descargado', 'success');
 }
 
+// Backup de Facturas con selector de rango (semana / mes / todas)
+function backupFacturas(rango = 'mes') {
+  const hoy = new Date();
+  let facts = [];
+  let rangoTxt = '';
+
+  if (rango === 'semana') {
+    facts = factsSemana.value;
+    rangoTxt = 'ultimos_7_dias';
+  } else if (rango === 'todas') {
+    facts = store.todasFacturas;
+    rangoTxt = 'historico_completo';
+  } else {
+    const { mes0 } = cortes();
+    facts = store.todasFacturas.filter(f => f.fecha_raw && new Date(f.fecha_raw) >= mes0);
+    rangoTxt = 'mes_actual';
+  }
+
+  if (!facts.length) {
+    store.notif('No hay facturas en el período seleccionado', 'error');
+    return;
+  }
+
+  const filas = [
+    ['REPORTE DE FACTURACION ARJ — ' + rangoTxt.toUpperCase() + ' — Generado: ' + hoy.toLocaleString('es-VE')],
+    ['Los montos $BCV y los $verdes son unidades distintas. NO se suman entre si.'],
+    [],
+    ['Factura', 'Fecha', 'Empresa', 'Cliente', 'Vendedor', 'Tipo', 'Estado',
+      'Bruto $BCV', 'Descuento $BCV', 'Neto $BCV', 'Cobrado en $verde', 'Abonado $BCV', 'Saldo $BCV', 'Motivo del descuento']
+  ];
+
+  let totBruto = 0, totDto = 0, totNeto = 0, totVerde = 0, totSaldo = 0, totAbon = 0, nVerde = 0;
+  facts.forEach(f => {
+    const bruto = f.total || 0;
+    const dto = f.descuento_manual || 0;
+    const neto = Math.round((bruto - dto) * 100) / 100;
+    const saldo = f.saldo_pendiente || 0;
+    const abon = Math.round((neto - saldo) * 100) / 100;
+    const cv = (f.cobrar_verde != null && f.cobrar_verde > 0) ? f.cobrar_verde : null;
+    if (f.estado !== 'anulada') {
+      totBruto += bruto; totDto += dto; totNeto += neto; totSaldo += saldo; totAbon += abon;
+      if (cv != null) { totVerde += cv; nVerde++; }
+    }
+    filas.push([
+      f.num, f.fecha, f.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora',
+      f.cliente_nombre_snap || f.cliente, f.vendedor || '', f.tipo_pago || '', (f.estado || '').toUpperCase(),
+      bruto.toFixed(2), dto.toFixed(2), neto.toFixed(2), cv != null ? cv.toFixed(2) : '',
+      abon.toFixed(2), saldo.toFixed(2), f.motivo_descuento || ''
+    ]);
+  });
+
+  filas.push([]);
+  filas.push(['TOTAL BRUTO $BCV (sin anuladas)', '', '', '', '', '', '', totBruto.toFixed(2)]);
+  filas.push(['TOTAL DESCUENTOS $BCV', '', '', '', '', '', '', totDto.toFixed(2)]);
+  filas.push(['TOTAL NETO FACTURADO $BCV', '', '', '', '', '', '', totNeto.toFixed(2)]);
+  filas.push(['TOTAL COBRADO $BCV', '', '', '', '', '', '', totAbon.toFixed(2)]);
+  filas.push(['TOTAL POR COBRAR $BCV', '', '', '', '', '', '', totSaldo.toFixed(2)]);
+  if (totVerde > 0) {
+    filas.push([]);
+    filas.push(['TOTAL ACORDADO EN $VERDE (' + nVerde + ' factura(s))', '', '', '', '', '', '', '', '', '', totVerde.toFixed(2)]);
+  }
+
+  descargarCSV('ARJ_facturacion_' + rangoTxt + '_' + hoyArchivo() + '.csv', filas);
+  store.logBitacora('inventario', 'Descargó reporte de facturación ' + rangoTxt + ' (' + facts.length + ' facturas)', false);
+  store.notif(facts.length + ' facturas descargadas en CSV', 'success');
+}
+
+// Backup de Clientes
+function backupClientes() {
+  if (!store.clientes.length) {
+    store.notif('No hay clientes registrados', 'error');
+    return;
+  }
+  const filas = [
+    ['DIRECTORIO DE CLIENTES — SISTEMA ARJ — ' + new Date().toLocaleString('es-VE')],
+    [],
+    ['ID', 'Nombre / Razon Social', 'RIF / Cedula', 'Telefono', 'Nivel de Precio', 'Direccion', 'Email']
+  ];
+  store.clientes.forEach(c => {
+    filas.push([
+      c.id || '',
+      c.nombre || '',
+      c.rif || '',
+      c.tel || '',
+      c.tier || 'T1',
+      c.direccion || '',
+      c.email || ''
+    ]);
+  });
+  descargarCSV('ARJ_directorio_clientes_' + hoyArchivo() + '.csv', filas);
+  store.logBitacora('clientes', 'Descargó directorio de clientes (' + store.clientes.length + ' clientes)', false);
+  store.notif(store.clientes.length + ' clientes descargados en CSV', 'success');
+}
+
+// Backup de Cuentas por Cobrar (Deudores)
+function backupCuentasCobrar() {
+  const deudas = store.todasFacturas.filter(f => f.estado !== 'anulada' && (Number(f.saldo_pendiente) || 0) > 0.01);
+  if (!deudas.length) {
+    store.notif('No hay cuentas por cobrar pendientes', 'info');
+    return;
+  }
+  const hoy = new Date();
+  const filas = [
+    ['CUENTAS POR COBRAR Y CARTERA DE DEUDORES — SISTEMA ARJ — ' + hoy.toLocaleString('es-VE')],
+    [],
+    ['Factura', 'Fecha Emision', 'Empresa', 'Cliente', 'Telefono', 'Total Factura USD', 'Saldo Pendiente USD', 'Dias de Emision', 'Tipo de Pago']
+  ];
+  let totPendiente = 0;
+  deudas.forEach(f => {
+    const saldo = Number(f.saldo_pendiente) || 0;
+    totPendiente += saldo;
+    const fch = f.fecha_raw ? new Date(f.fecha_raw) : null;
+    const dias = fch ? Math.floor((hoy - fch) / (1000 * 60 * 60 * 24)) : '—';
+    const cliObj = store.clientes.find(c => c.id === f.cliente_id || (c.nombre && c.nombre === f.cliente));
+    filas.push([
+      f.num || '',
+      f.fecha || '',
+      f.empresa === 'directa' ? 'Venta Directa' : 'Distribuidora',
+      f.cliente_nombre_snap || f.cliente || '',
+      cliObj?.tel || '',
+      (Number(f.total) || 0).toFixed(2),
+      saldo.toFixed(2),
+      dias,
+      f.tipo_pago || 'Crédito'
+    ]);
+  });
+  filas.push([]);
+  filas.push(['TOTAL SALDO POR COBRAR USD', '', '', '', '', '', totPendiente.toFixed(2)]);
+  descargarCSV('ARJ_cuentas_por_cobrar_' + hoyArchivo() + '.csv', filas);
+  store.logBitacora('cxc', 'Descargó cartera de cuentas por cobrar (' + deudas.length + ' facturas pendientes)', false);
+  store.notif(deudas.length + ' cuentas pendientes descargadas en CSV', 'success');
+}
+
 // ═══ Carga y recarga ═══
 function recargarTodo() {
   cargarUtilidad();
@@ -997,16 +1194,705 @@ function recargarTodo() {
 }
 onMounted(recargarTodo);
 watch(() => store.empresa, () => { detalleAbierto.value = false; recargarTodo(); });
-// Una venta nueva cambia la utilidad y el panel de origen
 watch(() => store.todasFacturas.length, () => cargarUtilidad());
 </script>
 
 <style scoped>
-.rp-in { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: inherit }
-.rp-ranking { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px }
-.rp-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
-.rp-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px }
-@media (max-width: 760px) {
-  .rp-ranking, .rp-2col, .rp-3col { grid-template-columns: 1fr }
+/* Encabezado y sub-navegación */
+.dash-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  color: var(--navy);
+  font-weight: 800;
+}
+.page-title i {
+  color: var(--blue);
+}
+.page-sub {
+  color: var(--dgray);
+  font-size: 13px;
+}
+
+.tab-count-badge {
+  background: var(--red);
+  color: #FFF;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: var(--radius-full);
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+
+/* Sub-navegación unificada con el sistema */
+.report-nav-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+}
+
+.nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 8px 16px;
+  color: var(--dgray);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  box-shadow: var(--shadow-xs);
+}
+
+.nav-pill:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+.nav-pill.active {
+  background: var(--lblue);
+  color: var(--blue);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Alerta stock crítico banner */
+.stock-alert-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--lred);
+  border: 1px solid var(--red);
+  border-left: 4px solid var(--red);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  color: var(--red);
+  font-size: 13px;
+}
+.stock-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stock-alert-left i {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.stock-alert-msg {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+/* ══ HERO SECTION ══ */
+.hero-row {
+  display: grid;
+  grid-template-columns: 1.65fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 960px) {
+  .hero-row { grid-template-columns: 1fr; }
+}
+
+.hero-revenue-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.hero-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.hero-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dgray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+}
+
+.hero-company-pill {
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hero-amount {
+  font-size: 46px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.hero-amount .hero-currency {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--dgray);
+  margin-right: 2px;
+}
+
+.hero-var-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.hero-var-pill.up { background: var(--lgreen); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+.hero-var-pill.down { background: var(--lred); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+.hero-var-pill.neutral { background: var(--gray); color: var(--dgray); border: 1px solid var(--border); }
+
+.hero-meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.hero-meta-item { display: flex; flex-direction: column; gap: 2px; }
+.hero-meta-label { font-size: 11px; color: var(--dgray); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.hero-meta-val { font-size: 15px; font-weight: 800; color: var(--text); }
+
+/* Barra de progreso de meta dentro del hero */
+.hero-goal-bar-wrap {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.hero-goal-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.hero-goal-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dgray);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hero-goal-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--green);
+}
+.hero-goal-track {
+  background: var(--gray);
+  border-radius: var(--radius-full);
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.hero-goal-fill {
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.4s ease;
+}
+.hero-goal-sub {
+  font-size: 11px;
+  color: var(--dgray);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.text-gold { color: var(--gold) !important; font-weight: 700; }
+.text-green { color: var(--green) !important; font-weight: 700; }
+
+/* Panel lateral del hero */
+.hero-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.side-panel-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  flex: 1;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.side-panel-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--navy);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.side-panel-title i { color: var(--blue); font-size: 15px; }
+
+/* Top clientes en hero */
+.hero-client-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--gray);
+}
+.hero-client-row:last-child { border-bottom: none; }
+
+.client-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--lblue);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--blue);
+  flex-shrink: 0;
+}
+.client-info { flex: 1; min-width: 0; }
+.client-nm { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.client-purchases { font-size: 10.5px; color: var(--dgray); }
+.client-monto { font-size: 13px; font-weight: 700; color: var(--green); white-space: nowrap; }
+
+/* Últimas ventas mini */
+.mini-sale-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--gray);
+}
+.mini-sale-row:last-child { border-bottom: none; }
+.mini-sale-client { font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+.mini-sale-val { font-size: 12.5px; font-weight: 700; color: var(--navy); }
+
+/* ══ KPI STRIP ══ */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+@media (max-width: 1100px) { .kpi-strip { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi-strip-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 86px;
+  transition: transform var(--trans-fast), box-shadow var(--trans-fast);
+}
+.kpi-strip-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-hover);
+}
+.kpi-strip-label {
+  font-size: 11px;
+  color: var(--dgray);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.kpi-strip-label i { color: var(--blue); }
+.kpi-strip-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+.kpi-strip-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kpi-strip-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 700;
+}
+.pill-red {
+  background: var(--lred);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* ══ FILA DE ANÁLISIS ══ */
+.analysis-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) { .analysis-row { grid-template-columns: 1fr; } }
+
+/* Top productos panel */
+.top-prod-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.dash-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--gray);
+}
+.dash-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dash-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: var(--lblue);
+  color: var(--blue);
+}
+.dash-card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.dash-card-subtitle {
+  font-size: 11px;
+  color: var(--dgray);
+  display: block;
+  margin-top: 2px;
+}
+.dash-pill-badge {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--lblue);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+/* Top productos list */
+.top-prods-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.top-prod-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.top-prod-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.top-prod-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.top-prod-rank {
+  color: var(--dgray);
+  font-size: 11px;
+  font-weight: 700;
+  width: 22px;
+}
+.top-prod-name {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-prod-numbers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.top-prod-units {
+  background: var(--gray);
+  color: var(--dgray);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+}
+.top-prod-total {
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.top-prod-bar-track {
+  background: var(--gray);
+  border-radius: var(--radius-full);
+  height: 7px;
+  overflow: hidden;
+}
+.top-prod-bar-fill {
+  background: linear-gradient(90deg, var(--blue), var(--navy));
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+/* Empty states */
+.empty-state-card {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--dgray);
+  font-size: 13px;
+}
+.empty-card {
+  text-align: center;
+  padding: 48px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.empty-icon-wrap {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 14px;
+}
+.empty-icon-wrap.blue { background: var(--lblue); color: var(--blue); }
+.empty-icon-wrap.amber { background: var(--lgold); color: var(--gold); }
+.empty-title {
+  color: var(--text);
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.empty-desc {
+  color: var(--dgray);
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Interactions & Print additions */
+.clickable-row {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  transition: background var(--trans-fast), transform var(--trans-fast);
+}
+.clickable-row:hover {
+  background: var(--gray);
+  transform: translateX(2px);
+}
+.chevron-mini {
+  font-size: 10px;
+  color: var(--dgray);
+  margin-left: 4px;
+}
+.top-prod-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--gray);
+  padding: 2px;
+  border-radius: var(--radius-full);
+}
+.toggle-pill {
+  border: none;
+  background: transparent;
+  color: var(--dgray);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--trans-fast);
+}
+.toggle-pill.active {
+  background: var(--card-bg);
+  color: var(--blue);
+  box-shadow: var(--shadow-xs);
+}
+.units-highlight {
+  background: var(--lblue) !important;
+  color: var(--blue) !important;
+  font-weight: 700 !important;
+}
+.total-highlight {
+  color: var(--navy) !important;
+  font-weight: 800 !important;
+}
+@media print {
+  .no-print { display: none !important; }
+  .page { padding: 0 !important; }
+  .hero-revenue-card, .side-panel-card, .kpi-strip-card, .top-prod-panel, .sales-chart-card {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #CCC !important;
+  }
+}
+
+/* ═══ Indicador de Liquidez ═══ */
+.liquidity-bar-wrap {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.liquidity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.liquidity-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dgray);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.liquidity-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--dgray);
+}
+.liq-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-green { background: var(--green); }
+.dot-gold  { background: var(--gold); }
+.liq-legend-text { font-weight: 600; }
+.liquidity-track {
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--gray);
+  overflow: hidden;
+  gap: 1px;
+}
+.liquidity-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+  flex-shrink: 0;
+}
+.liq-cobrado {
+  background: linear-gradient(90deg, var(--green), #34D399);
+  border-radius: var(--radius-full) 0 0 var(--radius-full);
+}
+.liq-pendiente {
+  background: linear-gradient(90deg, #F59E0B, var(--gold));
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+}
+.liquidity-amounts {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.liq-amount-cobrado {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.liq-amount-pendiente {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>
