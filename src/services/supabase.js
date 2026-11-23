@@ -421,13 +421,17 @@ export async function cargarVentasPeriodo(empresa, desde, hastaExcl) {
   const ids = [];
   for (let off = 0, v = 0; v < 30; v++, off += 1000) {
     const { data, error } = await supabase.from('facturas')
-      .select('id,numero,fecha,cliente_nombre,tasa_par,tasa_bcv,cobrar_verde,descuento_manual,saldo_pendiente')
+      .select('id,numero,fecha,cliente_nombre,tasa_par,tasa_bcv,cobrar_verde,descuento_manual,saldo_pendiente,subtotal_usd,empresa,vendedor,estado')
       .in('empresa', empresasBD(empresa)).neq('estado', 'anulada')
       .gte('fecha', desde).lt('fecha', hastaExcl)
       .range(off, off + 999);
     if (error) throw new Error('No se pudieron leer las facturas: ' + error.message);
     if (!data || !data.length) break;
-    data.forEach(x => { ids.push(x.id); fmap[x.id] = x; });
+    data.forEach(x => {
+      x.total = parseFloat(x.subtotal_usd) || 0;
+      ids.push(x.id);
+      fmap[x.id] = x;
+    });
     if (data.length < 1000) break;
   }
   const its = [];
@@ -451,7 +455,8 @@ export async function cargarVentasPeriodo(empresa, desde, hastaExcl) {
       if (q.data.length < 1000) break;
     }
   }
-  return { fmap, its, nFacts: ids.length };
+  const facts = Object.values(fmap).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  return { fmap, its, nFacts: ids.length, facts };
 }
 
 // KPI "Cobrado mes ($ verde)" de CxC (monolito v13): suma pagos.monto_usd del mes en

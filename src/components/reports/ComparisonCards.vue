@@ -17,9 +17,9 @@
           </div>
         </div>
 
-        <div v-if="R && R.g.local.venta > 0 && R.g.importado.venta > 0" class="trend-pill-header">
-          <span class="kpi-pill" :class="R.g.importado.mg - R.g.local.mg >= 0 ? 'pill-blue' : 'pill-gold'">
-            <i class="ti ti-sparkles"></i> Margen {{ R.g.importado.mg - R.g.local.mg >= 0 ? 'Importado' : 'Local' }} +{{ Math.abs(R.g.importado.mg - R.g.local.mg).toFixed(1) }}%
+        <div v-if="resumen && resumen.g.local.venta > 0 && resumen.g.importado.venta > 0" class="trend-pill-header">
+          <span class="kpi-pill" :class="resumen.g.importado.mg - resumen.g.local.mg >= 0 ? 'pill-blue' : 'pill-gold'">
+            <i class="ti ti-sparkles"></i> Margen {{ resumen.g.importado.mg - resumen.g.local.mg >= 0 ? 'Importado' : 'Local' }} +{{ Math.abs(resumen.g.importado.mg - resumen.g.local.mg).toFixed(1) }}%
           </span>
         </div>
       </div>
@@ -36,7 +36,7 @@
       <div v-else-if="!origen.data || !origen.data.its || !origen.data.its.length" class="state-container">
         Sin ventas en {{ origen.etiqueta }}.
       </div>
-      <template v-else-if="R">
+      <template v-else-if="resumen">
         <!-- Bloques comparativos de origen -->
         <div class="origin-blocks-grid">
           <div
@@ -50,7 +50,7 @@
                 <i :class="'ti ti-' + b.icono"></i> {{ b.nom }}
               </span>
               <span class="kpi-pill pill-neutral">
-                {{ calcPc(b.c.venta, R.tot.venta) }} del total
+                {{ calcPc(b.c.venta, resumen.tot.venta) }} del total
               </span>
             </div>
 
@@ -66,7 +66,7 @@
               <div
                 class="origin-progress-bar"
                 :class="b.key === 'importado' ? 'bar-blue' : 'bar-gold'"
-                :style="{ width: (R.tot.venta > 0 ? (b.c.venta / R.tot.venta) * 100 : 0).toFixed(1) + '%' }"
+                :style="{ width: (resumen.tot.venta > 0 ? (b.c.venta / resumen.tot.venta) * 100 : 0).toFixed(1) + '%' }"
               ></div>
             </div>
 
@@ -87,7 +87,7 @@
             </div>
 
             <div class="origin-contribution-note">
-              Aporta <strong class="text-white">{{ calcPc(b.c.util, R.tot.util) }}</strong> de la utilidad total
+              Aporta <strong class="text-white">{{ calcPc(b.c.util, resumen.tot.util) }}</strong> de la utilidad total
             </div>
 
             <!-- Desglose de caja: ya en caja vs por cobrar -->
@@ -118,18 +118,18 @@
         </div>
 
         <!-- Alertas de datos (sin origen, sin costo, pendientes) -->
-        <div v-if="R.deducidos > 0 || R.sinCosto > 0 || (R.VR && R.VR.nPend > 0)" class="alerts-stack">
-          <div v-if="R.deducidos > 0" class="alert-pill-item alert-warning">
+        <div v-if="resumen.deducidos > 0 || resumen.sinCosto > 0 || (resumen.VR && resumen.VR.nPend > 0)" class="alerts-stack">
+          <div v-if="resumen.deducidos > 0" class="alert-pill-item alert-warning">
             <i class="ti ti-alert-triangle"></i>
-            <span><strong>{{ R.deducidos }} renglones</strong> sin origen guardado (clasificados por factor).</span>
+            <span><strong>{{ resumen.deducidos }} renglones</strong> sin origen guardado (clasificados por factor).</span>
           </div>
-          <div v-if="R.sinCosto > 0" class="alert-pill-item alert-danger">
+          <div v-if="resumen.sinCosto > 0" class="alert-pill-item alert-danger">
             <i class="ti ti-alert-circle"></i>
-            <span><strong>{{ R.sinCosto }} renglones</strong> sin costo registrado (margen inflado).</span>
+            <span><strong>{{ resumen.sinCosto }} renglones</strong> sin costo registrado (margen inflado).</span>
           </div>
-          <div v-if="R.VR && R.VR.nPend > 0" class="alert-pill-item alert-info">
+          <div v-if="resumen.VR && resumen.VR.nPend > 0" class="alert-pill-item alert-info">
             <i class="ti ti-receipt-refund"></i>
-            <span><strong>{{ R.VR.nPend }} facturas</strong> con saldo pendiente por cobrar.</span>
+            <span><strong>{{ resumen.VR.nPend }} facturas</strong> con saldo pendiente por cobrar.</span>
           </div>
         </div>
 
@@ -145,6 +145,9 @@
           </button>
         </div>
       </template>
+      <div v-else class="state-container">
+        Procesando desglose de origen…
+      </div>
 
       <!-- Tabla desplegable de productos por origen -->
       <div v-if="detalleAbierto" class="origin-table-section">
@@ -213,7 +216,7 @@
           </div>
           <div>
             <h3 class="dash-card-title">Comparativa de ventas</h3>
-            <div class="dash-card-sub">Mes actual en curso vs Mes anterior</div>
+            <div class="dash-card-sub">{{ compMeses.subtitulo || (origen.lbl ? origen.lbl.charAt(0).toUpperCase() + origen.lbl.slice(1) + ' vs Período anterior' : 'Comparativa de ventas') }}</div>
           </div>
         </div>
 
@@ -223,7 +226,7 @@
             :class="compMeses.varPct >= 0 ? 'pill-green' : 'pill-red'"
           >
             <i :class="compMeses.varPct >= 0 ? 'ti ti-arrow-up-right' : 'ti ti-arrow-down-right'"></i>
-            {{ compMeses.varPct >= 0 ? '+' : '' }}{{ compMeses.varPct.toFixed(1) }}% vs mes anterior
+            {{ compMeses.varPct >= 0 ? '+' : '' }}{{ compMeses.varPct.toFixed(1) }}% {{ compMeses.etiquetaComp || 'vs mes anterior' }}
           </span>
         </div>
       </div>
@@ -262,14 +265,19 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { fmtUSD } from '../../services/pricing.js';
 
-defineProps({
+const props = defineProps({
   origen: {
     type: Object,
     default: () => ({ estado: 'listo', lbl: 'este mes', etiqueta: 'este mes', data: null, error: '' })
   },
   R: {
+    type: Object,
+    default: null
+  },
+  r: {
     type: Object,
     default: null
   },
@@ -296,6 +304,8 @@ defineProps({
     })
   }
 });
+
+const resumen = computed(() => props.R || props.r);
 
 defineEmits(['toggle-detalle', 'descargar-csv']);
 

@@ -121,252 +121,317 @@ function etiquetaValor(doc, label, valor, x, y, labelColor = GRAY, valorColor = 
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 1. PDF DE FACTURA (Diseño formal idéntico a presupuesto)
+// HELPERS PARA FACTURA FORMATO FISCAL SENIAT / FORMA LIBRE
 // ═══════════════════════════════════════════════════════════════════
-// A-04: todo sale de la factura (empresa, tasa, factor y copia del cliente al emitir)
+function fmtBsSENIAT(n) {
+  const val = Number(n) || 0;
+  return val.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtTasaSENIAT(n) {
+  const val = Number(n) || 0;
+  return val.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function formatearFechaSENIAT(str) {
+  if (!str) return '—';
+  const s = String(str).trim();
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dia}/${mes}/${d.getFullYear()}`;
+  }
+  return s;
+}
+
+function formatearItemDescSENIAT(it) {
+  let desc = (it.desc || it.descripcion || '').trim();
+  const cod = (it.cod_alt || it.codigo || '').trim();
+  const orig = (it.cod_orig || it.marca || '').trim();
+
+  let res = desc;
+  if (cod && !res.toUpperCase().includes(cod.toUpperCase())) {
+    res = `[${cod}] ${res}`;
+  }
+  if (orig && !res.toUpperCase().includes(orig.toUpperCase())) {
+    res = `${res} (${orig})`;
+  }
+  return res || 'Producto';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 1. PDF DE FACTURA (Formato estándar SENIAT / Forma Libre ARJ)
+// ═══════════════════════════════════════════════════════════════════
 export function generarFacturaPDF(factura, action = 'download') {
   if (!factura) return;
 
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
-  const marginL = 14;
-  const marginR = 14;
-  const contentW = pageWidth - marginL - marginR;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginL = 15;
+  const marginR = 15;
 
   const empKey = factura.empresa || 'directa';
   const emp = DATOS_EMPRESAS[empKey] || DATOS_EMPRESAS.directa;
 
-  // ── CABECERA EMPRESA (fondo navy) ──
-  doc.setFillColor(...NAVY);
-  doc.rect(0, 0, pageWidth, 42, 'F');
+  // ── BLOQUE IZQUIERDO: NOMBRE O RAZON SOCIAL (CLIENTE) ──
+  let yLeft = 18;
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('times', 'bold');
+  doc.setFontSize(10);
+  doc.text('NOMBRE O RAZON SOCIAL', marginL, yLeft);
 
-  // Nombre de la empresa
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(...WHITE);
-  doc.text(emp.nombre, marginL, 16);
+  yLeft += 5;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(9.5);
+  const cliNombre = (factura.cliente_nombre_snap || factura.cliente || emp.nombre || 'AGRO-REPUESTOS Y SERVICIOS JIMENEZ').toUpperCase();
+  doc.text(cliNombre, marginL, yLeft);
 
-  // Datos de contacto
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(200, 210, 225);
-  doc.text(emp.direccion || 'Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
-  doc.text(`Acarigua — Portuguesa · Teléfonos: ${emp.telefono} · ${emp.rif}`, marginL, 28);
+  yLeft += 4.2;
+  doc.setFont('times', 'normal');
+  doc.setFontSize(8.5);
+  const cliDir = factura.cliente_dir_snap || factura.cliente_dir || emp.direccion || 'Cr Principal Casa Nro 31 Barrio Altamira, ZP 3301';
+  const dirLines = doc.splitTextToSize(cliDir, 90);
+  doc.text(dirLines, marginL, yLeft);
+  yLeft += (dirLines.length * 3.8);
 
-  // ── BADGE FACTURA (dorado/navy, esquina derecha) ──
-  const badgeW = 60;
-  const badgeH = 28;
-  const badgeX = pageWidth - marginR - badgeW;
-  const badgeY = 7;
-  doc.setFillColor(...GOLD); // Gold
-  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
+  const cliCiudad = factura.cliente_ciudad_snap || (factura.cliente_dir_snap ? '' : 'Acarigua , Portuguesa');
+  if (cliCiudad) {
+    doc.text(cliCiudad, marginL, yLeft);
+    yLeft += 3.8;
+  }
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(...WHITE);
-  doc.text('FACTURA COMERCIAL', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
+  const cliTel = factura.cliente_tel_snap || factura.cliente_tel || emp.telefono || '+58 412-5574541';
+  if (cliTel) {
+    doc.text(`Tel: ${cliTel}`, marginL, yLeft);
+    yLeft += 4.5;
+  }
 
+  const cliRif = factura.cliente_rif_snap || factura.cliente_rif || emp.rif || 'V- 162930024';
+  doc.setFont('times', 'bold');
+  doc.text('RIF N°: ', marginL, yLeft);
+  const rifW = doc.getTextWidth('RIF N°: ');
+  doc.setFont('times', 'normal');
+  doc.text(cliRif.replace(/^RIF:?\s*/i, ''), marginL + rifW, yLeft);
+
+  // ── BLOQUE DERECHO: METADATOS FACTURA ──
+  const colRightX = 118;
+  const rightCenterX = 156;
+
+  // Título FACTURA centrado
+  doc.setFont('times', 'bold');
+  doc.setFontSize(19);
+  doc.text('FACTURA', rightCenterX, 18, { align: 'center' });
+
+  // Columnas FECHA y FACTURA N°
+  const fCol1 = 136;
+  const fCol2 = 175;
+  doc.setFontSize(9);
+  doc.text('FECHA', fCol1, 24, { align: 'center' });
+  doc.text('FACTURA N°', fCol2, 24, { align: 'center' });
+
+  const facturaFecha = formatearFechaSENIAT(factura.fecha);
+  const facturaNum = String(factura.num || '70797').trim();
   doc.setFontSize(11);
-  doc.text(factura.num || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
+  doc.text(facturaFecha, fCol1, 29, { align: 'center' });
+  doc.text(facturaNum, fCol2, 29, { align: 'center' });
 
-  doc.setFontSize(7.5);
-  doc.text(factura.fecha || '—', badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
+  // Metadatos
+  const condPago = (factura.tipo_pago === 'credito') ? 'Crédito' : 'Contado';
+  let fechaVence = factura.vence ? formatearFechaSENIAT(factura.vence) : null;
+  if (!fechaVence) {
+    if (factura.tipo_pago === 'credito' && Number(factura.dias_credito) > 0) {
+      const fDate = new Date(factura.fecha);
+      if (!isNaN(fDate.getTime())) {
+        fDate.setDate(fDate.getDate() + Number(factura.dias_credito));
+        const dia = String(fDate.getDate()).padStart(2, '0');
+        const mes = String(fDate.getMonth() + 1).padStart(2, '0');
+        fechaVence = `${dia}/${mes}/${fDate.getFullYear()}`;
+      }
+    }
+  }
+  if (!fechaVence) fechaVence = facturaFecha;
 
-  let y = 50;
+  const viaDespacho = factura.via_despacho || '000';
+  const ordenCompra = factura.orden_compra || factura.orden || (facturaNum ? 'S' + facturaNum.replace(/\D/g, '').padStart(5, '0') : 'S07812');
+  const vendedor = (factura.vendedor || 'MGB').toUpperCase();
 
-  // ── BLOQUE CLIENTE + INFORMACIÓN ──
-  const blockH = 38;
-  const halfW = contentW / 2 - 3;
+  let yMeta = 35;
+  const metaLeading = 4.2;
+  doc.setFontSize(8.5);
 
-  // Bloque CLIENTE (izquierda)
-  doc.setDrawColor(200, 210, 225);
-  doc.setLineWidth(0.4);
-  doc.rect(marginL, y, halfW, blockH, 'S');
+  function printMetaField(lbl, val) {
+    doc.setFont('times', 'normal');
+    doc.text(lbl, colRightX, yMeta);
+    const lblW = doc.getTextWidth(lbl);
+    doc.setFont('times', 'bold');
+    doc.text(val, colRightX + lblW, yMeta);
+    yMeta += metaLeading;
+  }
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...BLUE); // Blue label
-  doc.text('CLIENTE', marginL + 4, y + 6);
+  printMetaField('CONDICION DE PAGO: ', condPago);
+  printMetaField('VENCE: ', fechaVence);
+  printMetaField('VIA DESPACHO: ', viaDespacho);
+  printMetaField('ORDEN DE COMPRA N°: ', ordenCompra);
+  printMetaField('VENDEDOR: ', vendedor);
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...NAVY);
-  doc.text(factura.cliente_nombre_snap || factura.cliente || 'CLIENTE GENERAL', marginL + 4, y + 13);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  const cliRif = `RIF: ${factura.cliente_rif_snap || '—'}`;
-  const cliDir = `Dirección: ${factura.cliente_dir_snap || '—'}`;
-  const cliTel = `Teléfono: ${factura.cliente_tel_snap || '—'}`;
-  doc.text(cliRif, marginL + 4, y + 20);
-  doc.text(cliDir, marginL + 4, y + 25.5);
-  doc.text(cliTel, marginL + 4, y + 31);
-
-  // Bloque INFORMACIÓN (derecha)
-  const infoX = marginL + halfW + 6;
-  doc.setDrawColor(200, 210, 225);
-  doc.rect(infoX, y, halfW, blockH, 'S');
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...BLUE);
-  doc.text('INFORMACIÓN DE VENTA', infoX + 4, y + 6);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  const empresaTxt = (factura.empresa || empKey) === 'distribuidora' ? 'Distribuidora ARJ' : 'Venta Directa';
-
-  doc.text('Vendedor: ', infoX + 4, y + 13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...NAVY);
-  doc.text(factura.vendedor || '—', infoX + 24, y + 13);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-  doc.text(`Fecha de emisión: ${factura.fecha || '—'}`, infoX + 4, y + 20);
-  const condTxt = (factura.tipo_pago || 'contado').toUpperCase();
-  const estTxt = (factura.estado || 'pagada').toUpperCase();
-  doc.text(`Condición: ${condTxt}  ·  Estado: ${estTxt}`, infoX + 4, y + 25.5);
-  doc.text(`Empresa: ${empresaTxt}`, infoX + 4, y + 31);
-
-  y += blockH + 8;
-
-  // ── TABLA DE ITEMS ──
+  // ── TABLA DE PRODUCTOS ──
+  const startTableY = Math.max(yLeft, yMeta) + 6;
+  const tasaBCV = Number(factura.tasa_bcv) > 0 ? Number(factura.tasa_bcv) : 1;
   const listaItems = factura.items || [];
 
-  const items = listaItems.map((it, idx) => [
-    idx + 1,
-    it.cod_alt || '—',
-    it.desc || 'Producto',
-    it.cant || 1,
-    fmtUSD(it.precio || 0),
-    fmtUSD((it.cant || 1) * (it.precio || 0))
-  ]);
+  const itemsBody = listaItems.map(it => {
+    const desc = formatearItemDescSENIAT(it);
+    const cant = Number(it.cant != null ? it.cant : (it.cantidad != null ? it.cantidad : 1)) || 1;
+    const precioUSD = Number(it.precio != null ? it.precio : (it.precio_unitario != null ? it.precio_unitario : 0)) || 0;
+    const precioBs = precioUSD * tasaBCV;
+    const totalLineaBs = (it.total_linea != null && Number(it.total_linea) > 0)
+      ? Number(it.total_linea) * tasaBCV
+      : cant * precioBs;
+
+    return [
+      desc,
+      String(cant),
+      fmtBsSENIAT(precioBs),
+      fmtBsSENIAT(totalLineaBs)
+    ];
+  });
+
+  if (itemsBody.length === 0) {
+    itemsBody.push(['Sin productos registrados', '0', '0,00', '0,00']);
+  }
 
   autoTable(doc, {
-    startY: y,
-    head: [['#', 'Código', 'Descripción', 'Cant.', 'P. Unit $BCV', 'Total $BCV']],
-    body: items.length > 0 ? items : [['—', '—', 'Sin items registrados', '0', '$0.00', '$0.00']],
+    startY: startTableY,
+    head: [['PRODUCTO', 'CANT', 'PRECIO U.', 'TOTAL']],
+    body: itemsBody,
     theme: 'plain',
     margin: { left: marginL, right: marginR },
     headStyles: {
-      fillColor: TABLE_HEADER_BG, // Navy
-      textColor: WHITE,
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      font: 'times',
       fontStyle: 'bold',
-      fontSize: 8,
-      cellPadding: 4
+      fontSize: 8.5,
+      cellPadding: { top: 2.2, bottom: 2.2, left: 1, right: 1 }
     },
     bodyStyles: {
-      fontSize: 7.5,
-      cellPadding: 3.5,
-      textColor: [51, 51, 51]
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      font: 'times',
+      fontSize: 7.8,
+      cellPadding: { top: 1.6, bottom: 1.6, left: 1, right: 1 }
     },
-    alternateRowStyles: { fillColor: TABLE_ALT_ROW },
     columnStyles: {
-      0: { cellWidth: 10, halign: 'center', fontStyle: 'bold', textColor: GRAY },
-      1: { cellWidth: 28, fontStyle: 'bold', textColor: NAVY },
-      2: { cellWidth: 'auto' },
-      3: { cellWidth: 14, halign: 'center' },
-      4: { cellWidth: 24, halign: 'right' },
-      5: { cellWidth: 26, halign: 'right', fontStyle: 'bold' }
+      0: { cellWidth: 105, halign: 'left' },
+      1: { cellWidth: 15, halign: 'right' },
+      2: { cellWidth: 30, halign: 'right' },
+      3: { cellWidth: 30, halign: 'right' }
     },
-    didDrawPage: () => {
-      doc.setFillColor(...NAVY);
-      doc.rect(0, 0, pageWidth, 4, 'F');
+    didDrawCell: (data) => {
+      if (data.section === 'head' && data.row.index === 0) {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.5);
+        // Línea horizontal superior
+        doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
+        // Línea horizontal inferior
+        doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+      }
     }
   });
 
-  y = doc.lastAutoTable.finalY + 6;
+  // ── SECCIÓN INFERIOR: CLÁUSULAS Y TOTALES ──
+  let y = doc.lastAutoTable.finalY + 10;
+  if (y + 48 > pageHeight - 15) {
+    doc.addPage();
+    y = 25;
+  }
 
-  // ── NOTA FISCAL (izquierda) ──
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7);
-  doc.setTextColor(...BLUE);
-  doc.text('Exento de IVA según Decreto 126, Artículo 63, Numeral 02', marginL, y + 3);
+  const totalUSD = Number(factura.total != null ? factura.total : (factura.subtotal_usd != null ? factura.subtotal_usd : 0)) || 0;
+  const subtotalBs = totalUSD * tasaBCV;
+  const totalBs = subtotalBs;
 
-  // ── TOTALES (derecha) ──
-  const totalBoxW = 80;
-  const totalBoxX = pageWidth - marginR - totalBoxW;
-  const subtotal = factura.total || 0;
+  // Cláusula de equivalencia cambiaria SENIAT
+  function printRichLine(x, currentY, parts) {
+    let currX = x;
+    for (const p of parts) {
+      doc.setFont('times', p.bold ? 'bold' : 'normal');
+      doc.text(p.text, currX, currentY);
+      currX += doc.getTextWidth(p.text);
+    }
+  }
 
-  // Subtotal
-  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.setTextColor(...GRAY);
-  doc.text('Subtotal', totalBoxX, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 51, 51);
-  doc.text(fmtBCV(subtotal), pageWidth - marginR, y, { align: 'right' });
+  doc.setTextColor(0, 0, 0);
 
-  y += 5;
+  printRichLine(marginL, y, [
+    { text: 'El monto de esta factura equivale a US$ ' },
+    { text: fmtBsSENIAT(totalUSD), bold: true },
+    { text: ' calculados en bolívares' }
+  ]);
+  y += 4.5;
+  printRichLine(marginL, y, [
+    { text: 'a la tasa BCV del día de hoy de ' },
+    { text: fmtTasaSENIAT(tasaBCV), bold: true },
+    { text: ' Bs por dólar' }
+  ]);
 
-  // Descuentos ya incluidos en los precios (se informan, no se restan otra vez)
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-  doc.text('Descuentos aplicados', totalBoxX, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 51, 51);
-  doc.text(fmtBCV(factura.descuento_manual > 0 ? factura.descuento_manual : 0), pageWidth - marginR, y, { align: 'right' });
-
-  y += 5;
-
-  // IVA
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-  doc.text('IVA (exento)', totalBoxX, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 51, 51);
-  doc.text(fmtBCV(0), pageWidth - marginR, y, { align: 'right' });
+  y += 7;
+  doc.setFont('times', 'normal');
+  doc.text('IGTF 3% por pago en divisas por un monto en bolívares de _____________', marginL, y);
 
   y += 8;
 
-  // ── BLOQUE TOTAL USD (dorado) ──
-  const totalBarH = 14;
-  doc.setFillColor(...GOLD);
-  doc.roundedRect(totalBoxX - 4, y - 4, totalBoxW + 8, totalBarH, 2, 2, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...WHITE);
-  doc.text('TOTAL $BCV', totalBoxX, y + 5);
-  doc.setFontSize(13);
-  doc.text(fmtUSD(subtotal), pageWidth - marginR, y + 5, { align: 'right' });
+  // ── BARRA DE TOTALES CON BORDES HORIZONTALES GRUESOS ──
+  const barTop = y;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.8);
+  doc.line(marginL, barTop, pageWidth - marginR, barTop);
 
-  y += totalBarH + 4;
+  const textY = barTop + 4.5;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(`Subtotal  VEF ${fmtBsSENIAT(subtotalBs)}`, marginL, textY);
+  doc.text('I.V.A. ( 0% EXEMPT ) VEF 0,00', marginL + 55, textY);
+  doc.text(`TOTAL VEF  ${fmtBsSENIAT(totalBs)}`, pageWidth - marginR, textY, { align: 'right' });
 
-  // ── COBRAR EN BS / PAGOS (izquierda) ──
-  const tasa = factura.tasa_bcv || 0;
-  const factorBs = factura.factor_bs > 0 ? factura.factor_bs : 1;
-  const totalBs = (subtotal * factorBs * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  doc.setFont('helvetica', 'normal');
+  const barBottom = barTop + 7;
+  doc.line(marginL, barBottom, pageWidth - marginR, barBottom);
+
+  y = barBottom + 5;
+
+  // ── DATOS BANCARIOS DE DEPÓSITO ──
+  doc.setFont('times', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text(`Total en Bs: Bs. ${totalBs} (Tasa BCV del día de emisión: ${tasa})`, marginL, y);
+  doc.text('Favor depositar a nombre de MAQUINARIAS AGROINDUSTRIALES BARPEL CA', marginL, y);
+  y += 3.8;
+  doc.text('Bancaribe Cta. Corriente N° 0114 0195 35 1955000036', marginL, y);
+  y += 3.8;
+  doc.text('Banco Mercantil Cta. Corriente N° 0105 0091 59 1091222762', marginL, y);
 
-  if (factura.tipo_pago === 'credito' || (factura.saldo_pendiente || 0) > 0) {
-    doc.text(`Abonado: ${fmtBCV(factura.abonado || 0)}  ·  Saldo pendiente: ${fmtBCV(factura.saldo_pendiente || 0)}` +
-      (factura.vence ? `  ·  Vence: ${factura.vence}` : ''), marginL, y + 4.5);
-  }
-  if (factura.motivo_descuento) {
-    doc.text(('Descuentos: ' + factura.motivo_descuento).slice(0, 150), marginL, y + 9);
-  }
+  // Marca de agua si la factura está anulada
   if (factura.estado === 'anulada') {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(60);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(55);
     doc.setTextColor(220, 60, 60);
-    doc.text('ANULADA', pageWidth / 2, 160, { align: 'center', angle: 30 });
+    doc.text('ANULADA', pageWidth / 2, pageHeight / 2, { align: 'center', angle: 30 });
   }
 
-  piePagina(doc, 'Factura comercial. Repuestos agrícolas exentos de IVA según Ley de Impuesto al Valor Agregado.');
-
-  const filename = `Factura_${factura.num || 'SN'}_${(factura.fecha || '').replace(/\s/g, '_')}.pdf`;
+  const filename = `Factura_${facturaNum}_${facturaFecha.replace(/[\s\/:]/g, '_')}.pdf`;
   if (action === 'print') {
     doc.autoPrint();
-    const url = URL.createObjectURL(doc.output('blob'));
-    window.open(url, '_blank');
+    if (typeof window !== 'undefined' && typeof URL !== 'undefined') {
+      const url = URL.createObjectURL(doc.output('blob'));
+      window.open(url, '_blank');
+    }
   } else {
-    forceDownload(doc.output('blob'), filename);
+    if (typeof window !== 'undefined') {
+      forceDownload(doc.output('blob'), filename);
+    }
   }
 }
 

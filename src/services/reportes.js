@@ -202,6 +202,52 @@ export function rangoOrigen(sel, desdeTxt, hastaTxt, h = new Date()) {
   return { desde: desdeTxt, hastaExcl: fISO(sig), etiqueta: desdeTxt + ' a ' + hastaTxt };
 }
 
+// ─── Rango del período anterior equivalente para comparativas ───
+export function rangoAnterior(sel, desdeTxt, hastaTxt, h = new Date()) {
+  const y = h.getFullYear(), m = h.getMonth();
+  if (sel === 'mes') {
+    const d0 = new Date(y, m - 1, 1);
+    const d1 = new Date(y, m, 1);
+    return { desde: fISO(d0), hastaExcl: fISO(d1), etiqueta: d0.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' }) };
+  }
+  if (sel === 'mes_ant') {
+    const d0 = new Date(y, m - 2, 1);
+    const d1 = new Date(y, m - 1, 1);
+    return { desde: fISO(d0), hastaExcl: fISO(d1), etiqueta: d0.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' }) };
+  }
+  if (sel === '3m') {
+    const d0 = new Date(y, m - 5, 1);
+    const d1 = new Date(y, m - 2, 1);
+    return { desde: fISO(d0), hastaExcl: fISO(d1), etiqueta: '3 meses anteriores' };
+  }
+  if (sel === '6m') {
+    const d0 = new Date(y, m - 11, 1);
+    const d1 = new Date(y, m - 5, 1);
+    return { desde: fISO(d0), hastaExcl: fISO(d1), etiqueta: '6 meses anteriores' };
+  }
+  if (sel === '12m') {
+    const d0 = new Date(y - 1, m - 11, 1);
+    const d1 = new Date(y, m - 11, 1);
+    return { desde: fISO(d0), hastaExcl: fISO(d1), etiqueta: '12 meses anteriores' };
+  }
+  if (sel === 'anio') {
+    const d0 = new Date(y - 1, 0, 1);
+    const d1 = new Date(y, 0, 1);
+    return { desde: fISO(d0), hastaExcl: fISO(d1), etiqueta: 'año ' + (y - 1) };
+  }
+  if (sel === 'todo') {
+    return { desde: '1990-01-01', hastaExcl: '2000-01-01', etiqueta: 'período previo' };
+  }
+  if (desdeTxt && hastaTxt) {
+    const dIni = new Date(desdeTxt);
+    const dFin = new Date(hastaTxt);
+    const diffMs = Math.max(86400000, dFin.getTime() - dIni.getTime() + 86400000);
+    const prevIni = new Date(dIni.getTime() - diffMs);
+    return { desde: fISO(prevIni), hastaExcl: fISO(dIni), etiqueta: 'período anterior' };
+  }
+  return { desde: '', hastaExcl: '', etiqueta: 'período anterior' };
+}
+
 // ─── Metas (v13.2): el equipo se guarda como [{ nombre, empresa: 'directa'|'dist'|'ambas' }] ───
 export function normalizarEquipo(eq) {
   return (Array.isArray(eq) ? eq : []).map(t => (typeof t === 'string'

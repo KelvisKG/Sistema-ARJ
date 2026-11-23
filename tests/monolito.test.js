@@ -5,7 +5,7 @@ import { describe, test, expect, vi } from 'vitest';
 vi.hoisted(() => { if (!globalThis.WebSocket) globalThis.WebSocket = class {}; });
 
 import { parsearLineas, buscarPorCodigo, csvEsc, lpElegible, fotosDe } from '../src/services/monolito.js';
-import { calcVerdeReal, resumenOrigen, factorVerde, rangoOrigen, normalizarEquipo, claveEmpresa } from '../src/services/reportes.js';
+import { calcVerdeReal, resumenOrigen, factorVerde, rangoOrigen, rangoAnterior, normalizarEquipo, claveEmpresa } from '../src/services/reportes.js';
 import { mapFactura, empresaNorm, empresasBD } from '../src/services/supabase.js';
 
 describe('listas pegadas (recepción y despacho)', () => {
@@ -82,6 +82,15 @@ describe('reportes: verde real (v13.38)', () => {
     expect(r.desde).toBe('2026-09-01');
     expect(r.hastaExcl).toBe('2026-10-01');
     expect(rangoOrigen('custom', '2026-10-05', '2026-10-01').error).toBeTruthy();
+  });
+  test('rangoAnterior calcula el período previo equivalente', () => {
+    const rMes = rangoAnterior('mes', '', '', new Date(2026, 9, 10));
+    expect(rMes.desde).toBe('2026-09-01');
+    expect(rMes.hastaExcl).toBe('2026-10-01');
+
+    const r3m = rangoAnterior('3m', '', '', new Date(2026, 9, 10));
+    expect(r3m.desde).toBe('2026-05-01');
+    expect(r3m.hastaExcl).toBe('2026-08-01');
   });
   test('el equipo viejo (solo nombres) se lee como "ambas"', () => {
     expect(normalizarEquipo(['ANA', { nombre: 'LUIS', empresa: 'dist' }])).toEqual([

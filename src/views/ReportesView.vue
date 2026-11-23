@@ -66,7 +66,7 @@
               :class="compMeses.varPct > 0 ? 'up' : compMeses.varPct < 0 ? 'down' : 'neutral'"
             >
               <i :class="compMeses.varPct > 0 ? 'ti ti-trending-up' : compMeses.varPct < 0 ? 'ti ti-trending-down' : 'ti ti-minus'"></i>
-              {{ compMeses.varPct > 0 ? '+' : '' }}{{ (compMeses.varPct || 0).toFixed(1) }}% vs mes anterior
+              {{ compMeses.varPct > 0 ? '+' : '' }}{{ (compMeses.varPct || 0).toFixed(1) }}% {{ compMeses.etiquetaComp || 'vs mes anterior' }}
             </span>
           </div>
           <div class="hero-meta">
@@ -78,12 +78,12 @@
               <span class="hero-meta-label">Ticket promedio</span>
               <span class="hero-meta-val font-blue">{{ fmtUSD(ticketPromedio) }}</span>
             </div>
-            <div class="hero-meta-item" title="Estimación de facturación al cierre del mes al ritmo actual">
-              <span class="hero-meta-label">Proyección mes</span>
-              <span class="hero-meta-val font-green">{{ fmtUSD(proyeccionMes) }}</span>
+            <div class="hero-meta-item" :title="metricaHeroPeriodo.title">
+              <span class="hero-meta-label">{{ metricaHeroPeriodo.label }}</span>
+              <span class="hero-meta-val font-green">{{ metricaHeroPeriodo.val }}</span>
             </div>
-            <div class="hero-meta-item">
-              <span class="hero-meta-label">Mes anterior</span>
+            <div class="hero-meta-item" :title="'Total facturado en el ' + (rango === 'mes' ? 'mes anterior' : 'período anterior')">
+              <span class="hero-meta-label">{{ rango === 'mes' ? 'Mes anterior' : 'Período anterior' }}</span>
               <span class="hero-meta-val">${{ (compMeses.ant || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
             </div>
             <div class="hero-meta-item">
@@ -95,7 +95,7 @@
           <!-- ══ INDICADOR DE LIQUIDEZ (Caja vs Cuentas por Cobrar) ══ -->
           <div v-if="!liquidezMes.sinDatos" class="liquidity-bar-wrap">
             <div class="liquidity-header">
-              <span class="liquidity-label"><i class="ti ti-droplet"></i> Liquidez del mes</span>
+              <span class="liquidity-label"><i class="ti ti-droplet"></i> Liquidez ({{ origen.etiqueta }})</span>
               <div class="liquidity-legend">
                 <span class="liq-dot dot-green"></span>
                 <span class="liq-legend-text">Cobrado {{ liquidezMes.pctCobrado.toFixed(0) }}%</span>
@@ -145,11 +145,11 @@
 
         <!-- Columna derecha: Top clientes + últimas ventas -->
         <div class="hero-side-panel">
-          <!-- Top clientes del mes -->
+          <!-- Top clientes del período -->
           <div class="side-panel-card">
             <div class="side-panel-title">
               <i class="ti ti-crown"></i>
-              Top clientes del mes
+              Top clientes ({{ origen.etiqueta }})
             </div>
             <div v-if="!ranking.top.length" class="empty-state-card" style="padding:12px;font-size:12px;">
               Sin ventas en el período
@@ -165,7 +165,7 @@
                 <div class="client-avatar">{{ c.nombre.charAt(0).toUpperCase() }}</div>
                 <div class="client-info">
                   <div class="client-nm">{{ c.nombre }}</div>
-                  <div class="client-purchases">{{ c.comprasMes }} compra{{ c.comprasMes !== 1 ? 's' : '' }} este mes</div>
+                  <div class="client-purchases">{{ c.comprasMes }} compra{{ c.comprasMes !== 1 ? 's' : '' }} en este período</div>
                 </div>
                 <div class="client-monto">${{ (c.mes || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
               </div>
@@ -251,10 +251,13 @@
         </div>
       </div>
 
-      <!-- ══ CUADRO ESTADÍSTICO: DINÁMICA DIARIA DE FACTURACIÓN ══ -->
+      <!-- ══ CUADRO ESTADÍSTICO: DINÁMICA DE FACTURACIÓN ══ -->
       <SalesDynamicChart
-        :facturas="validas.filter(f => f.empresa === store.empresa)"
+        :facturas="facturasPeriodo"
         :etiqueta="origen.etiqueta"
+        :rango="rango"
+        :desde="rangoActivo.desde"
+        :hasta-excl="rangoActivo.hastaExcl"
       />
 
       <!-- ══ FILA DE ANÁLISIS (2 columnas) ══ -->
@@ -263,6 +266,7 @@
         <div>
           <ComparisonCards
             :origen="origen"
+            :R="R"
             :r="R"
             :bloques-origen="bloquesOrigen"
             :tablas-detalle="tablasDetalle"
@@ -449,7 +453,7 @@ import {
 import { periodoDe } from '../services/fechas.js';
 import { descargarCSV, descargarArchivo, hoyArchivo } from '../services/monolito.js';
 import {
-  resumenOrigen, agruparProductos, filasDetalleOrigen, costoRenglones, topProductos, rangoOrigen, fISO,
+  resumenOrigen, agruparProductos, filasDetalleOrigen, costoRenglones, topProductos, rangoOrigen, rangoAnterior, fISO,
   normalizarEquipo, claveEmpresa
 } from '../services/reportes.js';
 
@@ -470,38 +474,108 @@ const nombreEmp = computed(() => (store.empresa === 'directa' ? 'Venta Directa' 
 // Criterio para ordenar productos más vendidos: por total $ o por cantidad de unidades
 const criterioTop = ref('total');
 
-// Proyección de facturación al cierre de mes (Run-Rate)
-const proyeccionMes = computed(() => {
-  const hoy = new Date();
-  const dia = hoy.getDate();
-  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
-  if (dia === 0) return 0;
-  const vend = ventasEmpresa.value || 0;
-  return (vend / dia) * diasMes;
+// Fechas de corte locales (medianoche de hoy y día 1 del mes), igual que el monolito
+const cortes = () => {
+  const a = new Date();
+  return { hoy0: new Date(a.getFullYear(), a.getMonth(), a.getDate()), mes0: new Date(a.getFullYear(), a.getMonth(), 1), mesAnt0: new Date(a.getFullYear(), a.getMonth() - 1, 1) };
+};
+const validas = computed(() => store.todasFacturas.filter(f => f.estado !== 'anulada' && (f.fecha_raw || f.fecha)));
+
+// ═══ SELECTOR DE PERÍODO GLOBAL DE ANÁLISIS ═══
+const rango = ref('mes');
+const custDesde = ref('');
+const custHasta = ref('');
+const origen = ref({ estado: 'cargando', lbl: 'este mes', etiqueta: 'este mes', data: null, error: '' });
+const detalleAbierto = ref(false);
+
+const rangoActivo = computed(() => rangoOrigen(rango.value, custDesde.value, custHasta.value));
+const rangoAnt = computed(() => rangoAnterior(rango.value, custDesde.value, custHasta.value));
+
+const mesesEnRango = computed(() => {
+  if (rango.value === 'mes' || rango.value === 'mes_ant') return 1;
+  if (rango.value === '3m') return 3;
+  if (rango.value === '6m') return 6;
+  if (rango.value === '12m' || rango.value === 'anio') return 12;
+  if (rango.value === 'custom' && custDesde.value && custHasta.value) {
+    const d1 = new Date(custDesde.value);
+    const d2 = new Date(custHasta.value);
+    const m = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + 1;
+    return Math.max(1, m);
+  }
+  return 1;
 });
 
-// Ticket promedio por venta
-const ticketPromedio = computed(() => {
-  const total = kpisPeriodo.value.totalVenta || 0;
-  const n = kpisPeriodo.value.nFacts || 0;
-  return n > 0 ? total / n : 0;
+// Facturas del período actual (empresa activa)
+const facturasPeriodo = computed(() => {
+  const r = rangoActivo.value;
+  if (r.error) return [];
+  const desde = r.desde;
+  const hastaExcl = r.hastaExcl;
+
+  if (origen.value.estado === 'listo' && origen.value.data?.facts?.length) {
+    return origen.value.data.facts;
+  }
+  if (origen.value.estado === 'listo' && origen.value.data?.fmap && Object.keys(origen.value.data.fmap).length) {
+    return Object.values(origen.value.data.fmap).filter(f => f.estado !== 'anulada').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  }
+
+  return validas.value.filter(f => {
+    if (f.empresa !== store.empresa) return false;
+    const fch = String(f.fecha_raw || f.fecha || '').slice(0, 10);
+    return fch >= desde && fch < hastaExcl;
+  });
 });
 
-// ═══ LIQUIDEZ DEL MES: Cobrado en caja vs Pendiente en CxC ═══
-// Calcula directamente desde las facturas en memoria del mes activo.
-// No genera ninguna consulta adicional a Supabase.
+// Facturas del período anterior equivalente para comparativas
+const facturasPeriodoAnt = computed(() => {
+  const r = rangoAnt.value;
+  if (!r.desde || !r.hastaExcl) return [];
+  return validas.value.filter(f => {
+    if (f.empresa !== store.empresa) return false;
+    const fch = String(f.fecha_raw || f.fecha || '').slice(0, 10);
+    return fch >= r.desde && fch < r.hastaExcl;
+  });
+});
+
+function cambioRango() {
+  if (rango.value === 'custom') {
+    const h = new Date();
+    if (!custDesde.value) custDesde.value = fISO(new Date(h.getFullYear(), h.getMonth(), 1));
+    if (!custHasta.value) custHasta.value = fISO(h);
+    return;
+  }
+  cargarOrigen();
+}
+
+async function cargarOrigen() {
+  const r = rangoOrigen(rango.value, custDesde.value, custHasta.value);
+  if (r.error) { store.notif(r.error, 'error'); return; }
+  if (!store.supabaseConectado) { origen.value = { estado: 'sinconexion', lbl: r.etiqueta, etiqueta: r.etiqueta, data: null }; return; }
+  const empresaConsultada = store.empresa;
+  origen.value = { estado: 'cargando', lbl: origen.value.lbl, etiqueta: r.etiqueta, data: null };
+  try {
+    const d = await cargarVentasPeriodo(empresaConsultada, r.desde, r.hastaExcl);
+    if (store.empresa !== empresaConsultada) return;
+    const lbl = d.nFacts ? r.etiqueta + ' · ' + d.nFacts + ' factura(s)' : r.etiqueta;
+    origen.value = { estado: 'listo', lbl, etiqueta: r.etiqueta, data: d.nFacts ? { ...d, etiqueta: r.etiqueta } : null };
+    if (rango.value === 'mes' && store.empresa === empresaConsultada) {
+      itsMes.value = d.its || [];
+    }
+  } catch (e) {
+    origen.value = { estado: 'error', lbl: r.etiqueta, etiqueta: r.etiqueta, data: null, error: e.message || String(e) };
+  }
+}
+
+// ═══ LIQUIDEZ DEL PERÍODO: Cobrado en caja vs Pendiente en CxC ═══
 const liquidezMes = computed(() => {
-  const { mes0 } = cortes();
   let totalFacturado = 0;
   let totalPendiente = 0;
-  validas.value
-    .filter(f => f.empresa === store.empresa && new Date(f.fecha_raw) >= mes0)
-    .forEach(f => {
-      const t = f.total || 0;
-      const p = f.saldo_pendiente || 0;
-      totalFacturado += t;
-      totalPendiente += p;
-    });
+  facturasPeriodo.value.forEach(f => {
+    const t = parseFloat(f.total) || 0;
+    const p = parseFloat(f.saldo_pendiente) || 0;
+    totalFacturado += t;
+    totalPendiente += p;
+  });
   const cobrado = Math.max(0, totalFacturado - totalPendiente);
   const pctCobrado = totalFacturado > 0 ? (cobrado / totalFacturado) * 100 : 0;
   const pctPendiente = totalFacturado > 0 ? (totalPendiente / totalFacturado) * 100 : 0;
@@ -515,25 +589,46 @@ const liquidezMes = computed(() => {
   };
 });
 
-function verFactura(f) {
-  store.facturaReciente = f;
-  store.modalFacturaActivo = true;
-}
+// Proyección de facturación al cierre de mes (Run-Rate)
+const proyeccionMes = computed(() => {
+  const hoy = new Date();
+  const dia = hoy.getDate();
+  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+  if (dia === 0) return 0;
+  const vend = ventasEmpresa.value || 0;
+  return (vend / dia) * diasMes;
+});
 
-function irAClientes() {
-  store.cambiarVista('clientes');
-}
+const metricaHeroPeriodo = computed(() => {
+  if (rango.value === 'mes') {
+    return {
+      label: 'Proyección mes',
+      val: fmtUSD(proyeccionMes.value),
+      title: 'Estimación de facturación al cierre del mes al ritmo actual'
+    };
+  }
+  const m = mesesEnRango.value;
+  const tot = kpisPeriodo.value.totalVenta || 0;
+  if (m > 1) {
+    return {
+      label: 'Promedio mensual',
+      val: fmtUSD(tot / m),
+      title: `Promedio mensual facturado en los ${m} meses del período`
+    };
+  }
+  return {
+    label: 'Promedio diario',
+    val: fmtUSD(tot / 30),
+    title: 'Promedio diario facturado en el período'
+  };
+});
 
-function imprimirReporte() {
-  window.print();
-}
-
-// Fechas de corte locales (medianoche de hoy y día 1 del mes), igual que el monolito
-const cortes = () => {
-  const a = new Date();
-  return { hoy0: new Date(a.getFullYear(), a.getMonth(), a.getDate()), mes0: new Date(a.getFullYear(), a.getMonth(), 1), mesAnt0: new Date(a.getFullYear(), a.getMonth() - 1, 1) };
-};
-const validas = computed(() => store.todasFacturas.filter(f => f.estado !== 'anulada' && f.fecha_raw));
+// Ticket promedio por venta
+const ticketPromedio = computed(() => {
+  const total = kpisPeriodo.value.totalVenta || 0;
+  const n = kpisPeriodo.value.nFacts || 0;
+  return n > 0 ? total / n : 0;
+});
 
 // ═══ KPIs (actualizarKpisReportes) ═══
 const ventas = computed(() => {
@@ -636,59 +731,7 @@ const util = computed(() => {
 });
 
 // ═══ IMPORTADO vs LOCAL con selector de período ═══
-const rango = ref('mes');
-const custDesde = ref('');
-const custHasta = ref('');
-const origen = ref({ estado: 'cargando', lbl: 'este mes', etiqueta: 'este mes', data: null, error: '' });
-const detalleAbierto = ref(false);
-
-function cambioRango() {
-  if (rango.value === 'custom') {
-    // Se precarga con el mes en curso y espera al botón Aplicar
-    const h = new Date();
-    if (!custDesde.value) custDesde.value = fISO(new Date(h.getFullYear(), h.getMonth(), 1));
-    if (!custHasta.value) custHasta.value = fISO(h);
-    return;
-  }
-  cargarOrigen();
-}
-
-async function cargarOrigen() {
-  const r = rangoOrigen(rango.value, custDesde.value, custHasta.value);
-  if (r.error) { store.notif(r.error, 'error'); return; }
-  if (!store.supabaseConectado) { origen.value = { estado: 'sinconexion', lbl: r.etiqueta, etiqueta: r.etiqueta, data: null }; return; }
-  const empresaConsultada = store.empresa;
-  origen.value = { estado: 'cargando', lbl: origen.value.lbl, etiqueta: r.etiqueta, data: null };
-  try {
-    const d = await cargarVentasPeriodo(empresaConsultada, r.desde, r.hastaExcl);
-    if (store.empresa !== empresaConsultada) return;
-    const lbl = d.nFacts ? r.etiqueta + ' · ' + d.nFacts + ' factura(s)' : r.etiqueta;
-    origen.value = { estado: 'listo', lbl, etiqueta: r.etiqueta, data: d.nFacts ? { ...d, etiqueta: r.etiqueta } : null };
-    // Caché unificada v14.1: si el rango es "mes", reutilizar items descargados
-    // en itsMes para que cargarUtilidad() no duplique la consulta.
-    if (rango.value === 'mes' && store.empresa === empresaConsultada) {
-      itsMes.value = d.its || [];
-    }
-  } catch (e) {
-    origen.value = { estado: 'error', lbl: r.etiqueta, etiqueta: r.etiqueta, data: null, error: e.message || String(e) };
-  }
-}
-
 const R = computed(() => (origen.value.data ? resumenOrigen(origen.value.data.its, origen.value.data.fmap, store.productos) : null));
-
-const mesesEnRango = computed(() => {
-  if (rango.value === 'mes' || rango.value === 'mes_ant') return 1;
-  if (rango.value === '3m') return 3;
-  if (rango.value === '6m') return 6;
-  if (rango.value === '12m' || rango.value === 'anio') return 12;
-  if (rango.value === 'custom' && custDesde.value && custHasta.value) {
-    const d1 = new Date(custDesde.value);
-    const d2 = new Date(custHasta.value);
-    const m = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + 1;
-    return Math.max(1, m);
-  }
-  return 1;
-});
 
 const kpisPeriodo = computed(() => {
   const cfMensual = fijos.value.cf;
@@ -732,18 +775,22 @@ const kpisPeriodo = computed(() => {
     return res;
   }
 
-  const ingreso = rango.value === 'mes' ? ventas.value.totMes : 0;
+  // Fallback con facturas en memoria del período
+  const facts = facturasPeriodo.value;
+  const totalVenta = facts.reduce((a, f) => a + (parseFloat(f.total) || 0), 0);
+  const nFacts = facts.length;
+  const utilFallback = util.value;
   return {
-    totalVenta: ingreso,
-    nFacts: rango.value === 'mes' ? ventas.value.nMes : 0,
+    totalVenta,
+    nFacts,
     cf,
     cfSub,
-    utilVal: util.value.val,
-    utilSub: util.value.sub,
-    margenVal: util.value.margenVal,
-    margenSub: util.value.margenSub,
-    peVal: util.value.peVal,
-    peSub: util.value.peSub
+    utilVal: totalVenta > 0 && utilFallback.val !== '$0.00' ? utilFallback.val : fmtUSD(0),
+    utilSub: totalVenta > 0 ? `${nFacts} factura(s) en ${origen.value.etiqueta}` : `Sin ventas en ${origen.value.etiqueta}`,
+    margenVal: utilFallback.margenVal,
+    margenSub: utilFallback.margenSub,
+    peVal: utilFallback.peVal,
+    peSub: utilFallback.peSub
   };
 });
 
@@ -911,47 +958,78 @@ async function quitarDelEquipo(i) {
   store.notif(`${t.nombre} quitado del equipo`, 'warning');
 }
 
-// ═══ COMPARATIVA MES ACTUAL vs MES ANTERIOR ═══
+// ═══ COMPARATIVA DE VENTAS: PERÍODO ACTUAL vs PERÍODO ANTERIOR ═══
 const compMeses = computed(() => {
-  const { mes0, mesAnt0 } = cortes();
-  let act = 0, nAct = 0, ant = 0, nAnt = 0;
-  validas.value.filter(f => f.empresa === store.empresa).forEach(f => {
-    const d = new Date(f.fecha_raw);
-    if (d >= mes0) { act += f.total || 0; nAct++; } else if (d >= mesAnt0) { ant += f.total || 0; nAnt++; }
-  });
-  const nombreMes = d => d.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' });
+  const rAct = rangoActivo.value;
+  const rAnt = rangoAnt.value;
+
+  const totalAct = kpisPeriodo.value.totalVenta || 0;
+  const nAct = kpisPeriodo.value.nFacts || facturasPeriodo.value.length || 0;
+
+  const totalAnt = facturasPeriodoAnt.value.reduce((acc, f) => acc + (parseFloat(f.total) || 0), 0);
+  const nAnt = facturasPeriodoAnt.value.length;
+
+  const varPct = totalAnt > 0 ? ((totalAct - totalAnt) / totalAnt) * 100 : 0;
+  const etiquetaComp = rango.value === 'mes' ? 'vs mes anterior' : 'vs período anterior';
+  const subtitulo = rango.value === 'mes'
+    ? 'Mes actual en curso vs Mes anterior'
+    : `${rAct.etiqueta ? rAct.etiqueta.charAt(0).toUpperCase() + rAct.etiqueta.slice(1) : 'Período actual'} vs ${rAnt.etiqueta || 'Período anterior'}`;
+
   return {
-    act, ant, tope: Math.max(act, ant, 1), varPct: ant > 0 ? ((act - ant) / ant) * 100 : 0,
+    act: totalAct,
+    ant: totalAnt,
+    tope: Math.max(totalAct, totalAnt, 1),
+    varPct,
+    etiquetaComp,
+    subtitulo,
     barras: [
-      { etiqueta: nombreMes(mes0) + ' (en curso)', val: act, n: nAct, color: 'linear-gradient(90deg,var(--blue),var(--navy))' },
-      { etiqueta: nombreMes(mesAnt0), val: ant, n: nAnt, color: 'var(--dgray)' }
+      {
+        etiqueta: `${rAct.etiqueta || 'Actual'}${rango.value === 'mes' ? ' (en curso)' : ''}`,
+        val: totalAct,
+        n: nAct,
+        color: 'linear-gradient(90deg,var(--blue),var(--navy))'
+      },
+      {
+        etiqueta: rAnt.etiqueta || 'Anterior',
+        val: totalAnt,
+        n: nAnt,
+        color: 'var(--dgray)'
+      }
     ]
   };
 });
 
-// Últimas 20 ventas (todas las empresas, como el monolito)
-const ventasRecientes = computed(() => store.todasFacturas.slice(0, 20));
+// Últimas ventas del período (o de la empresa activa)
+const ventasRecientes = computed(() => {
+  if (facturasPeriodo.value.length > 0) {
+    return facturasPeriodo.value.slice(0, 10);
+  }
+  return store.todasFacturas.filter(f => f.empresa === store.empresa).slice(0, 10);
+});
 function fechaReciente(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
 }
 
-// ═══ RANKING DE CLIENTES (v13.2): solo la empresa activa ═══
+// ═══ RANKING DE CLIENTES DEL PERÍODO (solo la empresa activa) ═══
 const ranking = computed(() => {
   const hoy = new Date();
-  const { mes0 } = cortes();
   const porCliente = {};
-  validas.value.filter(f => f.empresa === store.empresa).forEach(f => {
-    const nom = f.cliente_nombre_snap || f.cliente || 'Sin cliente';
+
+  facturasPeriodo.value.forEach(f => {
+    const nom = f.cliente_nombre_snap || f.cliente_nombre || f.cliente || 'Sin cliente';
     if (!porCliente[nom]) porCliente[nom] = { nombre: nom, mes: 0, comprasMes: 0, ultima: null, totalHist: 0, comprasHist: 0 };
     const c = porCliente[nom];
-    const fch = new Date(f.fecha_raw);
-    const t = f.total || 0;
-    c.totalHist += t; c.comprasHist++;
+    const fch = new Date(f.fecha_raw || f.fecha);
+    const t = parseFloat(f.total) || 0;
+    c.totalHist += t;
+    c.comprasHist++;
     if (!c.ultima || fch > c.ultima) c.ultima = fch;
-    if (fch >= mes0) { c.mes += t; c.comprasMes++; }
+    c.mes += t;
+    c.comprasMes++;
   });
+
   const todos = Object.values(porCliente);
   const topC = todos.filter(c => c.mes > 0).sort((a, b) => b.mes - a.mes).slice(0, 5);
   // "Dejó de comprar": compró al menos 2 veces y lleva 30 días o más sin comprar
