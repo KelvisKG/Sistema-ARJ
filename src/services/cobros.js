@@ -13,9 +13,9 @@ import { colchonFactor, totalEnDivisas, dtoDivisaExcedentePct, dtoDivisaPct, fac
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
 // Métodos de pago (iguales al monolito) y su moneda
-export const METODOS_PAGO = ['Pago móvil Bs.', 'Transferencia Bs.', 'Zelle USD', 'Efectivo USD', 'Efectivo Bs.', 'Punto de venta'];
+export const METODOS_PAGO = ['Pago móvil Bs.', 'Transferencia Bs.', 'Zelle USD', 'USDT', 'Efectivo USD', 'Efectivo Bs.', 'Punto de venta'];
 export function monedaDeMetodo(m) {
-  return /USD|Zelle/i.test(m || '') ? 'USD' : 'Bs';
+  return /USD|Zelle|USDT/i.test(m || '') ? 'USD' : 'Bs';
 }
 export function requiereReferencia(m) {
   return /transferencia|pago m[oó]vil|punto de venta|zelle|usdt/i.test(m || '');

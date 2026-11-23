@@ -85,6 +85,7 @@ describe('emisión: fracciones por moneda (regresión v13.12 / C-03)', () => {
   });
   test('moneda por método', () => {
     expect(monedaDeMetodo('Zelle USD')).toBe('USD');
+    expect(monedaDeMetodo('USDT')).toBe('USD');
     expect(monedaDeMetodo('Punto de venta')).toBe('Bs');
     expect(monedaDeMetodo('Efectivo Bs.')).toBe('Bs');
   });

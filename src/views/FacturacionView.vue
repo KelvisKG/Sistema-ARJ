@@ -1,6 +1,6 @@
 <template>
   <div class="page active" id="page-facturacion">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div class="fact-header-bar">
       <div>
         <h1 class="page-title"><i class="ti ti-file-invoice"></i> Nueva Factura</h1>
         <p class="page-sub" style="margin-bottom:0">
@@ -10,7 +10,7 @@
         </p>
       </div>
       <div>
-        <button class="btn btn-gold" @click="store.modoCajaActivo = true">
+        <button class="btn btn-gold btn-modo-caja" @click="store.modoCajaActivo = true">
           <i class="ti ti-cash-register"></i> Modo Caja (Pantalla Simple)
         </button>
       </div>
@@ -109,19 +109,18 @@
           <!-- NIVEL DE PRECIO EN VENTA DIRECTA -->
           <div v-else class="field-row" id="fila-precio-publico-vd">
             <label>Nivel precio:</label>
-            <div style="flex:1;display:flex;align-items:center;gap:10px">
-              <span style="background:var(--lblue);color:var(--navy);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600">
+            <div class="precio-vd-row">
+              <span class="precio-publico-badge">
                 <i class="ti ti-tag"></i> Precio público
               </span>
               <button
                 v-if="store.rol === 'gerente'"
-                class="btn btn-secondary btn-sm"
-                style="font-size:11px"
+                class="btn btn-secondary btn-sm btn-dto-manual"
                 @click="store.modalDtoManualActivo = true"
               >
                 <i class="ti ti-discount"></i> Descuento manual
               </button>
-              <span v-if="store.carrito.descuento_manual > 0" style="font-size:11.5px;color:var(--green);font-weight:600">
+              <span v-if="store.carrito.descuento_manual > 0" class="dto-manual-aplicado">
                 −{{ store.carrito.descuento_manual }}% aplicado ({{ store.carrito.descuento_motivo }})
               </span>
             </div>
@@ -142,10 +141,20 @@
 
         <!-- AGREGAR PRODUCTOS (5 PESTAÑAS) -->
         <div class="card">
-          <div class="card-tit"><i class="ti ti-search"></i> Agregar productos</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            <div class="card-tit" style="margin-bottom:0"><i class="ti ti-search"></i> Agregar productos</div>
+            <button
+              class="btn btn-secondary btn-sm"
+              style="display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 14px;border-radius:6px;font-weight:600"
+              title="Crear un producto nuevo sin salir de facturación"
+              @click="abrirNuevoProductoRapido"
+            >
+              <i class="ti ti-package-plus" style="font-size:16px"></i> Nuevo producto
+            </button>
+          </div>
 
           <!-- Pestañas de Búsqueda -->
-          <div style="display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid var(--gray);overflow-x:auto">
+          <div class="search-tabs-row" style="display:flex;gap:4px;margin-bottom:12px;border-bottom:1.5px solid var(--border);overflow-x:auto">
             <button
               :class="['search-tab', { active: tabBusqueda === 'normal' }]"
               @click="tabBusqueda = 'normal'"
@@ -341,12 +350,13 @@
           <table class="tbl" id="tbl-items" style="margin-top:14px">
             <thead>
               <tr>
+                <th style="width:36px;text-align:center">#</th>
                 <th>Producto</th>
-                <th class="num" style="width:64px">Cant.</th>
-                <th class="num" style="width:128px">Dólar BCV</th>
-                <th v-if="store.rol === 'gerente'" class="num" style="width:60px">Margen</th>
-                <th class="num" style="width:92px">Total $BCV</th>
-                <th style="width:42px"></th>
+                <th class="num" style="width:75px;text-align:center">Cant.</th>
+                <th class="num" style="width:132px;text-align:right">Dólar BCV</th>
+                <th v-if="store.rol === 'gerente'" class="num" style="width:65px;text-align:right">Margen</th>
+                <th class="num" style="width:96px;text-align:right">Total $BCV</th>
+                <th style="width:85px;text-align:center">Acciones</th>
               </tr>
             </thead>
             <tbody id="items-body">
@@ -357,6 +367,9 @@
               </tr>
               <template v-for="(it, idx) in store.carrito.items" :key="it.id || it.cod_alt">
                 <tr>
+                  <td style="text-align:center;vertical-align:middle;padding:8px 4px">
+                    <div class="item-orden-num">{{ idx + 1 }}</div>
+                  </td>
                   <td>
                     <div class="fact-prod">
                       <strong>{{ it.cod_alt }}</strong>
@@ -365,17 +378,17 @@
                     </div>
                     <div class="fact-desc">{{ it.desc }}</div>
                   </td>
-                  <td class="num">
+                  <td class="num" style="text-align:center;padding:8px 4px">
                     <input
                       type="number"
                       min="1"
                       :value="it.cant"
-                      class="val-input"
-                      :style="{ width: '55px', padding: '4px 2px', textAlign: 'center', fontWeight: '700', borderColor: it.cant > stockDe(it) ? 'var(--gold)' : '' }"
+                      class="val-input item-cant-input"
+                      :style="{ width: '56px', minWidth: '50px', height: '34px', minHeight: '34px', textAlign: 'center', fontWeight: '700', padding: '2px 4px', fontSize: '13.5px', display: 'inline-block', borderColor: it.cant > stockDe(it) ? 'var(--gold)' : '' }"
                       @change="store.actualizarCantCarrito(idx, $event.target.value)"
                     >
                   </td>
-                  <td class="num">
+                  <td class="num" style="padding:8px 6px">
                     <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
                       <input
                         v-if="!it.modo_verde"
@@ -383,8 +396,8 @@
                         step="0.01"
                         min="0.01"
                         :value="it.precio"
-                        class="val-input"
-                        style="width:80px;padding:3px 6px;font-size:12px;text-align:right;font-weight:700;color:var(--navy)"
+                        class="val-input item-precio-input"
+                        :style="{ width: '80px', minWidth: '75px', height: '34px', minHeight: '34px', padding: '2px 6px', fontSize: '12.5px', textAlign: 'right', fontWeight: '700', color: 'var(--navy)' }"
                         title="Precio en Dólar BCV (editable)"
                         @change="store.cambiarPrecioBcvItem(idx, $event.target.value)"
                       >
@@ -393,15 +406,15 @@
                         type="number"
                         step="0.5"
                         :value="it.precio_verde"
-                        class="val-input"
-                        style="width:75px;padding:3px 6px;font-size:12px;border-color:var(--green);text-align:right;font-weight:700;color:var(--green)"
+                        class="val-input item-precio-input item-precio-verde"
+                        :style="{ width: '75px', minWidth: '70px', height: '34px', minHeight: '34px', padding: '2px 6px', fontSize: '12.5px', borderStyle: 'solid', borderWidth: '1.5px', borderColor: 'var(--green)', textAlign: 'right', fontWeight: '700', color: 'var(--green)' }"
                         title="Precio en Efectivo Verde"
                         @change="store.cambiarPrecioVerdeItem(idx, $event.target.value)"
                       >
                       <button
                         v-if="store.rol === 'gerente'"
-                        :class="['btn-sm', it.modo_verde ? 'btn-green' : 'btn-secondary']"
-                        style="padding:2px 5px;font-size:10px"
+                        :class="['btn-sm', it.modo_verde ? 'btn-green' : 'btn-secondary', 'btn-toggle-verde']"
+                        :style="{ height: '34px', minHeight: '34px', padding: '0 7px', fontSize: '11px', fontWeight: '700' }"
                         :title="it.modo_verde ? 'Modo Efectivo Verde activo (clic para volver a $BCV)' : 'Cambiar a modo efectivo ($ verde)'"
                         @click="store.toggleModoVerdeItem(idx)"
                       >
@@ -409,21 +422,38 @@
                       </button>
                     </div>
                   </td>
-                  <td v-if="store.rol === 'gerente'" class="num" style="font-size:11.5px;color:var(--dgray)">
+                  <td v-if="store.rol === 'gerente'" class="num" style="font-size:11.5px;color:var(--dgray);padding:8px 6px">
                     {{ margenItem(it) }}%
                   </td>
-                  <td class="num" style="font-weight:700;color:var(--navy)">
+                  <td class="num" style="font-weight:700;color:var(--navy);padding:8px 8px">
                     {{ fmtUSD(it.cant * it.precio) }}
                   </td>
-                  <td style="text-align:center">
-                    <button
-                      class="btn btn-danger btn-sm"
-                      style="padding:3px 7px"
-                      title="Eliminar ítem"
-                      @click="store.removerDelCarrito(idx)"
-                    >
-                      <i class="ti ti-trash"></i>
-                    </button>
+                  <td style="text-align:center;white-space:nowrap;padding:8px 4px">
+                    <div class="item-acciones-grupo">
+                      <button
+                        class="btn btn-secondary btn-sm item-orden-btn"
+                        :disabled="idx === 0"
+                        title="Subir"
+                        @click="moverItem(idx, -1)"
+                      >
+                        <i class="ti ti-arrow-up"></i>
+                      </button>
+                      <button
+                        class="btn btn-secondary btn-sm item-orden-btn"
+                        :disabled="idx === store.carrito.items.length - 1"
+                        title="Bajar"
+                        @click="moverItem(idx, 1)"
+                      >
+                        <i class="ti ti-arrow-down"></i>
+                      </button>
+                      <button
+                        class="btn btn-danger btn-sm item-orden-btn"
+                        title="Eliminar ítem"
+                        @click="store.removerDelCarrito(idx)"
+                      >
+                        <i class="ti ti-trash"></i>
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 <!-- ALERTA PRODUCTO SIN FOB (v13.17) -->
@@ -639,7 +669,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../stores/useArjStore.js';
-import { fmtUSD, fmtBCV, fmtDolar, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO, fmtTasa } from '../services/pricing.js';
+import { fmtUSD, fmtBCV, fmtDolar, fmtBsMonto, precioConTier, costoLanded, sinFob, MARGEN_MINIMO, fmtTasa, FACTOR_LANDED_FALLBACK } from '../services/pricing.js';
 import { METODOS_PAGO, monedaDeMetodo, requiereReferencia, parseMontoVE, fraccionPagada, descuentoCarrito } from '../services/cobros.js';
 
 const store = useArjStore();
@@ -652,7 +682,7 @@ const textoImportar = ref('');
 const mostrarResultados = ref(false);
 
 const t = computed(() => store.totales);
-const columnasItems = computed(() => (store.rol === 'gerente' ? 6 : 5));
+const columnasItems = computed(() => (store.rol === 'gerente' ? 7 : 6));
 const descuento = computed(() => descuentoCarrito(store.subtotalCarrito, t.value, store.estadoTasas));
 
 // ── Pagos ──
@@ -808,6 +838,24 @@ function seleccionarProducto(p) {
   store.agregarAlCarrito(p, 1);
   busquedaTexto.value = '';
   mostrarResultados.value = false;
+}
+
+function moverItem(idx, dir) {
+  const items = store.carrito.items;
+  const nuevoIdx = idx + dir;
+  if (nuevoIdx < 0 || nuevoIdx >= items.length) return;
+  const tmp = items[idx];
+  items.splice(idx, 1);
+  items.splice(nuevoIdx, 0, tmp);
+}
+
+function abrirNuevoProductoRapido() {
+  store.productoSeleccionado = {
+    _nuevo: true, cod_alt: '', cod_orig: '', cod_barras: '', desc: '', marca: '', fob: 0, stock_vd: 0, stock_dist: 0,
+    marca_modelo: '', sistema: '', precio_manual: null, origen: 'importado',
+    factor_landed: (store.configuracion && store.configuracion.factor_default) || FACTOR_LANDED_FALLBACK, proveedor: '', imagen_url: ''
+  };
+  store.modalEditProdActivo = true;
 }
 
 function escanearBarras() {
