@@ -79,41 +79,199 @@
         </section>
       </div>
 
-      <!-- ═══ PASO 2: pegar la lista (igual que Conteo / Recepción) ═══ -->
+      <!-- ═══ PASO 2: AGREGAR PRODUCTOS (INTERFAZ GRÁFICA Y DIRECTA) ═══ -->
       <div v-else-if="paso === 'productos'" class="me-cuerpo">
         <div class="cn-chip">
           <i class="ti ti-building-store"></i>
           <span><strong>{{ compra.codigo }}</strong> · {{ compra.proveedor }}<template v-if="compra.num_factura"> · Factura {{ compra.num_factura }}</template> · factor {{ fmtFactor(compra) }}</span>
           <button type="button" class="me-enlace" @click="paso = 'compra'">Cambiar compra</button>
         </div>
-        <div class="me-aviso azul-claro">
-          <i class="ti ti-info-circle"></i>
-          <div>Pega una línea por producto: <strong>código</strong> y <strong>cantidad</strong>, separados por tabulador, coma, punto y coma o espacios. Copiar y pegar desde Excel funciona directo. Las cantidades se <strong>suman</strong> al stock.
-            También puedes traer los productos de una marca y escribir cuánto llegó de cada uno; los que queden en 0 no se tocan.</div>
-        </div>
-        <label class="me-lbl">¿A qué empresa entra la mercancía?</label>
-        <div class="cn-destino">
-          <button v-for="d in DESTINOS" :key="d.v" type="button" :class="['me-chip', { activo: destino === d.v }]" :aria-pressed="destino === d.v" @click="destino = d.v">{{ d.t }}</button>
-        </div>
-        <div class="cn-marca">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
           <div>
-            <label class="me-lbl" for="cn-marca">Traer productos por marca</label>
-            <select id="cn-marca" v-model="marcaTraer" class="val-input" @change="traerMarca">
-              <option value="">— Elegir marca —</option>
-              <option v-for="m in store.marcasCatalogo" :key="m.marca" :value="m.marca">{{ m.marca }} ({{ m.n }})</option>
-            </select>
+            <label class="me-lbl" style="margin-bottom:4px">¿A qué empresa entra la mercancía?</label>
+            <div class="cn-destino">
+              <button v-for="d in DESTINOS" :key="d.v" type="button" :class="['me-chip', { activo: destino === d.v }]" :aria-pressed="destino === d.v" @click="destino = d.v">{{ d.t }}</button>
+            </div>
           </div>
-          <button id="cn-nuevo-producto" type="button" class="btn btn-gold" @click="crearProducto()"><i class="ti ti-plus"></i> Nuevo producto</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="cn-nuevo-producto" type="button" class="btn btn-gold btn-sm" @click="crearProducto()">
+              <i class="ti ti-plus"></i> Nuevo producto
+            </button>
+            <!-- Selector de modo -->
+            <div class="modo-tabs">
+              <button type="button" :class="['modo-btn', { activo: tabEntrada === 'grafico' }]" @click="tabEntrada = 'grafico'">
+                <i class="ti ti-hand-click"></i> Selección directa
+              </button>
+              <button type="button" :class="['modo-btn', { activo: tabEntrada === 'texto' }]" @click="tabEntrada = 'texto'">
+                <i class="ti ti-clipboard-text"></i> Pegar texto / Excel
+              </button>
+            </div>
+          </div>
         </div>
-        <label class="me-lbl" for="cn-lista" style="margin-top:12px">Productos que llegaron</label>
-        <textarea id="cn-lista" ref="inpLista" v-model="texto" class="cn-texto" placeholder="FIL-DON-P55	12&#10;COR-B52	4&#10;5191547-2	30"></textarea>
+
+        <!-- ── MODO 1: SELECCIÓN DIRECTA / GRÁFICA (TIPO FACTURACIÓN) ── -->
+        <div v-show="tabEntrada === 'grafico'">
+          <div class="cn-buscador-fila">
+            <div ref="buscadorBoxRef" class="cn-buscador-caja">
+              <i class="ti ti-search cn-lupa"></i>
+              <input
+                ref="inpBusquedaRef"
+                v-model="busquedaTexto"
+                type="text"
+                class="val-input cn-input-buscar"
+                placeholder="Busca el repuesto por código, descripción o marca para agregarlo..."
+                autocomplete="off"
+                @focus="mostrarSugerencias = true"
+                @input="mostrarSugerencias = true"
+              >
+              <!-- Desplegable de autocompletado en tiempo real -->
+              <div v-if="mostrarSugerencias && productosFiltrados.length > 0" class="cn-sugerencias">
+                <div
+                  v-for="p in productosFiltrados"
+                  :key="p.id"
+                  class="cn-sug-item"
+                  @click="seleccionarDesdeBuscador(p)"
+                >
+                  <div>
+                    <strong style="color:var(--primary);font-size:13.5px">{{ p.cod_alt }}</strong>
+                    <span v-if="p.cod_orig" style="color:var(--text-muted);font-size:11.5px;margin-left:6px">({{ p.cod_orig }})</span>
+                    <div style="font-size:12.5px;color:var(--text);margin-top:2px">{{ p.desc }}</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Marca: {{ p.marca || '—' }}</div>
+                  </div>
+                  <div style="text-align:right">
+                    <span :class="['badge', stockDe(p) > 0 ? 'badge-info' : 'badge-danger']" style="font-size:11px">
+                      Stock: {{ stockDe(p) }}
+                    </span>
+                    <div style="margin-top:4px">
+                      <span class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:11px">
+                        <i class="ti ti-plus"></i> Agregar
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Traer por marca -->
+            <div style="display:flex;align-items:center;gap:4px">
+              <select v-model="marcaTraerGrafico" class="val-input" style="font-size:12.5px;max-width:180px;height:38px;padding:4px 8px" @change="traerPorMarcaDirecto">
+                <option value="">+ Traer por marca</option>
+                <option v-for="m in store.marcasCatalogo" :key="m.marca" :value="m.marca">{{ m.marca }} ({{ m.n }})</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tabla gráfica de productos seleccionados -->
+          <div class="cn-tabla-grafica-caja">
+            <table class="simple-tbl cn-tabla-items">
+              <thead>
+                <tr>
+                  <th style="width:36px;text-align:center">#</th>
+                  <th style="width:140px">Código</th>
+                  <th>Descripción / Marca</th>
+                  <th class="num" style="width:85px;text-align:center">Stock actual</th>
+                  <th class="num" style="width:170px;text-align:center">Cantidad a sumar</th>
+                  <th class="num" style="width:95px;text-align:center">Quedará</th>
+                  <th style="width:44px;text-align:center"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="itemsGraficos.length === 0">
+                  <td colspan="7" style="text-align:center;padding:32px 14px;color:var(--dgray)">
+                    <i class="ti ti-package" style="font-size:28px;display:block;margin-bottom:6px;opacity:0.6"></i>
+                    No has seleccionado productos para esta compra.<br>
+                    <strong>Escribe en el buscador de arriba</strong> para agregar los repuestos y sumar su stock.
+                  </td>
+                </tr>
+                <tr v-for="(it, idx) in itemsGraficos" :key="it.producto_id">
+                  <td style="text-align:center;color:var(--dgray);font-weight:600;font-size:12px">
+                    {{ idx + 1 }}
+                  </td>
+                  <td>
+                    <strong style="color:var(--primary);font-size:13px">{{ it.cod_alt }}</strong>
+                    <div v-if="it.prod.cod_orig" style="font-size:11px;color:var(--dgray)">{{ it.prod.cod_orig }}</div>
+                  </td>
+                  <td>
+                    <div style="font-size:12.5px;color:var(--text);font-weight:500">{{ it.desc }}</div>
+                    <span v-if="it.marca" class="fact-marca" style="font-size:11px">{{ it.marca }}</span>
+                  </td>
+                  <td class="num" style="text-align:center">
+                    <span class="badge badge-info" style="font-size:12px;font-weight:700">
+                      {{ stockDe(it.prod) }}
+                    </span>
+                  </td>
+                  <td class="num" style="text-align:center">
+                    <div class="cn-cant-control">
+                      <button type="button" class="cn-btn-step" title="Disminuir" :disabled="it.cant <= 1" @click="modificarCantidadItem(it, -1)">
+                        <i class="ti ti-minus"></i>
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        :value="it.cant"
+                        class="val-input cn-cant-input"
+                        @change="fijarCantidadItem(it, $event.target.value)"
+                      >
+                      <button type="button" class="cn-btn-step" title="Aumentar" @click="modificarCantidadItem(it, 1)">
+                        <i class="ti ti-plus"></i>
+                      </button>
+                    </div>
+                  </td>
+                  <td class="num" style="text-align:center">
+                    <strong style="color:var(--green);font-size:14px">
+                      {{ stockDe(it.prod) + (parseInt(it.cant) || 0) }}
+                    </strong>
+                    <div v-if="it.cant > 0" style="font-size:10px;color:var(--dgray)">+{{ it.cant }} unid.</div>
+                  </td>
+                  <td style="text-align:center">
+                    <button type="button" class="btn btn-danger btn-sm" style="padding:3px 7px" title="Quitar de la compra" @click="eliminarItemGrafico(idx)">
+                      <i class="ti ti-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Resumen al pie de la tabla -->
+          <div v-if="itemsGraficos.length > 0" class="cn-resumen-barra">
+            <div>
+              <strong>{{ itemsGraficos.length }}</strong> producto(s) · 
+              Total a sumar: <strong style="color:var(--green);font-size:15px">{{ totalUnidadesGraficas }}</strong> unidades
+            </div>
+            <button type="button" class="me-enlace" style="color:var(--red);font-size:12px" @click="vaciarListaGrafica">
+              <i class="ti ti-trash"></i> Quitar todos
+            </button>
+          </div>
+        </div>
+
+        <!-- ── MODO 2: TEXTO PLANO / PEGAR DESDE EXCEL ── -->
+        <div v-show="tabEntrada === 'texto'">
+          <div class="me-aviso azul-claro">
+            <i class="ti ti-info-circle"></i>
+            <div>Pega una línea por producto: <strong>código</strong> y <strong>cantidad</strong>, separados por tabulador, coma, punto y coma o espacios. Copiar y pegar desde Excel funciona directo. Las cantidades se <strong>suman</strong> al stock.
+              También puedes traer los productos de una marca y escribir cuánto llegó de cada uno; los que queden en 0 no se tocan.</div>
+          </div>
+          <div class="cn-marca">
+            <div>
+              <label class="me-lbl" for="cn-marca">Traer productos por marca</label>
+              <select id="cn-marca" v-model="marcaTraer" class="val-input" @change="traerMarca">
+                <option value="">— Elegir marca —</option>
+                <option v-for="m in store.marcasCatalogo" :key="m.marca" :value="m.marca">{{ m.marca }} ({{ m.n }})</option>
+              </select>
+            </div>
+          </div>
+          <label class="me-lbl" for="cn-lista" style="margin-top:12px">Productos que llegaron</label>
+          <textarea id="cn-lista" ref="inpLista" v-model="texto" class="cn-texto" placeholder="FIL-DON-P55	12&#10;COR-B52	4&#10;5191547-2	30"></textarea>
+        </div>
       </div>
 
       <!-- ═══ PASO 3: revisar antes de aplicar ═══ -->
       <div v-else-if="paso === 'revisar'" class="me-cuerpo">
         <div class="cn-kpis">
           <div class="cn-kpi verde"><span>Se actualizan</span><strong>{{ A.ok.length }}</strong></div>
-          <div class="cn-kpi azul"><span>Unidades</span><strong>{{ unidades.toLocaleString('es-VE') }}</strong></div>
+          <div class="cn-kpi azul"><span>Unidades a sumar</span><strong>{{ unidades.toLocaleString('es-VE') }}</strong></div>
           <div class="cn-kpi oro"><span>Toman el costo de la compra</span><strong>{{ A.ok.filter(r => !r.conflicto).length }}</strong></div>
         </div>
 
@@ -142,7 +300,7 @@
                   <div v-if="r.aviso" class="cn-aviso-linea">{{ r.aviso }}</div>
                 </td>
                 <td class="num cn-desc">{{ r.actual }}</td>
-                <td class="num"><strong>+{{ r.cant }}</strong></td>
+                <td class="num"><strong style="color:var(--green)">+{{ r.cant }}</strong></td>
                 <td class="num"><strong class="cn-queda">{{ r.actual + r.cant }}</strong></td>
               </tr>
             </tbody>
@@ -184,7 +342,7 @@
           <button id="cn-revisar" type="button" class="btn btn-primary" @click="analizar"><i class="ti ti-eye"></i> Revisar antes de aplicar</button>
         </template>
         <template v-else-if="paso === 'revisar'">
-          <button type="button" class="btn btn-secondary" :disabled="trabajando" @click="paso = 'productos'"><i class="ti ti-arrow-left"></i> Corregir</button>
+          <button type="button" class="btn btn-secondary" :disabled="trabajando" @click="paso = 'productos'"><i class="ti ti-arrow-left"></i> Modificar productos</button>
           <button id="cn-registrar" type="button" class="btn btn-green" :disabled="trabajando || !A.ok.length" @click="registrar"><i class="ti ti-check"></i> {{ trabajando ? 'Registrando...' : 'Sumar al stock' }}</button>
         </template>
         <template v-else>
@@ -197,7 +355,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useArjStore } from '../../stores/useArjStore.js';
 import { fmtUSD, origenDe, FACTOR_LANDED_FALLBACK } from '../../services/pricing.js';
 import { parsearLineas, buscarPorCodigo } from '../../services/monolito.js';
@@ -212,28 +370,69 @@ const form = ref(vacio());
 const compraId = ref(null);
 const trabajando = ref(false);
 const destino = ref('directa');
+const tabEntrada = ref('grafico'); // 'grafico' | 'texto'
+
+// Modo Gráfico
+const busquedaTexto = ref('');
+const mostrarSugerencias = ref(false);
+const buscadorBoxRef = ref(null);
+const inpBusquedaRef = ref(null);
+const itemsGraficos = ref([]); // [{ prod, producto_id, cod_alt, desc, marca, cant }]
+const marcaTraerGrafico = ref('');
+
+// Modo Texto
 const texto = ref('');
 const marcaTraer = ref('');
 const inpLista = ref(null);
+
 const A = ref(null);             // análisis de la lista pegada
 const nuevos = ref([]);          // códigos creados en esta sesión
 const pendiente = ref(null);     // ids que existían al abrir la ficha de un producto nuevo
 const resumen = ref(null);
 
+let sincronizando = false;
+
 const indicePaso = computed(() => PASOS.findIndex(p => p.id === paso.value));
 const compras = computed(() => store.comprasNacionales);
 const compra = computed(() => compras.value.find(c => c.id === compraId.value) || null);
-// Productos con el costo de cada compra, contados en una sola pasada por el catálogo
+
 const piezasPorCompra = computed(() => {
   const m = new Map();
   store.productos.forEach(p => { if (p.embarque_id) m.set(p.embarque_id, (m.get(p.embarque_id) || 0) + 1); });
   return m;
 });
 const fmtFactor = c => (parseFloat(c.factor) || 0).toFixed(4);
-// Misma fórmula que el servidor: la columna generada con gastos / monto
 const factor = computed(() => {
   const m = parseFloat(form.value.monto) || 0;
   return m > 0 ? 1 + (parseFloat(form.value.gastos) || 0) / m : 0;
+});
+
+const totalUnidadesGraficas = computed(() => itemsGraficos.value.reduce((acc, it) => acc + (parseInt(it.cant) || 0), 0));
+
+// Búsqueda en tiempo real
+const productosFiltrados = computed(() => {
+  const q = busquedaTexto.value.trim().toLowerCase();
+  if (!q) return [];
+  return store.productos.filter(p =>
+    (p.cod_alt || '').toLowerCase().includes(q) ||
+    (p.cod_orig || '').toLowerCase().includes(q) ||
+    (p.desc || '').toLowerCase().includes(q) ||
+    (p.marca || '').toLowerCase().includes(q)
+  ).slice(0, 10);
+});
+
+function onClickFuera(e) {
+  if (buscadorBoxRef.value && !buscadorBoxRef.value.contains(e.target)) {
+    mostrarSugerencias.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onClickFuera);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onClickFuera);
 });
 
 watch(() => store.modalComprasActivo, abierto => {
@@ -242,20 +441,62 @@ watch(() => store.modalComprasActivo, abierto => {
   form.value = vacio();
   compraId.value = null;
   destino.value = store.empresa === 'directa' ? 'directa' : 'dist';
+  tabEntrada.value = 'grafico';
   reiniciarProductos();
 }, { immediate: true });
 
 function reiniciarProductos() {
   texto.value = '';
+  busquedaTexto.value = '';
+  mostrarSugerencias.value = false;
+  itemsGraficos.value = [];
   marcaTraer.value = '';
+  marcaTraerGrafico.value = '';
   A.value = null;
   nuevos.value = [];
   pendiente.value = null;
   resumen.value = null;
 }
-function enfocarLista() {
-  nextTick(() => { if (inpLista.value) inpLista.value.focus(); });
+
+// ── Sincronización bidireccional entre itemsGraficos y texto ──
+function actualizarTextoDesdeGrafico() {
+  if (sincronizando) return;
+  sincronizando = true;
+  texto.value = itemsGraficos.value.map(it => `${it.cod_alt}\t${it.cant}`).join('\n');
+  sincronizando = false;
 }
+
+watch(texto, nuevoTexto => {
+  if (sincronizando) return;
+  sincronizando = true;
+  const lineas = parsearLineas(nuevoTexto || '');
+  const nuevosItems = [];
+  const yaVistos = new Map();
+
+  lineas.forEach(f => {
+    if (!f.cod || f.error) return;
+    const p = buscarPorCodigo(store.productos, f.cod);
+    if (!p) return;
+    if (yaVistos.has(p.id)) {
+      const it = yaVistos.get(p.id);
+      it.cant += (f.cant || 0);
+    } else {
+      const it = {
+        prod: p,
+        producto_id: p.id,
+        cod_alt: p.cod_alt,
+        desc: p.desc,
+        marca: p.marca || '',
+        cant: f.cant ?? 0
+      };
+      yaVistos.set(p.id, it);
+      nuevosItems.push(it);
+    }
+  });
+
+  itemsGraficos.value = nuevosItems;
+  sincronizando = false;
+});
 
 // ── Paso 1 ──
 function nuevaCompra() { form.value = vacio(); }
@@ -295,16 +536,83 @@ function irAProductos() {
   if (!compra.value) return;
   form.value = vacio();
   paso.value = 'productos';
-  enfocarLista();
+  nextTick(() => { if (inpBusquedaRef.value) inpBusquedaRef.value.focus(); });
 }
 
-// ── Pasos 2 y 3: misma lectura que Conteo / Recepción ──
-const stockDe = p => (destino.value === 'directa' ? p.stock_vd : p.stock_dist) || 0;
-// Sin costo asignado y marcado importado: al sellarlo con esta compra pasa a local (sql/12)
+// ── Paso 2: Selección Gráfica de Productos ──
+const stockDe = p => (destino.value === 'directa' ? (p.stock_vd || 0) : (p.stock_dist || 0));
 const pasaALocal = p => !p.embarque_id && origenDe(p) === 'importado';
 const unidades = computed(() => (A.value ? A.value.ok.reduce((a, r) => a + r.cant, 0) : 0));
 
-// Agrega al cuadro los productos de la marca que aún no están, en 0: se escribe lo que llegó
+function seleccionarDesdeBuscador(p) {
+  agregarProductoGrafico(p, 1);
+  busquedaTexto.value = '';
+  mostrarSugerencias.value = false;
+  nextTick(() => { if (inpBusquedaRef.value) inpBusquedaRef.value.focus(); });
+}
+
+function agregarProductoGrafico(p, cantidad = 1) {
+  const n = Math.max(1, parseInt(cantidad) || 1);
+  const idx = itemsGraficos.value.findIndex(it => it.producto_id === p.id);
+  if (idx >= 0) {
+    itemsGraficos.value[idx].cant += n;
+    store.notif(`Aumentó cantidad de '${p.cod_alt}' a ${itemsGraficos.value[idx].cant}`, 'info');
+  } else {
+    itemsGraficos.value.unshift({
+      prod: p,
+      producto_id: p.id,
+      cod_alt: p.cod_alt,
+      desc: p.desc,
+      marca: p.marca || '',
+      cant: n
+    });
+    store.notif(`'${p.cod_alt}' agregado a la compra (+${n})`, 'success');
+  }
+  actualizarTextoDesdeGrafico();
+}
+
+function modificarCantidadItem(it, delta) {
+  it.cant = Math.max(1, (parseInt(it.cant) || 1) + delta);
+  actualizarTextoDesdeGrafico();
+}
+
+function fijarCantidadItem(it, val) {
+  it.cant = Math.max(1, parseInt(val) || 1);
+  actualizarTextoDesdeGrafico();
+}
+
+function eliminarItemGrafico(idx) {
+  itemsGraficos.value.splice(idx, 1);
+  actualizarTextoDesdeGrafico();
+}
+
+function vaciarListaGrafica() {
+  itemsGraficos.value = [];
+  actualizarTextoDesdeGrafico();
+}
+
+function traerPorMarcaDirecto() {
+  const m = marcaTraerGrafico.value;
+  if (!m) return;
+  marcaTraerGrafico.value = '';
+  const ya = new Set(itemsGraficos.value.map(it => it.producto_id));
+  const deMarca = store.productos.filter(p => p.activo !== false && (p.marca || '').trim() === m && !ya.has(p.id));
+  if (!deMarca.length) { store.notif('Los productos de ' + m + ' ya están en la lista', 'info'); return; }
+  deMarca.forEach(p => {
+    itemsGraficos.value.push({
+      prod: p,
+      producto_id: p.id,
+      cod_alt: p.cod_alt,
+      desc: p.desc,
+      marca: p.marca || '',
+      cant: 1
+    });
+  });
+  actualizarTextoDesdeGrafico();
+  store.notif(`${deMarca.length} producto(s) de ${m} agregados`, 'success');
+}
+
+// Traer marca en modo texto (mantiene compatibilidad exacta con tests y monolito)
 function traerMarca() {
   const m = marcaTraer.value;
   if (!m) return;
@@ -316,19 +624,17 @@ function traerMarca() {
   const deMarca = store.productos.filter(p => p.activo !== false && (p.marca || '').trim() === m && !ya.has(p.cod_alt));
   if (!deMarca.length) { store.notif('Los productos de ' + m + ' ya están en el cuadro', 'info'); return; }
   texto.value = (texto.value.trim() ? texto.value.trimEnd() + '\n' : '') + deMarca.map(p => p.cod_alt + '\t0').join('\n');
-  store.notif(`${deMarca.length} producto(s) de ${m} en el cuadro: cambia el 0 por la cantidad que llegó`, 'success');
-  enfocarLista();
+  store.notif(`${deMarca.length} producto(s) de ${m} en el cuadro`, 'success');
 }
 
 function analizar() {
-  if (!texto.value.trim()) { store.notif('Pega la lista primero', 'error'); return; }
+  if (!texto.value.trim()) { store.notif('Agrega al menos un producto a la compra', 'error'); return; }
   const recibido = {}, desconocidos = {}, malas = [];
   let sinCantidad = 0;
   parsearLineas(texto.value).forEach(f => {
     if (f.error) { malas.push(f); return; }
     if (!f.cant) { sinCantidad++; return; }
     const p = buscarPorCodigo(store.productos, f.cod);
-    // Un código repetido se ACUMULA: puede venir en dos cajas
     if (!p) { desconocidos[f.cod] = { cod: f.cod, cant: (desconocidos[f.cod] ? desconocidos[f.cod].cant : 0) + f.cant }; return; }
     const r = recibido[p.id] || (recibido[p.id] = { prod: p, cod: p.cod_alt, cant: 0, lineas: 0 });
     r.cant += f.cant;
@@ -349,11 +655,9 @@ function analizar() {
   paso.value = 'revisar';
 }
 
-// Producto nuevo: se crea en su ficha (encima de esta ventana), ya como compra local de este
-// proveedor. Sin código (botón "Nuevo producto") o con el código que no existía (revisión).
+// ── Crear producto al vuelo ──
 function crearProducto(cod = '') {
   if (store.rol !== 'gerente') { store.notif('Solo el gerente puede crear productos', 'error'); return; }
-  // El producto creado se reconoce por ser el único id que no estaba antes
   pendiente.value = new Set(store.productos.map(p => p.id));
   store.productoSeleccionado = {
     _nuevo: true, cod_alt: cod, cod_orig: '', cod_barras: '', desc: '', marca: '', fob: 0, stock_vd: 0, stock_dist: 0,
@@ -362,6 +666,7 @@ function crearProducto(cod = '') {
   };
   store.modalEditProdActivo = true;
 }
+
 watch(() => store.productos, lista => {
   if (!pendiente.value) return;
   const p = lista.find(x => !pendiente.value.has(x.id));
@@ -371,9 +676,9 @@ watch(() => store.productos, lista => {
   if (paso.value === 'revisar') { analizar(); return; }
   // En la lista: se agrega en 0 para que se escriba cuánto llegó
   texto.value = (texto.value.trim() ? texto.value.trimEnd() + '\n' : '') + p.cod_alt + '\t0';
-  store.notif(`${p.cod_alt} agregado al cuadro: cambia el 0 por la cantidad que llegó`, 'success');
-  enfocarLista();
+  store.notif(`${p.cod_alt} agregado: ingresa la cantidad que llegó`, 'success');
 });
+
 watch(() => store.modalEditProdActivo, abierto => { if (!abierto) nextTick(() => { pendiente.value = null; }); });
 
 async function registrar() {
@@ -410,7 +715,7 @@ async function registrar() {
 function masProductos() {
   reiniciarProductos();
   paso.value = 'productos';
-  enfocarLista();
+  nextTick(() => { if (inpBusquedaRef.value) inpBusquedaRef.value.focus(); });
 }
 
 function cerrar() {
@@ -420,7 +725,7 @@ function cerrar() {
 </script>
 
 <style scoped>
-.cn-caja { max-width: 1040px }
+.cn-caja { max-width: 1060px }
 .cn-pasos { display: flex; gap: 6px; margin: 0; padding: 12px 22px; list-style: none; border-bottom: 1px solid var(--border); background: var(--gray) }
 .cn-pasos li { display: flex; align-items: center; gap: 7px; padding: 4px 12px 4px 4px; border-radius: 99px; color: var(--dgray); font-size: 14px; font-weight: 600 }
 .cn-pasos li b { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--card-bg); border: 1.5px solid var(--border); font-size: 12.5px }
@@ -444,10 +749,38 @@ function cerrar() {
 .cn-chip { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 9px 13px; border-radius: 12px; background: var(--lgreen); color: var(--text); font-size: 14px }
 .cn-chip i { color: var(--green) }
 .me-aviso.azul-claro { background: var(--lblue); color: var(--navy) }
-.cn-destino { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; max-width: 460px }
+.cn-destino { display: flex; gap: 7px }
+
+/* Tabs de modo */
+.modo-tabs { display: flex; background: var(--gray); padding: 3px; border-radius: var(--radius-sm); gap: 4px }
+.modo-btn { border: none; background: transparent; padding: 6px 12px; font-size: 12.5px; font-weight: 600; color: var(--dgray); border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all var(--trans-fast) }
+.modo-btn.activo { background: var(--card-bg); color: var(--blue); box-shadow: var(--shadow-xs) }
+
+/* Buscador interactivo */
+.cn-buscador-fila { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap }
+.cn-buscador-caja { flex: 1; min-width: 260px; position: relative }
+.cn-lupa { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--dgray); font-size: 17px; pointer-events: none }
+.cn-input-buscar { padding-left: 36px !important; font-size: 13.5px !important; height: 38px !important; min-height: 38px !important }
+.cn-sugerencias { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 1000; background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 8px; max-height: 280px; overflow-y: auto; box-shadow: var(--shadow-lg) }
+.cn-sug-item { padding: 9px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background var(--trans-fast) }
+.cn-sug-item:hover { background: var(--lblue) }
+.cn-sug-item:last-child { border-bottom: none }
+
+/* Tabla gráfica de items */
+.cn-tabla-grafica-caja { max-height: 48vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); margin-bottom: 8px }
+.cn-tabla-items { width: 100%; border-collapse: collapse }
+.cn-tabla-items th { background: var(--gray); padding: 9px 12px; font-size: 12px; color: var(--dgray); font-weight: 700; border-bottom: 1px solid var(--border); white-space: nowrap }
+.cn-tabla-items td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle }
+.cn-cant-control { display: inline-flex; align-items: center; gap: 4px; justify-content: center }
+.cn-btn-step { width: 28px; height: 32px; border: 1.5px solid var(--border); background: var(--gray); border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text); transition: all var(--trans-fast) }
+.cn-btn-step:hover:not(:disabled) { background: var(--lblue); border-color: var(--blue); color: var(--blue) }
+.cn-btn-step:disabled { opacity: 0.3; cursor: not-allowed }
+.cn-cant-input { width: 56px !important; min-width: 50px !important; height: 32px !important; min-height: 32px !important; text-align: center !important; font-weight: 700 !important; font-size: 13.5px !important; padding: 2px 4px !important }
+.cn-resumen-barra { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--gray); border-radius: 6px; font-size: 13px }
+
 .cn-marca { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 12px; max-width: 640px }
 .cn-marca > div { flex: 1 1 240px }
-.cn-texto { width: 100%; box-sizing: border-box; min-height: 200px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--input-bg); color: var(--text); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; resize: vertical }
+.cn-texto { width: 100%; box-sizing: border-box; min-height: 180px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--input-bg); color: var(--text); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; resize: vertical }
 
 .cn-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px }
 .cn-kpi { padding: 10px 13px; border-radius: 12px }
@@ -469,5 +802,6 @@ function cerrar() {
   .cn-pasos { flex-wrap: wrap }
   .cn-cols-compra { grid-template-columns: minmax(0, 1fr) }
   .cn-kpis { grid-template-columns: minmax(0, 1fr) }
+  .cn-buscador-fila { flex-direction: column; align-items: stretch }
 }
 </style>

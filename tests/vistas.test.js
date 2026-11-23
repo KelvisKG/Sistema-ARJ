@@ -692,7 +692,9 @@ describe('Facturación adaptada', () => {
 
   test('la fila reúne código, marca, stock y descripción', async () => {
     const { w } = await montar(Fact());
-    const celda = w.find('#items-body tr td');
+    const celdas = w.findAll('#items-body tr td');
+    // La primera celda es el número de orden (#), la segunda es el producto
+    const celda = celdas[1];
     expect(celda.text()).toContain('HF6510');
     expect(celda.text()).toContain('Stock 5');
     expect(celda.text()).toContain('Filtro hidráulico');
@@ -700,9 +702,9 @@ describe('Facturación adaptada', () => {
 
   test('las columnas cuadran para gerente y vendedor', async () => {
     const g = await montar(Fact());
-    expect(g.w.findAll('#tbl-items thead th')).toHaveLength(6);
+    expect(g.w.findAll('#tbl-items thead th')).toHaveLength(7);
     const v = await montar(Fact(), s => { s.rol = 'vendedor'; });
-    expect(v.w.findAll('#tbl-items thead th')).toHaveLength(5);
+    expect(v.w.findAll('#tbl-items thead th')).toHaveLength(6);
   });
 });
 

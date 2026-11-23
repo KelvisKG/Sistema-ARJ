@@ -322,6 +322,7 @@
               <option>Pago móvil Bs.</option>
               <option>Transferencia Bs.</option>
               <option>Zelle USD</option>
+              <option>USDT</option>
               <option>Punto de venta</option>
               <option>Otro</option>
             </select>
