@@ -56,36 +56,38 @@
             <input v-model="f.proveedor" type="text" list="lista-proveedores" placeholder="Ej: PANEGOSSI">
             <datalist id="lista-proveedores"><option v-for="v in proveedores" :key="v" :value="v" /></datalist>
           </div>
-          <div style="font-size:11px;color:var(--dgray);margin:6px 0 3px">Atajos — multiplican el <strong>costo puesto aquí</strong> (FOB × factor). El % es el margen que te queda:</div>
+          <div style="font-size:11px;color:var(--dgray);margin:6px 0 3px">Atajos — multiplican el <strong>costo puesto aquí</strong> (FOB × factor). El porcentaje indica el margen bruto objetivo en dólares.</div>
           <div style="display:flex;gap:5px;margin:0 0 10px;flex-wrap:wrap">
-            <button v-for="a in ATAJOS" :key="a.m" type="button" class="btn-multi" @click="aplicarMultiplicador(a.m)">×{{ a.m.toFixed(2) }}<small>{{ a.txt }}</small></button>
+            <button v-for="a in ATAJOS" :key="a.m" type="button" class="btn-multi" :disabled="!tasasValidas" @click="aplicarMultiplicador(a.m)">×{{ a.m.toFixed(2) }}<small>{{ a.txt }}</small></button>
           </div>
           <div class="field-row" style="background:#FFFFFF;border:2px solid var(--gold);border-radius:6px;padding:8px 10px;margin:0">
-            <label style="font-weight:700;color:var(--navy)">Precio de venta USD:</label>
-            <input ref="inpPrecio" v-model="f.precio_manual" type="number" step="0.01" placeholder="Vacío = usa el ×2.5 automático"
+            <label style="font-weight:700;color:var(--navy)">Precio de lista ($ BCV)</label>
+            <input ref="inpPrecio" v-model="f.precio_manual" type="number" step="0.01" placeholder="Vacío = precio automático"
               style="font-size:16px;font-weight:700;color:var(--navy)">
           </div>
           <div style="background:#FFF;border-radius:5px;padding:8px 10px;font-size:12px;color:var(--dgray);margin-top:6px">
+            <div v-if="precioLista > 0">Equivalente por unidad en dólares a la tasa de reposición: <strong>{{ equivalente === null ? 'Pendiente de tasas vigentes' : fmtUSD(equivalente) }}</strong></div>
             <template v-if="prev.tipo === 'completo'">
               <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline">
-                <span>Precio de venta: <strong style="color:var(--navy);font-size:15px">${{ prev.manual.toFixed(2) }}</strong></span>
+                <span>Precio de lista BCV: <strong style="color:var(--navy);font-size:15px">${{ prev.manual.toFixed(2) }}</strong></span>
                 <span style="color:var(--dgray)">Te cuesta puesto aquí: <strong>${{ prev.costo.toFixed(2) }}</strong>
                   <span style="font-size:10.5px">{{ prev.factor === 1 ? '(compra local, sin flete de importación)' : '(costo $' + prev.fob.toFixed(2) + ' × ' + prev.factor.toFixed(3).replace('.', ',') + ')' }}</span></span>
               </div>
               <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
-                <span>Ganas <strong :style="{ color: prev.col, fontSize: '15px' }">${{ prev.ganancia.toFixed(2) }}</strong> por unidad</span>
-                <span style="color:var(--dgray)">Vendes a <strong>×{{ prev.mult.toFixed(1) }}</strong> el costo · Margen <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong></span>
+                <span>Ganancia bruta <strong :style="{ color: prev.col, fontSize: '15px' }">${{ prev.ganancia.toFixed(2) }}</strong> por unidad</span>
+                <span style="color:var(--dgray)">Vendes a <strong>×{{ prev.mult.toFixed(1) }}</strong> el costo · Margen bruto en dólares <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong></span>
               </div>
             </template>
+            <template v-else-if="prev.tipo === 'pendiente'">Margen pendiente de tasas vigentes y precio equivalente positivo.</template>
             <template v-else-if="prev.tipo === 'manual'">
-              Precio manual: <strong style="color:var(--navy)">${{ prev.manual.toFixed(2) }} USD</strong> <span style="color:var(--dgray)">(falta el FOB para calcular la ganancia)</span>
+              Precio manual: <strong style="color:var(--navy)">${{ prev.manual.toFixed(2) }} BCV</strong> <span style="color:var(--dgray)">(falta el FOB para calcular la ganancia)</span>
             </template>
             <template v-else-if="prev.tipo === 'local'">
               <span style="color:var(--red);font-weight:600">Compra local: tienes que poner el precio de venta a mano.</span>
               <span style="color:var(--dgray)"> El escalón automático asume costo de fábrica y aquí te sobrepreciaría.</span>
             </template>
             <template v-else-if="prev.tipo === 'auto'">
-              Precio sugerido automático (×2.5 escalonado): <strong style="color:var(--navy)">${{ prev.sugerido.toFixed(2) }} USD</strong> <span style="color:var(--dgray)">(sin precio manual)</span>
+              Precio sugerido automático (×2.5 escalonado): <strong style="color:var(--navy)">${{ prev.sugerido.toFixed(2) }} BCV</strong> <span style="color:var(--dgray)">(sin precio manual)</span>
             </template>
             <template v-else>Precio público sugerido: <strong style="color:var(--navy)">— USD</strong></template>
           </div>
@@ -175,12 +177,18 @@ function factorActual() {
 }
 
 // v13.12: los atajos multiplican el COSTO LANDED, no el FOB
+const tasasValidas = computed(() => store.tasasConfirmadasHoy && [store.tasa_bcv, store.tasa_par].every(t => Number.isFinite(Number(t)) && Number(t) > 0));
+const precioLista = computed(() => Number(f.value.precio_manual) > 0 ? Number(f.value.precio_manual) : (f.value.origen === 'local' ? 0 : precioPublico(Number(f.value.fob) || 0)));
+const equivalente = computed(() => tasasValidas.value ? Math.round(precioLista.value * store.tasa_bcv / store.tasa_par * 100) / 100 : null);
+
 function aplicarMultiplicador(mult) {
+  if (!tasasValidas.value) return;
   const fob = parseFloat(f.value.fob) || 0;
   if (fob === 0) { store.notif('Primero ingresa el costo FOB', 'warning'); return; }
   const costo = fob * factorActual();
   // ×1,00 es "vender al costo" (traspaso FINARMA → ARJ): sale exacto
-  const precio = mult === 1 ? Math.round(costo * 100) / 100 : redondeoBonito(costo * mult);
+  const objetivoBCV = costo * mult * store.tasa_par / store.tasa_bcv;
+  const precio = mult === 1 ? Math.ceil(objetivoBCV * 100) / 100 : redondeoBonito(objetivoBCV);
   f.value.precio_manual = precio.toFixed(2);
 }
 
@@ -188,13 +196,14 @@ const prev = computed(() => {
   const fob = parseFloat(f.value.fob) || 0;
   const manual = parseFloat(f.value.precio_manual) || 0;
   const factor = factorActual();
-  if (manual > 0 && fob > 0) {
+  if (precioLista.value > 0 && fob > 0) {
+    if (!(equivalente.value > 0)) return { tipo: 'pendiente' };
     const costo = fob * factor;
-    const ganancia = manual - costo;
-    const margen = (ganancia / manual) * 100;
-    const mult = costo > 0 ? manual / costo : 0;
+    const ganancia = equivalente.value - costo;
+    const margen = (ganancia / equivalente.value) * 100;
+    const mult = costo > 0 ? equivalente.value / costo : 0;
     const col = margen < 25 ? 'var(--red)' : margen < 35 ? 'var(--gold)' : 'var(--green)';
-    return { tipo: 'completo', fob, manual, factor, costo, ganancia, margen, mult, col };
+    return { tipo: 'completo', fob, manual: precioLista.value, factor, costo, ganancia, margen, mult, col };
   }
   if (manual > 0) return { tipo: 'manual', manual };
   if (fob > 0) return f.value.origen === 'local' ? { tipo: 'local' } : { tipo: 'auto', sugerido: precioPublico(fob) };
