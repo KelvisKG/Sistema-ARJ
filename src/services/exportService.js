@@ -163,152 +163,113 @@ function formatearItemDescSENIAT(it) {
   return res || 'Producto';
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// 1. PDF DE FACTURA (Formato estándar SENIAT / Forma Libre ARJ)
-// ═══════════════════════════════════════════════════════════════════
-export function generarFacturaPDF(factura, action = 'download') {
-  if (!factura) return;
-
+/**
+ * Renderiza un documento comercial (Factura, Presupuesto o Nota de Entrega)
+ * con el formato estándar Forma Libre / SENIAT (tipografía serif en blanco y negro).
+ */
+function renderDocumentoFormaLibre({
+  titulo,
+  tituloSize = 19,
+  etiquetaNumero,
+  numero,
+  fechaStr,
+  bloqueIzqTitulo = 'NOMBRE O RAZON SOCIAL',
+  bloqueIzqNombre,
+  bloqueIzqDir = '',
+  bloqueIzqCiudad = '',
+  bloqueIzqTel = '',
+  bloqueIzqRif = '',
+  metadatos = [],
+  columnas = ['PRODUCTO', 'CANT', 'PRECIO U.', 'TOTAL'],
+  filas = [],
+  clausulas = [],
+  totalIzq = '',
+  totalCentro = '',
+  totalDer = '',
+  pieNotas = [],
+  firmas = false,
+  anulada = false,
+  filename = 'Documento.pdf',
+  action = 'download'
+}) {
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const marginL = 15;
   const marginR = 15;
 
-  const empKey = factura.empresa || 'directa';
-  const emp = DATOS_EMPRESAS[empKey] || DATOS_EMPRESAS.directa;
-
-  // ── BLOQUE IZQUIERDO: NOMBRE O RAZON SOCIAL (CLIENTE) ──
+  // ── BLOQUE IZQUIERDO ──
   let yLeft = 18;
   doc.setTextColor(0, 0, 0);
   doc.setFont('times', 'bold');
   doc.setFontSize(10);
-  doc.text('NOMBRE O RAZON SOCIAL', marginL, yLeft);
+  doc.text(bloqueIzqTitulo, marginL, yLeft);
 
   yLeft += 5;
   doc.setFont('times', 'bold');
   doc.setFontSize(9.5);
-  const cliNombre = (factura.cliente_nombre_snap || factura.cliente || emp.nombre || 'AGRO-REPUESTOS Y SERVICIOS JIMENEZ').toUpperCase();
-  doc.text(cliNombre, marginL, yLeft);
+  doc.text(String(bloqueIzqNombre || 'CLIENTE GENERAL').toUpperCase(), marginL, yLeft);
 
   yLeft += 4.2;
   doc.setFont('times', 'normal');
   doc.setFontSize(8.5);
-  const cliDir = factura.cliente_dir_snap || factura.cliente_dir || emp.direccion || 'Cr Principal Casa Nro 31 Barrio Altamira, ZP 3301';
-  const dirLines = doc.splitTextToSize(cliDir, 90);
-  doc.text(dirLines, marginL, yLeft);
-  yLeft += (dirLines.length * 3.8);
-
-  const cliCiudad = factura.cliente_ciudad_snap || (factura.cliente_dir_snap ? '' : 'Acarigua , Portuguesa');
-  if (cliCiudad) {
-    doc.text(cliCiudad, marginL, yLeft);
+  if (bloqueIzqDir) {
+    const dirLines = doc.splitTextToSize(String(bloqueIzqDir), 90);
+    doc.text(dirLines, marginL, yLeft);
+    yLeft += (dirLines.length * 3.8);
+  }
+  if (bloqueIzqCiudad) {
+    doc.text(String(bloqueIzqCiudad), marginL, yLeft);
     yLeft += 3.8;
   }
-
-  const cliTel = factura.cliente_tel_snap || factura.cliente_tel || emp.telefono || '+58 412-5574541';
-  if (cliTel) {
-    doc.text(`Tel: ${cliTel}`, marginL, yLeft);
+  if (bloqueIzqTel) {
+    doc.text(`Tel: ${bloqueIzqTel}`, marginL, yLeft);
     yLeft += 4.5;
   }
+  if (bloqueIzqRif) {
+    doc.setFont('times', 'bold');
+    doc.text('RIF N°: ', marginL, yLeft);
+    const rifW = doc.getTextWidth('RIF N°: ');
+    doc.setFont('times', 'normal');
+    doc.text(String(bloqueIzqRif).replace(/^RIF:?\s*/i, ''), marginL + rifW, yLeft);
+  }
 
-  const cliRif = factura.cliente_rif_snap || factura.cliente_rif || emp.rif || 'V- 162930024';
-  doc.setFont('times', 'bold');
-  doc.text('RIF N°: ', marginL, yLeft);
-  const rifW = doc.getTextWidth('RIF N°: ');
-  doc.setFont('times', 'normal');
-  doc.text(cliRif.replace(/^RIF:?\s*/i, ''), marginL + rifW, yLeft);
-
-  // ── BLOQUE DERECHO: METADATOS FACTURA ──
+  // ── BLOQUE DERECHO: TÍTULO Y METADATOS ──
   const colRightX = 118;
   const rightCenterX = 156;
 
-  // Título FACTURA centrado
   doc.setFont('times', 'bold');
-  doc.setFontSize(19);
-  doc.text('FACTURA', rightCenterX, 18, { align: 'center' });
+  doc.setFontSize(tituloSize);
+  doc.text(titulo, rightCenterX, 18, { align: 'center' });
 
-  // Columnas FECHA y FACTURA N°
   const fCol1 = 136;
   const fCol2 = 175;
   doc.setFontSize(9);
   doc.text('FECHA', fCol1, 24, { align: 'center' });
-  doc.text('FACTURA N°', fCol2, 24, { align: 'center' });
+  doc.text(etiquetaNumero, fCol2, 24, { align: 'center' });
 
-  const facturaFecha = formatearFechaSENIAT(factura.fecha);
-  const facturaNum = String(factura.num || '70797').trim();
   doc.setFontSize(11);
-  doc.text(facturaFecha, fCol1, 29, { align: 'center' });
-  doc.text(facturaNum, fCol2, 29, { align: 'center' });
-
-  // Metadatos
-  const condPago = (factura.tipo_pago === 'credito') ? 'Crédito' : 'Contado';
-  let fechaVence = factura.vence ? formatearFechaSENIAT(factura.vence) : null;
-  if (!fechaVence) {
-    if (factura.tipo_pago === 'credito' && Number(factura.dias_credito) > 0) {
-      const fDate = new Date(factura.fecha);
-      if (!isNaN(fDate.getTime())) {
-        fDate.setDate(fDate.getDate() + Number(factura.dias_credito));
-        const dia = String(fDate.getDate()).padStart(2, '0');
-        const mes = String(fDate.getMonth() + 1).padStart(2, '0');
-        fechaVence = `${dia}/${mes}/${fDate.getFullYear()}`;
-      }
-    }
-  }
-  if (!fechaVence) fechaVence = facturaFecha;
-
-  const viaDespacho = factura.via_despacho || '000';
-  const ordenCompra = factura.orden_compra || factura.orden || (facturaNum ? 'S' + facturaNum.replace(/\D/g, '').padStart(5, '0') : 'S07812');
-  const vendedor = (factura.vendedor || 'MGB').toUpperCase();
+  doc.text(fechaStr, fCol1, 29, { align: 'center' });
+  doc.text(String(numero || 'SN'), fCol2, 29, { align: 'center' });
 
   let yMeta = 35;
   const metaLeading = 4.2;
   doc.setFontSize(8.5);
-
-  function printMetaField(lbl, val) {
+  for (const [lbl, val] of metadatos) {
     doc.setFont('times', 'normal');
     doc.text(lbl, colRightX, yMeta);
     const lblW = doc.getTextWidth(lbl);
     doc.setFont('times', 'bold');
-    doc.text(val, colRightX + lblW, yMeta);
+    doc.text(String(val || '—'), colRightX + lblW, yMeta);
     yMeta += metaLeading;
   }
 
-  printMetaField('CONDICION DE PAGO: ', condPago);
-  printMetaField('VENCE: ', fechaVence);
-  printMetaField('VIA DESPACHO: ', viaDespacho);
-  printMetaField('ORDEN DE COMPRA N°: ', ordenCompra);
-  printMetaField('VENDEDOR: ', vendedor);
-
   // ── TABLA DE PRODUCTOS ──
   const startTableY = Math.max(yLeft, yMeta) + 6;
-  const tasaBCV = Number(factura.tasa_bcv) > 0 ? Number(factura.tasa_bcv) : 1;
-  const listaItems = factura.items || [];
-
-  const itemsBody = listaItems.map(it => {
-    const desc = formatearItemDescSENIAT(it);
-    const cant = Number(it.cant != null ? it.cant : (it.cantidad != null ? it.cantidad : 1)) || 1;
-    const precioUSD = Number(it.precio != null ? it.precio : (it.precio_unitario != null ? it.precio_unitario : 0)) || 0;
-    const precioBs = precioUSD * tasaBCV;
-    const totalLineaBs = (it.total_linea != null && Number(it.total_linea) > 0)
-      ? Number(it.total_linea) * tasaBCV
-      : cant * precioBs;
-
-    return [
-      desc,
-      String(cant),
-      fmtBsSENIAT(precioBs),
-      fmtBsSENIAT(totalLineaBs)
-    ];
-  });
-
-  if (itemsBody.length === 0) {
-    itemsBody.push(['Sin productos registrados', '0', '0,00', '0,00']);
-  }
-
   autoTable(doc, {
     startY: startTableY,
-    head: [['PRODUCTO', 'CANT', 'PRECIO U.', 'TOTAL']],
-    body: itemsBody,
+    head: [columnas],
+    body: filas.length > 0 ? filas : [['Sin productos registrados', '0', '0,00', '0,00']],
     theme: 'plain',
     margin: { left: marginL, right: marginR },
     headStyles: {
@@ -336,57 +297,36 @@ export function generarFacturaPDF(factura, action = 'download') {
       if (data.section === 'head' && data.row.index === 0) {
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
-        // Línea horizontal superior
         doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
-        // Línea horizontal inferior
         doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
       }
     }
   });
 
-  // ── SECCIÓN INFERIOR: CLÁUSULAS Y TOTALES ──
+  // ── SECCIÓN INFERIOR: CLÁUSULAS, TOTALES Y PIE ──
+  const espacioNecesario = 35 + (clausulas.length * 5) + (pieNotas.length * 4) + (firmas ? 24 : 0);
   let y = doc.lastAutoTable.finalY + 10;
-  if (y + 48 > pageHeight - 15) {
+  if (y + espacioNecesario > pageHeight - 15) {
     doc.addPage();
     y = 25;
   }
 
-  const totalUSD = Number(factura.total != null ? factura.total : (factura.subtotal_usd != null ? factura.subtotal_usd : 0)) || 0;
-  const subtotalBs = totalUSD * tasaBCV;
-  const totalBs = subtotalBs;
-
-  // Cláusula de equivalencia cambiaria SENIAT
-  function printRichLine(x, currentY, parts) {
-    let currX = x;
-    for (const p of parts) {
-      doc.setFont('times', p.bold ? 'bold' : 'normal');
-      doc.text(p.text, currX, currentY);
-      currX += doc.getTextWidth(p.text);
-    }
-  }
-
   doc.setFontSize(8.5);
   doc.setTextColor(0, 0, 0);
+  for (const linea of clausulas) {
+    if (linea.espacioAntes) y += linea.espacioAntes;
+    let currX = marginL;
+    for (const p of linea.partes) {
+      doc.setFont('times', p.bold ? 'bold' : (p.italic ? 'italic' : 'normal'));
+      doc.text(p.text, currX, y);
+      currX += doc.getTextWidth(p.text);
+    }
+    y += 4.5;
+  }
 
-  printRichLine(marginL, y, [
-    { text: 'El monto de esta factura equivale a US$ ' },
-    { text: fmtBsSENIAT(totalUSD), bold: true },
-    { text: ' calculados en bolívares' }
-  ]);
-  y += 4.5;
-  printRichLine(marginL, y, [
-    { text: 'a la tasa BCV del día de hoy de ' },
-    { text: fmtTasaSENIAT(tasaBCV), bold: true },
-    { text: ' Bs por dólar' }
-  ]);
+  if (clausulas.length > 0) y += 4;
 
-  y += 7;
-  doc.setFont('times', 'normal');
-  doc.text('IGTF 3% por pago en divisas por un monto en bolívares de _____________', marginL, y);
-
-  y += 8;
-
-  // ── BARRA DE TOTALES CON BORDES HORIZONTALES GRUESOS ──
+  // Barra de totales con bordes horizontales gruesos
   const barTop = y;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.8);
@@ -395,270 +335,195 @@ export function generarFacturaPDF(factura, action = 'download') {
   const textY = barTop + 4.5;
   doc.setFont('times', 'bold');
   doc.setFontSize(9.5);
-  doc.text(`Subtotal  VEF ${fmtBsSENIAT(subtotalBs)}`, marginL, textY);
-  doc.text('I.V.A. ( 0% EXEMPT ) VEF 0,00', marginL + 55, textY);
-  doc.text(`TOTAL VEF  ${fmtBsSENIAT(totalBs)}`, pageWidth - marginR, textY, { align: 'right' });
+  if (totalIzq) doc.text(totalIzq, marginL, textY);
+  if (totalCentro) doc.text(totalCentro, marginL + 55, textY);
+  if (totalDer) doc.text(totalDer, pageWidth - marginR, textY, { align: 'right' });
 
   const barBottom = barTop + 7;
   doc.line(marginL, barBottom, pageWidth - marginR, barBottom);
 
   y = barBottom + 5;
 
-  // ── DATOS BANCARIOS DE DEPÓSITO ──
+  // Pie de página (datos bancarios o notas legales)
   doc.setFont('times', 'normal');
   doc.setFontSize(8);
-  doc.text('Favor depositar a nombre de MAQUINARIAS AGROINDUSTRIALES BARPEL CA', marginL, y);
-  y += 3.8;
-  doc.text('Bancaribe Cta. Corriente N° 0114 0195 35 1955000036', marginL, y);
-  y += 3.8;
-  doc.text('Banco Mercantil Cta. Corriente N° 0105 0091 59 1091222762', marginL, y);
+  for (const nota of pieNotas) {
+    doc.text(nota, marginL, y);
+    y += 3.8;
+  }
 
-  // Marca de agua si la factura está anulada
-  if (factura.estado === 'anulada') {
+  // Firmas (para Notas de Entrega)
+  if (firmas) {
+    y += 16;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.line(marginL + 15, y, marginL + 70, y);
+    doc.line(pageWidth - marginR - 70, y, pageWidth - marginR - 15, y);
+    doc.setFont('times', 'normal');
+    doc.setFontSize(8);
+    doc.text('Firma Autorizada / Despacha', marginL + 42.5, y + 4.5, { align: 'center' });
+    doc.text('Firma Recibe Conforme', pageWidth - marginR - 42.5, y + 4.5, { align: 'center' });
+  }
+
+  if (anulada) {
     doc.setFont('times', 'bold');
     doc.setFontSize(55);
     doc.setTextColor(220, 60, 60);
     doc.text('ANULADA', pageWidth / 2, pageHeight / 2, { align: 'center', angle: 30 });
   }
 
-  const filename = `Factura_${facturaNum}_${facturaFecha.replace(/[\s\/:]/g, '_')}.pdf`;
   if (action === 'print') {
     doc.autoPrint();
     if (typeof window !== 'undefined' && typeof URL !== 'undefined') {
       const url = URL.createObjectURL(doc.output('blob'));
       window.open(url, '_blank');
     }
-  } else {
-    if (typeof window !== 'undefined') {
-      forceDownload(doc.output('blob'), filename);
-    }
+  } else if (typeof window !== 'undefined') {
+    forceDownload(doc.output('blob'), filename);
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 2. PDF DE PRESUPUESTO / COTIZACIÓN (Diseño formal tipo documento)
+// 1. PDF DE FACTURA (Formato estándar SENIAT / Forma Libre ARJ)
+// ═══════════════════════════════════════════════════════════════════
+export function generarFacturaPDF(factura, action = 'download') {
+  if (!factura) return;
+
+  const empKey = factura.empresa || 'directa';
+  const emp = DATOS_EMPRESAS[empKey] || DATOS_EMPRESAS.directa;
+
+  const facturaFecha = formatearFechaSENIAT(factura.fecha);
+  const facturaNum = String(factura.num || '70797').trim();
+
+  let fechaVence = factura.vence ? formatearFechaSENIAT(factura.vence) : null;
+  if (!fechaVence && factura.tipo_pago === 'credito' && Number(factura.dias_credito) > 0) {
+    const fDate = new Date(factura.fecha);
+    if (!isNaN(fDate.getTime())) {
+      fDate.setDate(fDate.getDate() + Number(factura.dias_credito));
+      const dia = String(fDate.getDate()).padStart(2, '0');
+      const mes = String(fDate.getMonth() + 1).padStart(2, '0');
+      fechaVence = `${dia}/${mes}/${fDate.getFullYear()}`;
+    }
+  }
+  if (!fechaVence) fechaVence = facturaFecha;
+
+  const tasaBCV = Number(factura.tasa_bcv) > 0 ? Number(factura.tasa_bcv) : 1;
+  const totalUSD = Number(factura.total != null ? factura.total : (factura.subtotal_usd != null ? factura.subtotal_usd : 0)) || 0;
+  const subtotalBs = totalUSD * tasaBCV;
+
+  const filas = (factura.items || []).map(it => {
+    const cant = Number(it.cant != null ? it.cant : (it.cantidad != null ? it.cantidad : 1)) || 1;
+    const precioUSD = Number(it.precio != null ? it.precio : (it.precio_unitario != null ? it.precio_unitario : 0)) || 0;
+    const precioBs = precioUSD * tasaBCV;
+    const totalLineaBs = (it.total_linea != null && Number(it.total_linea) > 0)
+      ? Number(it.total_linea) * tasaBCV
+      : cant * precioBs;
+    return [formatearItemDescSENIAT(it), String(cant), fmtBsSENIAT(precioBs), fmtBsSENIAT(totalLineaBs)];
+  });
+
+  renderDocumentoFormaLibre({
+    titulo: 'FACTURA',
+    etiquetaNumero: 'FACTURA N°',
+    numero: facturaNum,
+    fechaStr: facturaFecha,
+    bloqueIzqNombre: factura.cliente_nombre_snap || factura.cliente || emp.nombre || 'AGRO-REPUESTOS Y SERVICIOS JIMENEZ',
+    bloqueIzqDir: factura.cliente_dir_snap || factura.cliente_dir || emp.direccion || 'Cr Principal Casa Nro 31 Barrio Altamira, ZP 3301',
+    bloqueIzqCiudad: factura.cliente_ciudad_snap || (factura.cliente_dir_snap ? '' : 'Acarigua , Portuguesa'),
+    bloqueIzqTel: factura.cliente_tel_snap || factura.cliente_tel || emp.telefono || '+58 412-5574541',
+    bloqueIzqRif: factura.cliente_rif_snap || factura.cliente_rif || emp.rif || 'V- 162930024',
+    metadatos: [
+      ['CONDICION DE PAGO: ', (factura.tipo_pago === 'credito') ? 'Crédito' : 'Contado'],
+      ['VENCE: ', fechaVence],
+      ['VIA DESPACHO: ', factura.via_despacho || '000'],
+      ['ORDEN DE COMPRA N°: ', factura.orden_compra || factura.orden || (facturaNum ? 'S' + facturaNum.replace(/\D/g, '').padStart(5, '0') : 'S07812')],
+      ['VENDEDOR: ', (factura.vendedor || 'MGB').toUpperCase()]
+    ],
+    columnas: ['PRODUCTO', 'CANT', 'PRECIO U.', 'TOTAL'],
+    filas,
+    clausulas: [
+      { partes: [{ text: 'El monto de esta factura equivale a US$ ' }, { text: fmtBsSENIAT(totalUSD), bold: true }, { text: ' calculados en bolívares' }] },
+      { partes: [{ text: 'a la tasa BCV del día de hoy de ' }, { text: fmtTasaSENIAT(tasaBCV), bold: true }, { text: ' Bs por dólar' }] },
+      { espacioAntes: 2.5, partes: [{ text: 'IGTF 3% por pago en divisas por un monto en bolívares de _____________' }] }
+    ],
+    totalIzq: `Subtotal  VEF ${fmtBsSENIAT(subtotalBs)}`,
+    totalCentro: 'I.V.A. ( 0% EXEMPT ) VEF 0,00',
+    totalDer: `TOTAL VEF  ${fmtBsSENIAT(subtotalBs)}`,
+    pieNotas: [
+      'Favor depositar a nombre de MAQUINARIAS AGROINDUSTRIALES BARPEL CA',
+      'Bancaribe Cta. Corriente N° 0114 0195 35 1955000036',
+      'Banco Mercantil Cta. Corriente N° 0105 0091 59 1091222762'
+    ],
+    anulada: factura.estado === 'anulada',
+    filename: `Factura_${facturaNum}_${facturaFecha.replace(/[\s\/:]/g, '_')}.pdf`,
+    action
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 2. PDF DE PRESUPUESTO / COTIZACIÓN (Mismo formato Forma Libre SENIAT)
 // ═══════════════════════════════════════════════════════════════════
 export function generarPresupuestoPDF(presupuesto, tasa_bcv, clienteData, action = 'print') {
   if (!presupuesto) return;
 
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const marginL = 14;
-  const marginR = 14;
-  const contentW = pageWidth - marginL - marginR;
+  const emp = DATOS_EMPRESAS[presupuesto.empresa] || DATOS_EMPRESAS.directa;
+  const fechaStr = formatearFechaSENIAT(presupuesto.fecha);
+  const numStr = String(presupuesto.num || 'SN').trim();
+  const tasa = Number(tasa_bcv || presupuesto.tasa_bcv) || 0;
+  const usaBs = tasa > 0;
+  const totalUSD = Number(presupuesto.total) || 0;
+  const totalBs = totalUSD * tasa;
+  const monedaEtq = usaBs ? 'VEF' : 'USD';
+  const totalMostrar = usaBs ? totalBs : totalUSD;
 
-  // ── CABECERA EMPRESA (fondo navy) ──
-  doc.setFillColor(...NAVY);
-  doc.rect(0, 0, pageWidth, 42, 'F');
-
-  // Nombre de la empresa
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(...WHITE);
-  doc.text('AGRO REPUESTOS Y SERVICIOS JIMENEZ, FP', marginL, 16);
-
-  // Datos de contacto
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(200, 210, 225);
-  doc.text('Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
-  doc.text('Acarigua — Portuguesa · Teléfonos: 0255-6642208 · 0414-5750174 · RIF V-162930024', marginL, 28);
-
-  // ── BADGE PRESUPUESTO (dorado, esquina derecha) ──
-  const badgeW = 60;
-  const badgeH = 28;
-  const badgeX = pageWidth - marginR - badgeW;
-  const badgeY = 7;
-  doc.setFillColor(217, 119, 6); // Gold
-  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(...WHITE);
-  doc.text('PRESUPUESTO', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
-
-  doc.setFontSize(11);
-  doc.text(presupuesto.num || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
-
-  doc.setFontSize(7.5);
-  doc.text(presupuesto.fecha || '—', badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
-
-  let y = 50;
-
-  // ── BLOQUE CLIENTE + INFORMACIÓN ──
-  const blockH = 38;
-  const halfW = contentW / 2 - 3;
-
-  // Bloque CLIENTE (izquierda)
-  doc.setDrawColor(200, 210, 225);
-  doc.setLineWidth(0.4);
-  doc.rect(marginL, y, halfW, blockH, 'S');
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(37, 99, 235); // Blue label
-  doc.text('CLIENTE', marginL + 4, y + 6);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...NAVY);
-  doc.text(presupuesto.cliente || 'CLIENTE GENERAL', marginL + 4, y + 13);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  const cliRif = (clienteData && clienteData.rif) ? `RIF: ${clienteData.rif}` : 'RIF: —';
-  const cliDir = (clienteData && clienteData.direccion) ? `Dirección: ${clienteData.direccion}` : 'Dirección: —';
-  const cliTel = (clienteData && clienteData.telefono) ? `Teléfono: ${clienteData.telefono}` : 'Teléfono: —';
-  doc.text(cliRif, marginL + 4, y + 20);
-  doc.text(cliDir, marginL + 4, y + 25.5);
-  doc.text(cliTel, marginL + 4, y + 31);
-
-  // Bloque INFORMACIÓN (derecha)
-  const infoX = marginL + halfW + 6;
-  doc.setDrawColor(200, 210, 225);
-  doc.rect(infoX, y, halfW, blockH, 'S');
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(37, 99, 235);
-  doc.text('INFORMACIÓN', infoX + 4, y + 6);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  const empresaTxt = presupuesto.empresa === 'distribuidora' ? 'Distribuidora' : 'Venta Directa';
-
-  doc.text(`Vendedor: `, infoX + 4, y + 13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...NAVY);
-  doc.text(presupuesto.vendedor || '—', infoX + 24, y + 13);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-  doc.text(`Fecha de emisión: ${presupuesto.fecha || '—'}`, infoX + 4, y + 20);
-  doc.text(`Válida hasta: ${presupuesto.vence || '45 días'}`, infoX + 4, y + 25.5);
-  doc.text(`Empresa: ${empresaTxt}`, infoX + 4, y + 31);
-
-  y += blockH + 8;
-
-  // ── TABLA DE ITEMS ──
-  const listaItemsPres = presupuesto.items || [];
-
-  const items = listaItemsPres.map((it, idx) => [
-    idx + 1,
-    it.cod_alt || '—',
-    it.desc || 'Producto',
-    it.cant || 1,
-    fmtUSD(it.precio || 0),
-    fmtUSD((it.cant || 1) * (it.precio || 0))
-  ]);
-
-  autoTable(doc, {
-    startY: y,
-    head: [['#', 'Código', 'Descripción', 'Cant.', 'P. Unit USD', 'Total USD']],
-    body: items,
-    theme: 'plain',
-    margin: { left: marginL, right: marginR },
-    headStyles: {
-      fillColor: TABLE_HEADER_BG, // Navy
-      textColor: WHITE,
-      fontStyle: 'bold',
-      fontSize: 8,
-      cellPadding: 4
-    },
-    bodyStyles: {
-      fontSize: 7.5,
-      cellPadding: 3.5,
-      textColor: [51, 51, 51]
-    },
-    alternateRowStyles: { fillColor: TABLE_ALT_ROW },
-    columnStyles: {
-      0: { cellWidth: 10, halign: 'center', fontStyle: 'bold', textColor: GRAY },
-      1: { cellWidth: 28, fontStyle: 'bold', textColor: NAVY },
-      2: { cellWidth: 'auto' },
-      3: { cellWidth: 14, halign: 'center' },
-      4: { cellWidth: 24, halign: 'right' },
-      5: { cellWidth: 26, halign: 'right', fontStyle: 'bold' }
-    }
+  const filas = (presupuesto.items || []).map(it => {
+    const cant = Number(it.cant != null ? it.cant : (it.cantidad != null ? it.cantidad : 1)) || 1;
+    const precioUSD = Number(it.precio) || 0;
+    const precioUnit = usaBs ? precioUSD * tasa : precioUSD;
+    const totalLinea = cant * precioUnit;
+    return [formatearItemDescSENIAT(it), String(cant), fmtBsSENIAT(precioUnit), fmtBsSENIAT(totalLinea)];
   });
 
-  y = doc.lastAutoTable.finalY + 6;
-
-  // ── NOTA FISCAL (izquierda) ──
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7);
-  doc.setTextColor(37, 99, 235);
-  doc.text('Exento de IVA según Decreto 126, Artículo 63, Numeral 02', marginL, y + 3);
-
-  // ── TOTALES (derecha) ──
-  const totalBoxW = 80;
-  const totalBoxX = pageWidth - marginR - totalBoxW;
-  const subtotal = presupuesto.total || 0;
-
-  // Subtotal
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...GRAY);
-  doc.text('Subtotal', totalBoxX, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 51, 51);
-  doc.text(fmtUSD(subtotal), pageWidth - marginR, y, { align: 'right' });
-
-  y += 5;
-
-  // Descuento
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-  doc.text('Descuento', totalBoxX, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 51, 51);
-  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
-
-  y += 5;
-
-  // IVA
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-  doc.text('IVA (exento)', totalBoxX, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 51, 51);
-  doc.text('$0,00', pageWidth - marginR, y, { align: 'right' });
-
-  y += 8;
-
-  // ── BLOQUE TOTAL USD (dorado) ──
-  const totalBarH = 14;
-  doc.setFillColor(217, 119, 6);
-  doc.roundedRect(totalBoxX - 4, y - 4, totalBoxW + 8, totalBarH, 2, 2, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...WHITE);
-  doc.text('TOTAL USD', totalBoxX, y + 5);
-  doc.setFontSize(13);
-  doc.text(fmtUSD(subtotal), pageWidth - marginR, y + 5, { align: 'right' });
-
-  y += totalBarH + 4;
-
-  // ── COBRAR EN BS (izquierda, debajo de nota fiscal) ──
-  // Sin tasa válida no se inventa una (antes caía a 47,80 en duro)
-  const tasa = tasa_bcv || presupuesto.tasa_bcv || 0;
-  const totalBs = tasa > 0 ? (subtotal * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text(`Cobrar en Bs.: Bs. ${totalBs} (a tasa de hoy)`, marginL, y);
-
-  piePagina(doc, 'Cotización comercial sin valor fiscal. Precios exentos de IVA (sector agropecuario). Validez: 45 días calendario.');
-
-  const filename = `Presupuesto_${presupuesto.num || 'SN'}_${(presupuesto.fecha || '').replace(/\s/g, '_')}.pdf`;
-  if (action === 'print') {
-    doc.autoPrint();
-    const url = URL.createObjectURL(doc.output('blob'));
-    window.open(url, '_blank');
-  } else {
-    forceDownload(doc.output('blob'), filename);
+  const clausulas = [];
+  if (usaBs) {
+    clausulas.push(
+      { partes: [{ text: 'El monto de este presupuesto equivale a US$ ' }, { text: fmtBsSENIAT(totalUSD), bold: true }, { text: ' calculados en bolívares' }] },
+      { partes: [{ text: 'a la tasa BCV del día de hoy de ' }, { text: fmtTasaSENIAT(tasa), bold: true }, { text: ' Bs por dólar' }] }
+    );
   }
+  clausulas.push({
+    espacioAntes: usaBs ? 2 : 0,
+    partes: [{ text: 'Cotización comercial sin valor fiscal. Validez: 45 días calendario.', italic: true }]
+  });
+
+  renderDocumentoFormaLibre({
+    titulo: 'PRESUPUESTO',
+    tituloSize: 16,
+    etiquetaNumero: 'PRESUPUESTO N°',
+    numero: numStr,
+    fechaStr,
+    bloqueIzqNombre: (clienteData && clienteData.nombre) || presupuesto.cliente || 'CLIENTE GENERAL',
+    bloqueIzqDir: (clienteData && clienteData.direccion) || '',
+    bloqueIzqTel: (clienteData && clienteData.telefono) || '',
+    bloqueIzqRif: (clienteData && clienteData.rif) || '—',
+    metadatos: [
+      ['CONDICION: ', 'Cotización'],
+      ['VALIDO HASTA: ', presupuesto.vence ? formatearFechaSENIAT(presupuesto.vence) : '45 días'],
+      ['EMPRESA: ', presupuesto.empresa === 'distribuidora' ? 'Distribuidora ARJ' : 'Venta Directa'],
+      ['VENDEDOR: ', (presupuesto.vendedor || 'ARJ').toUpperCase()]
+    ],
+    columnas: ['PRODUCTO', 'CANT', usaBs ? 'PRECIO U.' : 'PRECIO U. $', usaBs ? 'TOTAL' : 'TOTAL $'],
+    filas,
+    clausulas,
+    totalIzq: `Subtotal  ${monedaEtq} ${fmtBsSENIAT(totalMostrar)}`,
+    totalCentro: `I.V.A. ( 0% EXEMPT ) ${monedaEtq} 0,00`,
+    totalDer: `TOTAL ${monedaEtq}  ${fmtBsSENIAT(totalMostrar)}`,
+    pieNotas: [
+      `${emp.nombre} · ${emp.rif} · Tel: ${emp.telefono}`,
+      'Exento de IVA según Decreto 126, Artículo 63, Numeral 02 (Sector agropecuario primario).'
+    ],
+    filename: `Presupuesto_${numStr}_${fechaStr.replace(/[\s\/:]/g, '_')}.pdf`,
+    action
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -991,193 +856,60 @@ export function exportarLibroVentasExcel(facturas, items, { empresaSel, etiqueta
   return { facturas: facturas.length, totalUSD: tUSD };
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// 5. PDF DE NOTA DE ENTREGA (Mismo formato Forma Libre)
+// ═══════════════════════════════════════════════════════════════════
 export function generarNotaEntregaPDF(nota, usuario, action = 'download') {
   if (!nota) return;
 
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const marginL = 14;
-  const marginR = 14;
-  const contentW = pageWidth - marginL - marginR;
+  const fStr = nota.fecha instanceof Date ? formatearFechaSENIAT(nota.fecha.toISOString()) : formatearFechaSENIAT(nota.fecha);
+  const numStr = String(nota.numero || 'SN').trim();
+  const totalCosto = Number(nota.totalCosto) || 0;
 
-  // ── CABECERA EMPRESA (fondo navy) ──
-  doc.setFillColor(...[21, 37, 63]); // NAVY
-  doc.rect(0, 0, pageWidth, 42, 'F');
-
-  // Nombre de la empresa origen (Distribuidora)
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(255, 255, 255);
-  doc.text('DISTRIBUIDORA ARJ C.A.', marginL, 16);
-
-  // Datos de contacto
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(200, 210, 225);
-  doc.text('Carretera Nacional Vía La Misión, Barrio Altamira, Local 31', marginL, 23);
-  doc.text('Acarigua — Portuguesa · Teléfonos: 0255-6642208 · 0414-5750174', marginL, 28);
-
-  // ── BADGE NOTA (dorado/navy, esquina derecha) ──
-  const badgeW = 60;
-  const badgeH = 28;
-  const badgeX = pageWidth - marginR - badgeW;
-  const badgeY = 7;
-  doc.setFillColor(...[217, 119, 6]); // GOLD
-  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3, 3, 'F');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(255, 255, 255);
-  doc.text('NOTA DE ENTREGA', badgeX + badgeW / 2, badgeY + 9, { align: 'center' });
-
-  doc.setFontSize(11);
-  doc.text(nota.numero || 'SN', badgeX + badgeW / 2, badgeY + 17, { align: 'center' });
-
-  const fStr = nota.fecha instanceof Date ? nota.fecha.toLocaleDateString('es-VE') : (nota.fecha || '—');
-  doc.setFontSize(7.5);
-  doc.text(fStr, badgeX + badgeW / 2, badgeY + 23, { align: 'center' });
-
-  let y = 50;
-
-  // ── BLOQUE CLIENTE + INFORMACIÓN ──
-  const blockH = 38;
-  const halfW = contentW / 2 - 3;
-
-  // Bloque DESTINO (izquierda)
-  doc.setDrawColor(200, 210, 225);
-  doc.setLineWidth(0.4);
-  doc.rect(marginL, y, halfW, blockH, 'S');
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(37, 99, 235); // BLUE
-  doc.text('DESTINO / RECEPCIÓN', marginL + 4, y + 6);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...[21, 37, 63]); // NAVY
-  doc.text('VENTA DIRECTA - ARJ', marginL + 4, y + 13);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(107, 114, 128); // GRAY
-  doc.text('Despacho interno desde Distribuidora', marginL + 4, y + 20);
-  doc.text('Dirección: Mostrador Acarigua', marginL + 4, y + 25.5);
-  doc.text('Recibe: ______________________', marginL + 4, y + 31);
-
-  // Bloque INFORMACIÓN (derecha)
-  const infoX = marginL + halfW + 6;
-  doc.setDrawColor(200, 210, 225);
-  doc.rect(infoX, y, halfW, blockH, 'S');
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(37, 99, 235); // BLUE
-  doc.text('INFORMACIÓN DE DESPACHO', infoX + 4, y + 6);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(107, 114, 128); // GRAY
-
-  doc.text('Vendedor/Autoriza: ', infoX + 4, y + 13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...[21, 37, 63]); // NAVY
-  doc.text(usuario || 'Sistema', infoX + 28, y + 13);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(107, 114, 128); // GRAY
-  doc.text(`Fecha de emisión: ${fStr}`, infoX + 4, y + 20);
-  doc.text(`Embarque: ${nota.embarque || '—'}`, infoX + 4, y + 25.5);
-  doc.text(`Referencia: ${nota.ref || '—'}`, infoX + 4, y + 31);
-
-  y += blockH + 8;
-
-  // ── TABLA DE ITEMS ──
-  const listaItems = nota.items || [];
-
-  const itemsArray = listaItems.map((it, idx) => [
-    idx + 1,
-    it.cod_alt || '—',
-    (it.descripcion || 'Producto') + (it.marca ? ' · ' + it.marca : ''),
-    it.cantidad || 1,
-    fmtUSD(it.costo_unitario || 0),
-    fmtUSD((it.cantidad || 1) * (it.costo_unitario || 0))
-  ]);
-
-  autoTable(doc, {
-    startY: y,
-    head: [['#', 'Cód. Alt', 'Descripción y Marca', 'Unid.', 'Costo U.', 'Total']],
-    body: itemsArray,
-    theme: 'grid',
-    headStyles: { fillColor: [21, 37, 63], textColor: 255, fontSize: 8, fontStyle: 'bold', halign: 'center' },
-    bodyStyles: { fontSize: 7.5, textColor: [50, 50, 50], cellPadding: 3 },
-    alternateRowStyles: { fillColor: [245, 247, 250] },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 8 },
-      1: { halign: 'left', cellWidth: 25, fontStyle: 'bold' },
-      2: { halign: 'left', cellWidth: 'auto' },
-      3: { halign: 'right', cellWidth: 15 },
-      4: { halign: 'right', cellWidth: 20 },
-      5: { halign: 'right', cellWidth: 22, fontStyle: 'bold' }
-    },
-    margin: { left: marginL, right: marginR },
-    didDrawPage: (data) => {
-      piePagina(doc, 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.');
-    }
+  const filas = (nota.items || []).map(it => {
+    const cant = Number(it.cantidad != null ? it.cantidad : (it.cant != null ? it.cant : 1)) || 1;
+    const costoU = Number(it.costo_unitario) || 0;
+    return [
+      formatearItemDescSENIAT(it),
+      String(cant),
+      fmtBsSENIAT(costoU),
+      fmtBsSENIAT(cant * costoU)
+    ];
   });
 
-  y = doc.lastAutoTable.finalY + 8;
+  const dateFile = nota.fecha instanceof Date ? nota.fecha.toISOString().split('T')[0] : fStr.replace(/[\s\/:]/g, '_');
 
-  // ── TOTALES ──
-  if (y > doc.internal.pageSize.getHeight() - 40) {
-    doc.addPage();
-    y = 20;
-    piePagina(doc, 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.');
-  }
-
-  const wTotal = 70;
-  const xTotal = pageWidth - marginR - wTotal;
-  
-  doc.setDrawColor(200, 210, 225);
-  doc.rect(xTotal, y, wTotal, 14, 'S');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(107, 114, 128); // GRAY
-  doc.text('TOTAL COSTO USD:', xTotal + 5, y + 9);
-  
-  doc.setFontSize(12);
-  doc.setTextColor(16, 185, 129); // GREEN
-  doc.text(fmtUSD(nota.totalCosto || 0), xTotal + wTotal - 5, y + 9, { align: 'right' });
-
-  // ── FIRMAS ──
-  y += 30;
-  if (y > doc.internal.pageSize.getHeight() - 30) {
-    doc.addPage();
-    y = 30;
-    piePagina(doc, 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.');
-  }
-
-  doc.setDrawColor(150, 150, 150);
-  doc.setLineWidth(0.3);
-  doc.line(marginL + 20, y, marginL + 70, y);
-  doc.line(pageWidth - marginR - 70, y, pageWidth - marginR - 20, y);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(107, 114, 128);
-  doc.text('Firma Autorizada / Despacha', marginL + 45, y + 5, { align: 'center' });
-  doc.text('Firma Recibe Conforme', pageWidth - marginR - 45, y + 5, { align: 'center' });
-
-  // FIN GENERACIÓN
-  const dateStr = nota.fecha instanceof Date ? nota.fecha.toISOString().split('T')[0] : (nota.fecha || '').replace(/\s/g, '_');
-  const filename = `Nota_Entrega_${nota.numero || 'SN'}_${dateStr}.pdf`;
-
-  if (action === 'print') {
-    doc.autoPrint();
-    const url = URL.createObjectURL(doc.output('blob'));
-    window.open(url, '_blank');
-  } else {
-    forceDownload(doc.output('blob'), filename);
-  }
+  renderDocumentoFormaLibre({
+    titulo: 'NOTA DE ENTREGA',
+    tituloSize: 14,
+    etiquetaNumero: 'NOTA N°',
+    numero: numStr,
+    fechaStr: fStr,
+    bloqueIzqTitulo: 'DESTINO / RECEPCIÓN',
+    bloqueIzqNombre: 'VENTA DIRECTA - ARJ',
+    bloqueIzqDir: 'Despacho interno desde Distribuidora ARJ C.A.',
+    bloqueIzqCiudad: 'Mostrador Acarigua , Portuguesa',
+    bloqueIzqTel: '0255-6642208 · 0414-5750174',
+    metadatos: [
+      ['ORIGEN: ', 'Distribuidora ARJ'],
+      ['EMBARQUE: ', nota.embarque || '—'],
+      ['REFERENCIA: ', nota.ref || '—'],
+      ['AUTORIZA: ', (usuario || 'Sistema').toUpperCase()]
+    ],
+    columnas: ['PRODUCTO', 'CANT', 'COSTO U. $', 'TOTAL $'],
+    filas,
+    clausulas: [
+      { partes: [{ text: 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.', italic: true }] }
+    ],
+    totalIzq: `Items: ${filas.length}`,
+    totalCentro: 'TRASPASO INTER-EMPRESA',
+    totalDer: `TOTAL COSTO USD  ${fmtBsSENIAT(totalCosto)}`,
+    pieNotas: [
+      'DISTRIBUIDORA ARJ C.A. · Carretera Nacional Vía La Misión, Barrio Altamira, Local 31'
+    ],
+    firmas: true,
+    anulada: !!nota.anulado,
+    filename: `Nota_Entrega_${numStr}_${dateFile}.pdf`,
+    action
+  });
 }
