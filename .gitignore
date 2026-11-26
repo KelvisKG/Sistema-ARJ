@@ -32,3 +32,11 @@ dist-ssr
 Base de datos ARJ/
 scratch/
 scripts/
+
+# Non-essential files for Vercel deployment
+.claude/
+legacy/
+sql/
+*.sql
+*.patch
+AUDITORIA_MIGRACION_VUE.md
