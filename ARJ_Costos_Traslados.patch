@@ -1,0 +1,232 @@
+diff --git a/sql/16_costos_traslado_lote.sql b/sql/16_costos_traslado_lote.sql
+new file mode 100644
+index 0000000..c7aeb32
+--- /dev/null
++++ b/sql/16_costos_traslado_lote.sql
+@@ -0,0 +1,93 @@
++CREATE TABLE public.costos_traslado_lote (
++  embarque_id uuid NOT NULL REFERENCES public.embarques(id),
++  producto_id bigint NOT NULL REFERENCES public.productos(id),
++  almacen numeric NOT NULL CHECK (almacen > 0),
++  con_diferencial numeric NOT NULL CHECK (con_diferencial > 0),
++  PRIMARY KEY (producto_id, embarque_id)
++);
++ALTER TABLE public.costos_traslado_lote ENABLE ROW LEVEL SECURITY;
++REVOKE ALL ON public.costos_traslado_lote FROM public, anon, authenticated;
++GRANT SELECT ON public.costos_traslado_lote TO authenticated;
++CREATE POLICY costos_visibles ON public.costos_traslado_lote FOR SELECT TO authenticated
++USING (EXISTS (SELECT 1 FROM public.productos p WHERE p.id = producto_id AND p.embarque_id = costos_traslado_lote.embarque_id));
++ALTER TABLE public.traspaso_items ADD COLUMN costo_almacen_aprobado numeric, ADD COLUMN costo_diferencial_aprobado numeric;
++ALTER TABLE public.traspasos ADD COLUMN total_almacen_aprobado numeric(14,2);
++CREATE OR REPLACE FUNCTION public.aplicar_traspaso(p_items jsonb, p_referencia text DEFAULT NULL::text)
++ RETURNS jsonb
++ LANGUAGE plpgsql
++ SECURITY DEFINER
++ SET search_path TO 'public'
++AS $function$
++DECLARE
++  v_perfil perfiles;
++  v_numero TEXT;
++  v_tid UUID;
++  v_item JSONB;
++  v_p productos;
++  v_cant INT;
++  v_costo NUMERIC;
++  v_almacen NUMERIC;
++  v_diferencial NUMERIC;
++  v_total_almacen NUMERIC;
++  v_unidades INT := 0;
++  v_total NUMERIC := 0;
++  v_n INT := 0;
++  v_embs UUID[] := '{}';
++  v_emb_txt TEXT := '';
++BEGIN
++  v_perfil := arj_exigir_usuario(TRUE);
++  IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
++    RAISE EXCEPTION 'ARJ: el traspaso no tiene renglones';
++  END IF;
++
++  v_numero := arj_siguiente_correlativo('nota_entrega');
++  INSERT INTO traspasos (numero, fecha, origen, destino, referencia, usuario, productos_count, unidades_count, total_costo, anulado)
++  VALUES (v_numero, NOW(), 'dist', 'directa', NULLIF(TRIM(p_referencia), ''), v_perfil.nombre_display, 0, 0, 0, FALSE)
++  RETURNING id INTO v_tid;
++
++  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
++    v_cant := COALESCE((v_item->>'cantidad')::INT, 0);
++    IF v_cant <= 0 THEN CONTINUE; END IF;
++    SELECT * INTO v_p FROM productos WHERE id = (v_item->>'producto_id')::INT FOR UPDATE;
++    IF NOT FOUND THEN RAISE EXCEPTION 'ARJ: producto % no existe', v_item->>'producto_id'; END IF;
++    IF COALESCE(v_p.stock_dist, 0) < v_cant THEN
++      RAISE EXCEPTION 'ARJ: % solo tiene % en Distribuidora (pediste %)', v_p.cod_alt, COALESCE(v_p.stock_dist, 0), v_cant;
++    END IF;
++    SELECT c.almacen, c.con_diferencial INTO v_almacen, v_diferencial
++    FROM public.costos_traslado_lote c
++    WHERE c.producto_id = v_p.id AND c.embarque_id = v_p.embarque_id;
++    v_costo := COALESCE(v_diferencial, COALESCE(v_p.fob, 0) * COALESCE(NULLIF(v_p.factor_landed, 0), 1.471));
++    IF v_almacen IS NOT NULL THEN
++      v_total_almacen := COALESCE(v_total_almacen, 0) + v_almacen * v_cant;
++    END IF;
++
++    UPDATE productos SET stock_dist = stock_dist - v_cant, stock_vd = COALESCE(stock_vd, 0) + v_cant WHERE id = v_p.id;
++    INSERT INTO traspaso_items (traspaso_id, producto_id, cod_alt, descripcion, marca, cantidad, costo_unitario, total_linea, costo_almacen_aprobado, costo_diferencial_aprobado,
++      stock_dist_antes, stock_dist_despues, stock_vd_antes, stock_vd_despues)
++    VALUES (v_tid, v_p.id, v_p.cod_alt, v_p.descripcion, v_p.marca, v_cant, ROUND(v_costo, 4), ROUND(v_costo * v_cant, 2), v_almacen, v_diferencial,
++      COALESCE(v_p.stock_dist, 0), COALESCE(v_p.stock_dist, 0) - v_cant, COALESCE(v_p.stock_vd, 0), COALESCE(v_p.stock_vd, 0) + v_cant);
++
++    v_n := v_n + 1;
++    v_unidades := v_unidades + v_cant;
++    v_total := v_total + v_costo * v_cant;
++    IF v_p.embarque_id IS NOT NULL AND NOT (v_p.embarque_id = ANY(v_embs)) THEN
++      v_embs := array_append(v_embs, v_p.embarque_id);
++    END IF;
++  END LOOP;
++
++  IF v_n = 0 THEN RAISE EXCEPTION 'ARJ: ninguna cantidad válida para traspasar'; END IF;
++  IF array_length(v_embs, 1) = 1 THEN
++    SELECT codigo INTO v_emb_txt FROM embarques WHERE id = v_embs[1];
++  ELSIF array_length(v_embs, 1) > 1 THEN
++    v_emb_txt := 'Varios (' || array_length(v_embs, 1) || ')';
++  END IF;
++
++  UPDATE traspasos SET productos_count = v_n, unidades_count = v_unidades, total_costo = ROUND(v_total, 2),
++    total_almacen_aprobado = ROUND(v_total_almacen, 2), embarque_codigo = NULLIF(v_emb_txt, '')
++  WHERE id = v_tid;
++
++  RETURN jsonb_build_object('ok', TRUE, 'id', v_tid, 'numero', v_numero, 'total_almacen_aprobado', ROUND(v_total_almacen, 2), 'renglones', v_n, 'unidades', v_unidades, 'total_costo', ROUND(v_total, 2));
++EXCEPTION WHEN OTHERS THEN
++  RETURN arj_respuesta_error(SQLERRM);
++END $function$
++;
+diff --git a/src/components/modals/NotasEntregaModal.vue b/src/components/modals/NotasEntregaModal.vue
+index 9555c10..d51c577 100644
+--- a/src/components/modals/NotasEntregaModal.vue
++++ b/src/components/modals/NotasEntregaModal.vue
+@@ -158,6 +158,7 @@ async function reimprimir(nota) {
+       embarque: nota.embarque_codigo || '',
+       ref: nota.referencia || '',
+       items: items,
++      totalAlmacen: nota.total_almacen_aprobado,
+       totalCosto: parseFloat(nota.total_costo) || 0,
+       unidades: nota.unidades_count || 0
+     };
+diff --git a/src/components/modals/TraspasoModal.vue b/src/components/modals/TraspasoModal.vue
+index 73fbbb2..8900d4a 100644
+--- a/src/components/modals/TraspasoModal.vue
++++ b/src/components/modals/TraspasoModal.vue
+@@ -223,13 +223,17 @@ function mitad() {
+   store.notif(n + ' producto(s) cargados con la mitad de su stock', 'success');
+ }
+ 
++function costoTraslado(p) {
++  return p.costo_traslado_aprobado ?? costoLanded(p, store.productos);
++}
++
+ const contador = computed(() => {
+   let prods = 0, unids = 0, valor = 0;
+   Object.keys(cant.value).forEach(cod => {
+     const c = cant.value[cod]; if (!c) return;
+     const p = store.productos.find(x => String(x.cod_alt) === String(cod));
+     if (!p) return;
+-    prods++; unids += c; valor += costoLanded(p, store.productos) * c;
++    prods++; unids += c; valor += costoTraslado(p) * c;
+   });
+   return { prods, unids, valor };
+ });
+@@ -272,7 +276,7 @@ function analizar() {
+ 
+ const resumen = computed(() => ({
+   unid: A.value ? A.value.ok.reduce((a, r) => a + r.cant, 0) : 0,
+-  valor: A.value ? A.value.ok.reduce((a, r) => a + costoLanded(r.prod, store.productos) * r.cant, 0) : 0
++  valor: A.value ? A.value.ok.reduce((a, r) => a + costoTraslado(r.prod) * r.cant, 0) : 0
+ }));
+ 
+ // Todo en una sola operación del servidor: si un renglón falla, no se mueve nada
+@@ -300,7 +304,7 @@ async function imprimirNota() {
+     const items = await cargarItemsNotaEntrega(nota.value.id);
+     generarNotaEntregaPDF({
+       numero: nota.value.numero, fecha: new Date(), embarque: nota.value.embarque, ref: nota.value.ref,
+-      items, totalCosto: nota.value.total_costo, unidades: nota.value.unidades
++      items, totalAlmacen: nota.value.total_almacen_aprobado, totalCosto: nota.value.total_costo, unidades: nota.value.unidades
+     }, store.usuarioNombre, 'print');
+   } catch (e) {
+     store.notif('No se pudo generar la nota: ' + e.message, 'error');
+diff --git a/src/services/exportService.js b/src/services/exportService.js
+index 96ca2cd..2d5b32f 100644
+--- a/src/services/exportService.js
++++ b/src/services/exportService.js
+@@ -1095,18 +1095,26 @@ export function generarNotaEntregaPDF(nota, usuario, action = 'download') {
+   // ── TABLA DE ITEMS ──
+   const listaItems = nota.items || [];
+ 
++  const conCostos = listaItems.some(it => it.costo_almacen_aprobado != null);
++  const todosValorados = conCostos && listaItems.every(it => it.costo_almacen_aprobado != null);
++  const unitario = valor => Number(valor).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+   const itemsArray = listaItems.map((it, idx) => [
+     idx + 1,
+-    it.cod_alt || '—',
+-    (it.descripcion || 'Producto') + (it.marca ? ' · ' + it.marca : ''),
++    conCostos ? (it.codigo_lonmar_nota || '—') : (it.cod_alt || '—'),
++    conCostos ? (it.codigo_lonmar_nota ? it.codigo_arj_nota || '—' : it.cod_alt || '—') : (it.descripcion || 'Producto') + (it.marca ? ' · ' + it.marca : ''),
+     it.cantidad || 1,
++    ...(conCostos ? [
++      it.costo_almacen_aprobado == null ? '—' : unitario(it.costo_almacen_aprobado),
++      unitario(it.costo_diferencial_aprobado ?? it.costo_unitario)
++    ] : [
+     fmtUSD(it.costo_unitario || 0),
+     fmtUSD((it.cantidad || 1) * (it.costo_unitario || 0))
++    ])
+   ]);
+ 
+   autoTable(doc, {
+     startY: y,
+-    head: [['#', 'Cód. Alt', 'Descripción y Marca', 'Unid.', 'Costo U.', 'Total']],
++    head: conCostos ? [['#', 'Lonmar', 'Código ARJ', 'Unid.', 'Almacén USD/u', todosValorados ? 'Con 25 % USD/u' : 'Costo traslado USD/u']] : [['#', 'Cód. Alt', 'Descripción y Marca', 'Unid.', 'Costo U.', 'Total']],
+     body: itemsArray,
+     theme: 'grid',
+     headStyles: { fillColor: [21, 37, 63], textColor: 255, fontSize: 8, fontStyle: 'bold', halign: 'center' },
+@@ -1135,16 +1143,21 @@ export function generarNotaEntregaPDF(nota, usuario, action = 'download') {
+     piePagina(doc, 'Nota de entrega interna sin validez fiscal. Válida para control de inventario y rotación.');
+   }
+ 
+-  const wTotal = 70;
++  const wTotal = conCostos ? 100 : 70;
+   const xTotal = pageWidth - marginR - wTotal;
+   
+   doc.setDrawColor(200, 210, 225);
+-  doc.rect(xTotal, y, wTotal, 14, 'S');
++  doc.rect(xTotal, y, wTotal, conCostos ? 22 : 14, 'S');
+ 
+   doc.setFont('helvetica', 'bold');
+   doc.setFontSize(10);
+   doc.setTextColor(107, 114, 128); // GRAY
+-  doc.text('TOTAL COSTO USD:', xTotal + 5, y + 9);
++  if (conCostos) {
++    doc.text(todosValorados ? 'Almacén USD' : 'Almacén USD (renglones valorados)', xTotal + 5, y + 7);
++    doc.text(fmtUSD(nota.totalAlmacen), xTotal + wTotal - 5, y + 7, { align: 'right' });
++    y += 8;
++  }
++  doc.text(todosValorados ? 'Con diferencial del 25 % USD' : 'TOTAL COSTO USD:', xTotal + 5, y + 9);
+   
+   doc.setFontSize(12);
+   doc.setTextColor(16, 185, 129); // GREEN
+diff --git a/src/services/supabase.js b/src/services/supabase.js
+index 1c1d44a..30b401d 100644
+--- a/src/services/supabase.js
++++ b/src/services/supabase.js
+@@ -136,6 +136,7 @@ export function mapProducto(p) {
+     origen: origenDe({ origen: p.origen, factor_landed: p.factor_landed }),
+     factor_landed: p.factor_landed != null ? parseFloat(p.factor_landed) : FACTOR_LANDED_FALLBACK,
+     proveedor: p.proveedor || '',
++    costo_traslado_aprobado: p.costos_traslado_lote?.find(c => c.embarque_id === p.embarque_id)?.con_diferencial ?? null,
+     embarque_id: p.embarque_id || null,
+     activo: p.activo !== false
+   };
+@@ -246,7 +247,7 @@ function mapConfiguracion(cfg) {
+ // ═══════════════════════════════════════════════════════════════
+ // `ids` opcional: solo esas filas (recarga puntual tras una operación)
+ export async function cargarProductos(ids) {
+-  let q = supabase.from('productos').select('*').eq('activo', true).order('cod_alt');
++  let q = supabase.from('productos').select('*, costos_traslado_lote(embarque_id,con_diferencial)').eq('activo', true).order('cod_alt');
+   if (ids && ids.length) q = q.in('id', ids);
+   const { data, error } = await q;
+   if (error) throw error;

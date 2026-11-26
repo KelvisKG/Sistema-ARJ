@@ -61,11 +61,10 @@
             <th class="center" style="width:3%">#</th>
             <th style="width:11%">Código alt.</th>
             <th style="width:10%">Código orig.</th>
-            <th style="width:20%">Descripción</th>
+            <th style="width:24%">Descripción</th>
             <th style="width:9%">Marca</th>
             <th style="width:12%">Aplicación</th>
-            <th v-if="esGerente" class="num" style="width:8%">FOB</th>
-            <th class="num" style="width:9%">P. Público</th>
+            <th class="num" style="width:11%">Precio de venta</th>
             <th class="center" style="width:7%">Stock</th>
             <th v-if="!store.esPerfilDistribuidora" class="center" style="width:9%">Otra emp.</th>
             <th v-if="esGerente" class="center" style="width:13%">Acciones</th>
@@ -93,7 +92,6 @@
               </div>
               <span v-else style="color:var(--dgray);font-size:10.5px">—</span>
             </td>
-            <td v-if="esGerente" class="num">{{ fmtUSD(p.fob) }}</td>
             <td class="num"><strong>{{ fmtUSD(p.precio_manual || precioPublico(p.fob)) }}</strong>
               <div v-if="p.precio_manual" style="font-size:9px;color:var(--gold)">manual</div>
             </td>
