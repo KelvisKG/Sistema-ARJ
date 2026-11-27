@@ -33,7 +33,14 @@
           <div v-if="precioLista > 0" class="ep-price-meta">
             <span>Equivalente efectivo (reposición): <strong>{{ equivalente === null ? 'Pendiente de tasas' : fmtUSD(equivalente) }}</strong></span>
             <span v-if="prev.tipo === 'completo'">
-              Ganancia: <strong :style="{ color: prev.col }">${{ prev.ganancia.toFixed(2) }}</strong> · Margen: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong>
+              Ganancia: <strong :style="{ color: prev.col }">${{ prev.ganancia.toFixed(2) }}</strong>
+              (<strong>+{{ prev.sobreCosto.toFixed(0) }}%</strong> s/costo · Margen: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong>)
+            </span>
+            <span v-else-if="prev.tipo === 'manual'" style="color:var(--dgray)">
+              Ingresa el costo FOB para ver ganancia y margen
+            </span>
+            <span v-else-if="prev.tipo === 'pendiente'" style="color:var(--dgray)">
+              Configura tasas BCV/Paralelo para calcular margen
             </span>
           </div>
         </div>
@@ -59,10 +66,15 @@
             <input v-model="f.desc" type="text" placeholder="Descripción completa del repuesto">
           </div>
 
-          <div class="ep-grid-2" style="margin-top:10px">
+          <div class="ep-grid-3" style="margin-top:10px">
             <div class="ep-field">
               <label>Marca</label>
               <input v-model="f.marca" type="text" placeholder="Ej: Ford NH, Lonmar...">
+            </div>
+            <div class="ep-field">
+              <label>Proveedor</label>
+              <input v-model="f.proveedor" type="text" list="lista-proveedores" placeholder="Ej: PANEGOSSI">
+              <datalist id="lista-proveedores"><option v-for="v in proveedores" :key="v" :value="v" /></datalist>
             </div>
             <div class="ep-field">
               <label>Código de barras</label>
@@ -145,27 +157,47 @@
                 <input v-model="f.factor_landed" type="number" step="0.001" min="1" max="5">
               </div>
               <div class="ep-field">
-                <label>Proveedor</label>
-                <input v-model="f.proveedor" type="text" list="lista-proveedores" placeholder="Ej: PANEGOSSI">
-                <datalist id="lista-proveedores"><option v-for="v in proveedores" :key="v" :value="v" /></datalist>
+                <label>Precio real (FOB × Landed)</label>
+                <input :value="fmtUSD(costoReal)" type="text" readonly class="ep-readonly"
+                  style="font-weight:700;color:var(--navy)" title="Costo real puesto aquí (FOB × Factor landed)">
               </div>
             </div>
 
             <div style="font-size:11px;color:var(--dgray);margin:10px 0 4px">
-              Atajos para calcular el precio de venta sobre el costo puesto aquí (FOB × factor):
+              Simulador de ganancia sobre el <strong>costo real</strong> ({{ fmtUSD(costoReal) }}) — no modifica el precio de venta:
             </div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">
-              <button v-for="a in ATAJOS" :key="a.m" type="button" class="btn-multi" :disabled="!tasasValidas" @click="aplicarMultiplicador(a.m)">
-                ×{{ a.m.toFixed(2) }}<small>{{ a.txt }}</small>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button v-for="a in ATAJOS" :key="a.m" type="button" class="btn-multi"
+                :style="atajoSel === a.m ? { background: '#FFE082', borderColor: 'var(--gold)' } : {}"
+                @click="simularAtajo(a.m)">
+                {{ a.lbl }}<small>{{ a.txt }}</small>
               </button>
+            </div>
+
+            <div v-if="simAtajo" class="ep-sim-box">
+              <div class="ep-field">
+                <label>Venta efectivo (×{{ simAtajo.mult }})</label>
+                <input :value="fmtUSD(simAtajo.totalEfectivo)" type="text" readonly class="ep-readonly"
+                  style="font-weight:800;color:var(--navy)">
+              </div>
+              <div class="ep-field">
+                <label>Ganancia neta (+{{ simAtajo.pct }}%)</label>
+                <input :value="fmtUSD(simAtajo.ganancia)" type="text" readonly class="ep-readonly"
+                  style="font-weight:800;color:var(--green)">
+              </div>
+              <div class="ep-field">
+                <label>Precio venta ($ BCV)</label>
+                <input :value="fmtUSD(simAtajo.precioBcv)" type="text" readonly class="ep-readonly"
+                  style="font-weight:700;color:var(--navy)">
+              </div>
             </div>
 
             <div class="ep-costs-preview">
               <template v-if="prev.tipo === 'completo'">
-                <div>Costo puesto aquí: <strong>${{ prev.costo.toFixed(2) }}</strong>
+                <div>Costo real: <strong>${{ prev.costo.toFixed(2) }}</strong>
                   <span style="font-size:10.5px"> {{ prev.factor === 1 ? '(compra local)' : `($${prev.fob.toFixed(2)} × ${prev.factor.toFixed(3).replace('.', ',')})` }}</span>
                 </div>
-                <div>Vendes a <strong>×{{ prev.mult.toFixed(1) }}</strong> · Margen bruto: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong></div>
+                <div>Ganancia: <strong :style="{ color: prev.col }">+{{ prev.sobreCosto.toFixed(0) }}%</strong> · Margen: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong></div>
               </template>
               <template v-else-if="prev.tipo === 'pendiente'">Margen pendiente de tasas vigentes y precio equivalente positivo.</template>
               <template v-else-if="prev.tipo === 'manual'">
@@ -206,11 +238,13 @@ const fotos = ref([]);
 const guardando = ref(false);
 const inpPrecio = ref(null);
 const inpFoto = ref(null);
+const atajoSel = ref(null);
 
-// El margen sobre el costo landed es fijo: (mult - 1) / mult
+// Atajos de ganancia sobre el costo real (FOB × Landed): 100% (×2), 200% (×3), 300% (×4)
 const ATAJOS = [
-  { m: 1.0, txt: 'al costo' }, { m: 1.5, txt: '33% mg' }, { m: 1.8, txt: '44% mg' },
-  { m: 2.0, txt: '50% mg' }, { m: 2.25, txt: '56% mg' }, { m: 2.5, txt: '60% mg' }
+  { m: 2.0, lbl: '100% ganancia', txt: 'Costo real × 2' },
+  { m: 3.0, lbl: '200% ganancia', txt: 'Costo real × 3' },
+  { m: 4.0, lbl: '300% ganancia', txt: 'Costo real × 4' }
 ];
 
 const esNuevo = computed(() => !!(store.productoSeleccionado && store.productoSeleccionado._nuevo));
@@ -236,6 +270,7 @@ watch(() => [store.modalEditProdActivo, store.productoSeleccionado], ([abierto, 
     precio_manual: p.precio_manual || '', stock_vd: p.stock_vd || 0, stock_dist: p.stock_dist || 0
   };
   fotos.value = fotosDe(p);
+  atajoSel.value = null;
   if (inpFoto.value) inpFoto.value.value = '';
 }, { immediate: true });
 
@@ -250,21 +285,34 @@ function factorActual() {
   return (Number.isFinite(r) && r > 0) ? r : FACTOR_LANDED_FALLBACK;
 }
 
-// v13.12: los atajos multiplican el COSTO LANDED, no el FOB
-const tasasValidas = computed(() => store.tasasConfirmadasHoy && [store.tasa_bcv, store.tasa_par].every(t => Number.isFinite(Number(t)) && Number(t) > 0));
+// v13.12: los atajos multiplican el COSTO REAL (FOB × factor landed)
+const tasasDisponibles = computed(() => [store.tasa_bcv, store.tasa_par].every(t => Number.isFinite(Number(t)) && Number(t) > 0));
+const costoReal = computed(() => (parseFloat(f.value.fob) || 0) * factorActual());
 const precioLista = computed(() => Number(f.value.precio_manual) > 0 ? Number(f.value.precio_manual) : (f.value.origen === 'local' ? 0 : precioPublico(Number(f.value.fob) || 0)));
-const equivalente = computed(() => tasasValidas.value ? Math.round(precioLista.value * store.tasa_bcv / store.tasa_par * 100) / 100 : null);
+const equivalente = computed(() => tasasDisponibles.value ? Math.round(precioLista.value * store.tasa_bcv / store.tasa_par * 100) / 100 : null);
 
-function aplicarMultiplicador(mult) {
-  if (!tasasValidas.value) return;
+function simularAtajo(mult) {
   const fob = parseFloat(f.value.fob) || 0;
-  if (fob === 0) { store.notif('Primero ingresa el costo FOB', 'warning'); return; }
-  const costo = fob * factorActual();
-  // ×1,00 es "vender al costo" (traspaso FINARMA → ARJ): sale exacto
-  const objetivoBCV = costo * mult * store.tasa_par / store.tasa_bcv;
-  const precio = mult === 1 ? Math.ceil(objetivoBCV * 100) / 100 : redondeoBonito(objetivoBCV);
-  f.value.precio_manual = precio.toFixed(2);
+  if (fob <= 0) { store.notif('Primero ingresa el costo FOB', 'warning'); return; }
+  atajoSel.value = atajoSel.value === mult ? null : mult;
 }
+
+const simAtajo = computed(() => {
+  if (!atajoSel.value || costoReal.value <= 0) return null;
+  const mult = atajoSel.value;
+  const costo = costoReal.value;
+  const ganancia = costo * (mult - 1);
+  const objetivoBCV = tasasDisponibles.value
+    ? (costo * mult * Number(store.tasa_par) / Number(store.tasa_bcv))
+    : (costo * mult);
+  return {
+    mult,
+    pct: Math.round((mult - 1) * 100),
+    totalEfectivo: costo * mult,
+    ganancia,
+    precioBcv: redondeoBonito(objetivoBCV)
+  };
+});
 
 const prev = computed(() => {
   const fob = parseFloat(f.value.fob) || 0;
@@ -275,9 +323,10 @@ const prev = computed(() => {
     const costo = fob * factor;
     const ganancia = equivalente.value - costo;
     const margen = (ganancia / equivalente.value) * 100;
+    const sobreCosto = costo > 0 ? (ganancia / costo) * 100 : 0;
     const mult = costo > 0 ? equivalente.value / costo : 0;
     const col = margen < 25 ? 'var(--red)' : margen < 35 ? 'var(--gold)' : 'var(--green)';
-    return { tipo: 'completo', fob, manual: precioLista.value, factor, costo, ganancia, margen, mult, col };
+    return { tipo: 'completo', fob, manual: precioLista.value, factor, costo, ganancia, margen, sobreCosto, mult, col };
   }
   if (manual > 0) return { tipo: 'manual', manual };
   if (fob > 0) return f.value.origen === 'local' ? { tipo: 'local' } : { tipo: 'auto', sugerido: precioPublico(fob) };
@@ -590,6 +639,16 @@ async function guardar() {
 .ep-costs-body {
   padding: 12px 14px;
   border-top: 1px solid var(--border);
+}
+.ep-sim-box {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  background: #FFFDF5;
+  border: 1px solid #FFE082;
+  border-radius: 6px;
 }
 .ep-costs-preview {
   background: #FFF;
