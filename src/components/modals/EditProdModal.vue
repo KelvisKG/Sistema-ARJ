@@ -1,118 +1,192 @@
 <template>
-  <!-- Mismo modal del monolito para editar y para crear (modal-edit-prod) -->
+  <!-- Modal ordenado para editar y crear productos (modal-edit-prod) -->
   <div v-if="store.modalEditProdActivo && store.productoSeleccionado" class="modal show" id="modal-edit-prod">
-    <div class="modal-content" style="max-width:600px;text-align:left;max-height:90vh;overflow-y:auto">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:1px solid var(--gray);padding-bottom:12px">
-        <h2 style="margin:0;text-align:left">Editar producto</h2>
-        <button class="btn btn-secondary btn-sm" @click="cerrar"><i class="ti ti-x"></i></button>
+    <div class="modal-content ep-modal">
+      <div class="ep-header">
+        <div>
+          <h2 class="ep-title">{{ esNuevo ? 'Nuevo producto' : 'Editar producto' }}</h2>
+          <p v-if="!esNuevo && (f.cod_alt || f.desc)" class="ep-sub">{{ f.cod_alt }} {{ f.desc ? '· ' + f.desc : '' }}</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" @click="cerrar" title="Cerrar"><i class="ti ti-x"></i></button>
       </div>
-      <div id="edit-prod-fields">
-        <div class="field-row"><label>Código alternativo:</label>
-          <input v-model="f.cod_alt" type="text" :readonly="!puedeEditarCodAlt"
-            :style="puedeEditarCodAlt ? 'background:#FFF;color:#222' : 'background:#F5F5F5;color:var(--dgray)'"
-            :title="puedeEditarCodAlt ? 'Código alternativo editable' : 'Solo el gerente puede modificar el código alternativo'">
-        </div>
-        <div class="field-row"><label>Código original:</label><input v-model="f.cod_orig" type="text"></div>
-        <div class="field-row"><label>Código de barras:</label>
-          <input v-model="f.cod_barras" type="text" placeholder="Pasa el lector o escribe el código EAN/UPC"
-            style="font-family:'Courier New',monospace;letter-spacing:1px">
-        </div>
-        <div class="field-row"><label>Descripción:</label><input v-model="f.desc" type="text"></div>
-        <div class="field-row"><label>Marca:</label><input v-model="f.marca" type="text"></div>
 
-        <!-- APLICACIÓN ESTRUCTURADA -->
-        <div style="background:#F5F8FC;border-radius:6px;padding:10px 12px;margin:10px 0">
-          <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500;margin-bottom:8px">
-            <i class="ti ti-tractor"></i> Aplicación del producto</div>
-          <div class="field-row"><label>Marca y modelo:</label>
-            <input v-model="f.marca_modelo" type="text" placeholder="Ej: John Deere 6420, Ford 5000...">
-          </div>
-          <div class="field-row">
-            <label>Sistema:</label>
-            <select v-model="f.sistema">
-              <option value="">-- Selecciona --</option>
-              <option v-for="s in opcionesSistema" :key="s" :value="s">{{ s }}</option>
-            </select>
-            <button type="button" class="btn btn-secondary btn-sm" title="Agregar nuevo sistema" @click="agregarSistemaNuevo"><i class="ti ti-plus"></i></button>
-          </div>
-        </div>
-
-        <!-- PRECIOS -->
-        <div style="background:#FFF8E1;border-radius:6px;padding:10px 12px;margin:10px 0">
-          <div style="font-size:11px;color:var(--dgray);text-transform:uppercase;letter-spacing:.04em;font-weight:500;margin-bottom:8px">
-            <i class="ti ti-currency-dollar"></i> Precios del producto</div>
-          <div style="font-size:11px;color:var(--dgray);margin:0 0 5px">Origen de la mercancía:</div>
-          <div style="display:flex;gap:6px;margin:0 0 9px;flex-wrap:wrap">
-            <button type="button" class="btn-multi" :style="{ background: f.origen === 'local' ? '#FFF' : '#FFE082' }"
-              @click="setOrigen('importado')">Importado<small>flete + aduana</small></button>
-            <button type="button" class="btn-multi" :style="{ background: f.origen === 'local' ? '#FFE082' : '#FFF' }"
-              @click="setOrigen('local')">Compra local<small>ya está aquí</small></button>
-          </div>
-          <div class="field-row"><label>{{ f.origen === 'local' ? 'Costo de compra USD:' : 'Costo FOB USD:' }}</label>
-            <input v-model="f.fob" type="number" step="0.01">
-          </div>
-          <div class="field-row"><label>Factor landed:</label><input v-model="f.factor_landed" type="number" step="0.001" min="1" max="5"></div>
-          <div class="field-row"><label>Proveedor:</label>
-            <input v-model="f.proveedor" type="text" list="lista-proveedores" placeholder="Ej: PANEGOSSI">
-            <datalist id="lista-proveedores"><option v-for="v in proveedores" :key="v" :value="v" /></datalist>
-          </div>
-          <div style="font-size:11px;color:var(--dgray);margin:6px 0 3px">Atajos — multiplican el <strong>costo puesto aquí</strong> (FOB × factor). El porcentaje indica el margen bruto objetivo en dólares.</div>
-          <div style="display:flex;gap:5px;margin:0 0 10px;flex-wrap:wrap">
-            <button v-for="a in ATAJOS" :key="a.m" type="button" class="btn-multi" :disabled="!tasasValidas" @click="aplicarMultiplicador(a.m)">×{{ a.m.toFixed(2) }}<small>{{ a.txt }}</small></button>
-          </div>
-          <div class="field-row" style="background:#FFFFFF;border:2px solid var(--gold);border-radius:6px;padding:8px 10px;margin:0">
-            <label style="font-weight:700;color:var(--navy)">Precio de lista ($ BCV)</label>
-            <input ref="inpPrecio" v-model="f.precio_manual" type="number" step="0.01" placeholder="Vacío = precio automático"
-              style="font-size:16px;font-weight:700;color:var(--navy)">
-          </div>
-          <div style="background:#FFF;border-radius:5px;padding:8px 10px;font-size:12px;color:var(--dgray);margin-top:6px">
-            <div v-if="precioLista > 0">Equivalente por unidad en dólares a la tasa de reposición: <strong>{{ equivalente === null ? 'Pendiente de tasas vigentes' : fmtUSD(equivalente) }}</strong></div>
-            <template v-if="prev.tipo === 'completo'">
-              <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline">
-                <span>Precio de lista BCV: <strong style="color:var(--navy);font-size:15px">${{ prev.manual.toFixed(2) }}</strong></span>
-                <span style="color:var(--dgray)">Te cuesta puesto aquí: <strong>${{ prev.costo.toFixed(2) }}</strong>
-                  <span style="font-size:10.5px">{{ prev.factor === 1 ? '(compra local, sin flete de importación)' : '(costo $' + prev.fob.toFixed(2) + ' × ' + prev.factor.toFixed(3).replace('.', ',') + ')' }}</span></span>
+      <div id="edit-prod-fields" class="ep-body">
+        <!-- 1. PRECIO DE VENTA PRINCIPAL (Lo primero que se ve) -->
+        <div class="ep-price-hero">
+          <div class="ep-price-hero-top">
+            <div>
+              <label class="ep-price-lbl" for="ep-inp-precio">
+                <i class="ti ti-tag"></i> Precio de venta ($ BCV)
+              </label>
+              <div class="ep-price-hint">
+                <span v-if="Number(f.precio_manual) > 0">Precio fijado por los encargados</span>
+                <span v-else-if="precioLista > 0">Automático sugerido: <strong>{{ fmtUSD(precioLista) }}</strong> (vacío = automático)</span>
+                <span v-else>Ingresa el precio de venta al público</span>
               </div>
-              <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
-                <span>Ganancia bruta <strong :style="{ color: prev.col, fontSize: '15px' }">${{ prev.ganancia.toFixed(2) }}</strong> por unidad</span>
-                <span style="color:var(--dgray)">Vendes a <strong>×{{ prev.mult.toFixed(1) }}</strong> el costo · Margen bruto en dólares <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong></span>
-              </div>
-            </template>
-            <template v-else-if="prev.tipo === 'pendiente'">Margen pendiente de tasas vigentes y precio equivalente positivo.</template>
-            <template v-else-if="prev.tipo === 'manual'">
-              Precio manual: <strong style="color:var(--navy)">${{ prev.manual.toFixed(2) }} BCV</strong> <span style="color:var(--dgray)">(falta el FOB para calcular la ganancia)</span>
-            </template>
-            <template v-else-if="prev.tipo === 'local'">
-              <span style="color:var(--red);font-weight:600">Compra local: tienes que poner el precio de venta a mano.</span>
-              <span style="color:var(--dgray)"> El escalón automático asume costo de fábrica y aquí te sobrepreciaría.</span>
-            </template>
-            <template v-else-if="prev.tipo === 'auto'">
-              Precio sugerido automático (×2.5 escalonado): <strong style="color:var(--navy)">${{ prev.sugerido.toFixed(2) }} BCV</strong> <span style="color:var(--dgray)">(sin precio manual)</span>
-            </template>
-            <template v-else>Precio público sugerido: <strong style="color:var(--navy)">— USD</strong></template>
-          </div>
-        </div>
-
-        <div class="field-row"><label>Stock Venta Directa:</label><input v-model="f.stock_vd" type="number"></div>
-        <div class="field-row"><label>Stock Distribuidora:</label><input v-model="f.stock_dist" type="number"></div>
-        <div class="field-row" style="margin-top:8px"><label>Fotos (máx 3):</label>
-          <div style="flex:1">
-            <div style="display:flex;gap:8px;margin-bottom:6px">
-              <div v-for="(u, i) in fotos" :key="u" style="position:relative">
-                <img :src="u" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #ddd">
-                <button title="Quitar foto" style="position:absolute;top:-6px;right:-6px;background:#c0392b;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1"
-                  @click="fotos.splice(i, 1)">×</button>
-              </div>
-              <span v-if="!fotos.length" style="font-size:11px;color:var(--dgray)">Sin fotos</span>
             </div>
-            <input ref="inpFoto" type="file" accept="image/*" multiple style="width:100%">
+            <div class="ep-price-input-wrap">
+              <span class="ep-currency">$</span>
+              <input id="ep-inp-precio" ref="inpPrecio" v-model="f.precio_manual" type="number" step="0.01"
+                placeholder="0.00" class="ep-price-input">
+            </div>
+          </div>
+          <div v-if="precioLista > 0" class="ep-price-meta">
+            <span>Equivalente efectivo (reposición): <strong>{{ equivalente === null ? 'Pendiente de tasas' : fmtUSD(equivalente) }}</strong></span>
+            <span v-if="prev.tipo === 'completo'">
+              Ganancia: <strong :style="{ color: prev.col }">${{ prev.ganancia.toFixed(2) }}</strong> · Margen: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong>
+            </span>
           </div>
         </div>
+
+        <!-- 2. IDENTIFICACIÓN Y STOCK -->
+        <div class="ep-card">
+          <div class="ep-card-title"><i class="ti ti-package"></i> Datos del producto y stock</div>
+          <div class="ep-grid-2">
+            <div class="ep-field">
+              <label>Código alternativo</label>
+              <input v-model="f.cod_alt" type="text" :readonly="!puedeEditarCodAlt"
+                :class="{ 'ep-readonly': !puedeEditarCodAlt }"
+                :title="puedeEditarCodAlt ? 'Código alternativo editable' : 'Solo el gerente puede modificar el código alternativo'">
+            </div>
+            <div class="ep-field">
+              <label>Código original</label>
+              <input v-model="f.cod_orig" type="text" placeholder="Ej: 787MY099016">
+            </div>
+          </div>
+
+          <div class="ep-field" style="margin-top:10px">
+            <label>Descripción</label>
+            <input v-model="f.desc" type="text" placeholder="Descripción completa del repuesto">
+          </div>
+
+          <div class="ep-grid-2" style="margin-top:10px">
+            <div class="ep-field">
+              <label>Marca</label>
+              <input v-model="f.marca" type="text" placeholder="Ej: Ford NH, Lonmar...">
+            </div>
+            <div class="ep-field">
+              <label>Código de barras</label>
+              <input v-model="f.cod_barras" type="text" placeholder="EAN / UPC"
+                style="font-family:'Courier New',monospace;letter-spacing:1px">
+            </div>
+          </div>
+
+          <div class="ep-grid-2" style="margin-top:10px">
+            <div class="ep-field">
+              <label>Stock Venta Directa</label>
+              <input v-model="f.stock_vd" type="number">
+            </div>
+            <div class="ep-field">
+              <label>Stock Distribuidora</label>
+              <input v-model="f.stock_dist" type="number">
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. APLICACIÓN Y FOTOS -->
+        <div class="ep-grid-2 ep-sections-row">
+          <div class="ep-card" style="margin:0">
+            <div class="ep-card-title"><i class="ti ti-tractor"></i> Aplicación</div>
+            <div class="ep-field">
+              <label>Marca y modelo</label>
+              <input v-model="f.marca_modelo" type="text" placeholder="Ej: John Deere 6420, Ford 5000...">
+            </div>
+            <div class="ep-field" style="margin-top:10px">
+              <label>Sistema</label>
+              <div style="display:flex;gap:6px">
+                <select v-model="f.sistema" style="flex:1">
+                  <option value="">-- Selecciona --</option>
+                  <option v-for="s in opcionesSistema" :key="s" :value="s">{{ s }}</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-sm" title="Agregar nuevo sistema" @click="agregarSistemaNuevo"><i class="ti ti-plus"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="ep-card" style="margin:0">
+            <div class="ep-card-title"><i class="ti ti-photo"></i> Fotos (máx 3)</div>
+            <div class="ep-photos">
+              <div v-for="(u, i) in fotos" :key="u" class="ep-photo-item">
+                <img :src="u">
+                <button type="button" title="Quitar foto" class="ep-photo-del" @click="fotos.splice(i, 1)">×</button>
+              </div>
+              <span v-if="!fotos.length" class="ep-photo-empty">Sin fotos cargadas</span>
+            </div>
+            <input ref="inpFoto" type="file" accept="image/*" multiple style="width:100%;font-size:12px">
+          </div>
+        </div>
+
+        <!-- 4. COSTOS, FOB Y PROVEEDOR (Sección secundaria separada) -->
+        <details class="ep-costs-details">
+          <summary class="ep-costs-summary">
+            <span><i class="ti ti-calculator"></i> Costos internos, FOB y proveedor</span>
+            <span class="ep-costs-badge">
+              {{ f.origen === 'local' ? 'Local' : 'Importado' }}
+              <template v-if="Number(f.fob) > 0"> · FOB {{ fmtUSD(f.fob) }}</template>
+            </span>
+          </summary>
+
+          <div class="ep-costs-body">
+            <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:11.5px;color:var(--dgray);margin-right:4px">Origen:</span>
+              <button type="button" class="btn-multi" :style="{ background: f.origen === 'local' ? '#FFF' : '#FFE082' }"
+                @click="setOrigen('importado')">Importado<small>flete + aduana</small></button>
+              <button type="button" class="btn-multi" :style="{ background: f.origen === 'local' ? '#FFE082' : '#FFF' }"
+                @click="setOrigen('local')">Compra local<small>ya está aquí</small></button>
+            </div>
+
+            <div class="ep-grid-3">
+              <div class="ep-field">
+                <label>{{ f.origen === 'local' ? 'Costo compra USD' : 'Costo FOB USD' }}</label>
+                <input v-model="f.fob" type="number" step="0.01">
+              </div>
+              <div class="ep-field">
+                <label>Factor landed</label>
+                <input v-model="f.factor_landed" type="number" step="0.001" min="1" max="5">
+              </div>
+              <div class="ep-field">
+                <label>Proveedor</label>
+                <input v-model="f.proveedor" type="text" list="lista-proveedores" placeholder="Ej: PANEGOSSI">
+                <datalist id="lista-proveedores"><option v-for="v in proveedores" :key="v" :value="v" /></datalist>
+              </div>
+            </div>
+
+            <div style="font-size:11px;color:var(--dgray);margin:10px 0 4px">
+              Atajos para calcular el precio de venta sobre el costo puesto aquí (FOB × factor):
+            </div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <button v-for="a in ATAJOS" :key="a.m" type="button" class="btn-multi" :disabled="!tasasValidas" @click="aplicarMultiplicador(a.m)">
+                ×{{ a.m.toFixed(2) }}<small>{{ a.txt }}</small>
+              </button>
+            </div>
+
+            <div class="ep-costs-preview">
+              <template v-if="prev.tipo === 'completo'">
+                <div>Costo puesto aquí: <strong>${{ prev.costo.toFixed(2) }}</strong>
+                  <span style="font-size:10.5px"> {{ prev.factor === 1 ? '(compra local)' : `($${prev.fob.toFixed(2)} × ${prev.factor.toFixed(3).replace('.', ',')})` }}</span>
+                </div>
+                <div>Vendes a <strong>×{{ prev.mult.toFixed(1) }}</strong> · Margen bruto: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong></div>
+              </template>
+              <template v-else-if="prev.tipo === 'pendiente'">Margen pendiente de tasas vigentes y precio equivalente positivo.</template>
+              <template v-else-if="prev.tipo === 'manual'">
+                Precio manual: <strong style="color:var(--navy)">${{ prev.manual.toFixed(2) }} BCV</strong> (falta el costo FOB para calcular la ganancia)
+              </template>
+              <template v-else-if="prev.tipo === 'local'">
+                <span style="color:var(--red);font-weight:600">Compra local: ingresa el precio de venta manualmente arriba.</span>
+              </template>
+              <template v-else-if="prev.tipo === 'auto'">
+                Precio sugerido automático (×2.5 escalonado): <strong style="color:var(--navy)">${{ prev.sugerido.toFixed(2) }} BCV</strong>
+              </template>
+              <template v-else>Sin costo FOB ni precio configurado.</template>
+            </div>
+          </div>
+        </details>
       </div>
-      <div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:6px;padding:8px 10px;font-size:11.5px;color:#5D4037;margin-top:12px">
+
+      <div class="ep-footer-note">
         <i class="ti ti-info-circle"></i> Los cambios se reflejarán inmediatamente en la cuenta de los vendedores.
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <div class="ep-actions">
         <button class="btn btn-secondary" :disabled="guardando" @click="cerrar">Cancelar</button>
         <button class="btn btn-green" :disabled="guardando" @click="guardar"><i class="ti ti-check"></i> {{ guardando ? 'Guardando...' : 'Guardar cambios' }}</button>
       </div>
@@ -303,3 +377,252 @@ async function guardar() {
   }
 }
 </script>
+
+<style scoped>
+.ep-modal {
+  max-width: 720px;
+  text-align: left;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+.ep-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+.ep-title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--navy);
+}
+.ep-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--dgray);
+}
+.ep-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ep-price-hero {
+  background: linear-gradient(135deg, #FFFDF5 0%, #FFF8E1 100%);
+  border: 2px solid var(--gold);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.ep-price-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ep-price-lbl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.ep-price-hint {
+  font-size: 11.5px;
+  color: var(--dgray);
+  margin-top: 2px;
+}
+.ep-price-input-wrap {
+  display: flex;
+  align-items: center;
+  background: #FFF;
+  border: 1.5px solid var(--gold);
+  border-radius: 8px;
+  padding: 4px 10px;
+  min-width: 150px;
+}
+.ep-currency {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--dgray);
+  margin-right: 4px;
+}
+.ep-price-input {
+  border: none !important;
+  outline: none !important;
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: var(--navy) !important;
+  width: 110px;
+  text-align: right;
+  background: transparent !important;
+  padding: 2px 0 !important;
+}
+.ep-price-meta {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #E5C878;
+  font-size: 11.5px;
+  color: var(--dgray);
+}
+.ep-card {
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.ep-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dgray);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ep-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.ep-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.ep-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ep-field label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.ep-field input,
+.ep-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #FFF;
+}
+.ep-readonly {
+  background: #F1F5F9 !important;
+  color: var(--dgray) !important;
+}
+.ep-photos {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 40px;
+}
+.ep-photo-item {
+  position: relative;
+}
+.ep-photo-item img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #DDD;
+}
+.ep-photo-del {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #C0392B;
+  color: #FFF;
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+}
+.ep-photo-empty {
+  font-size: 11.5px;
+  color: var(--dgray);
+}
+.ep-costs-details {
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ep-costs-summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+  user-select: none;
+  background: #F1F5F9;
+}
+.ep-costs-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dgray);
+  background: #FFF;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+}
+.ep-costs-body {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+.ep-costs-preview {
+  background: #FFF;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--dgray);
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ep-footer-note {
+  background: #FFF8E1;
+  border: 1px solid #FFE082;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: #5D4037;
+  margin-top: 12px;
+}
+.ep-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+@media (max-width: 600px) {
+  .ep-grid-2,
+  .ep-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
