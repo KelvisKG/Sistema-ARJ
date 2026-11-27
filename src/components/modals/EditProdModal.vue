@@ -30,18 +30,8 @@
                 placeholder="0.00" class="ep-price-input">
             </div>
           </div>
-          <div v-if="precioLista > 0" class="ep-price-meta">
-            <span>Equivalente efectivo (reposición): <strong>{{ equivalente === null ? 'Pendiente de tasas' : fmtUSD(equivalente) }}</strong></span>
-            <span v-if="prev.tipo === 'completo'">
-              Ganancia: <strong :style="{ color: prev.col }">${{ prev.ganancia.toFixed(2) }}</strong>
-              (<strong>+{{ prev.sobreCosto.toFixed(0) }}%</strong> s/costo · Margen: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong>)
-            </span>
-            <span v-else-if="prev.tipo === 'manual'" style="color:var(--dgray)">
-              Ingresa el costo FOB para ver ganancia y margen
-            </span>
-            <span v-else-if="prev.tipo === 'pendiente'" style="color:var(--dgray)">
-              Configura tasas BCV/Paralelo para calcular margen
-            </span>
+          <div v-if="precioLista > 0" class="ep-price-summary">
+            Equivalente en efectivo (reposición): <strong>{{ equivalente === null ? 'Pendiente de tasas' : fmtUSD(equivalente) }}</strong>
           </div>
         </div>
 
@@ -131,7 +121,7 @@
         <!-- 4. COSTOS, FOB Y PROVEEDOR (Sección secundaria separada) -->
         <details class="ep-costs-details">
           <summary class="ep-costs-summary">
-            <span><i class="ti ti-calculator"></i> Costos internos, FOB y proveedor</span>
+            <span><i class="ti ti-calculator"></i> Costos internos y FOB</span>
             <span class="ep-costs-badge">
               {{ f.origen === 'local' ? 'Local' : 'Importado' }}
               <template v-if="Number(f.fob) > 0"> · FOB {{ fmtUSD(f.fob) }}</template>
@@ -174,40 +164,32 @@
               </button>
             </div>
 
-            <div v-if="simAtajo" class="ep-sim-box">
-              <div class="ep-field">
-                <label>Venta efectivo (×{{ simAtajo.mult }})</label>
-                <input :value="fmtUSD(simAtajo.totalEfectivo)" type="text" readonly class="ep-readonly"
-                  style="font-weight:800;color:var(--navy)">
+            <div class="ep-costs-preview" :style="resumenCostos.simulado ? { display: 'block', borderColor: 'var(--gold)', background: '#FFFDF5' } : { display: 'block' }">
+              <div v-if="resumenCostos.simulado" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:11px;color:#8A6200;font-weight:700">
+                <span><i class="ti ti-sparkles"></i> Simulación {{ resumenCostos.pct }}% ganancia (precio arriba sin cambios)</span>
+                <button type="button" @click="atajoSel = null" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;font-weight:600;padding:0">Ver actual</button>
               </div>
-              <div class="ep-field">
-                <label>Ganancia neta (+{{ simAtajo.pct }}%)</label>
-                <input :value="fmtUSD(simAtajo.ganancia)" type="text" readonly class="ep-readonly"
-                  style="font-weight:800;color:var(--green)">
-              </div>
-              <div class="ep-field">
-                <label>Precio venta ($ BCV)</label>
-                <input :value="fmtUSD(simAtajo.precioBcv)" type="text" readonly class="ep-readonly"
-                  style="font-weight:700;color:var(--navy)">
-              </div>
-            </div>
-
-            <div class="ep-costs-preview">
-              <template v-if="prev.tipo === 'completo'">
-                <div>Costo real: <strong>${{ prev.costo.toFixed(2) }}</strong>
-                  <span style="font-size:10.5px"> {{ prev.factor === 1 ? '(compra local)' : `($${prev.fob.toFixed(2)} × ${prev.factor.toFixed(3).replace('.', ',')})` }}</span>
+              <template v-if="resumenCostos.tipo === 'completo'">
+                <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline">
+                  <span>{{ resumenCostos.simulado ? 'Precio simulado:' : 'Precio de venta:' }} <strong style="color:var(--navy);font-size:15px">${{ resumenCostos.manual.toFixed(2) }}</strong></span>
+                  <span style="color:var(--dgray)">Te cuesta puesto aquí: <strong style="color:var(--navy)">${{ resumenCostos.costo.toFixed(2) }}</strong>
+                    <span style="font-size:10.5px"> {{ resumenCostos.factor === 1 ? '(compra local, sin flete de importación)' : `(costo $${resumenCostos.fob.toFixed(2)} × ${resumenCostos.factor.toFixed(3).replace('.', ',')})` }}</span>
+                  </span>
                 </div>
-                <div>Ganancia: <strong :style="{ color: prev.col }">+{{ prev.sobreCosto.toFixed(0) }}%</strong> · Margen: <strong :style="{ color: prev.col }">{{ prev.margen.toFixed(1) }}%</strong></div>
+                <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline">
+                  <span>Ganas <strong :style="{ color: resumenCostos.col, fontSize: '15px' }">${{ resumenCostos.ganancia.toFixed(2) }}</strong> por unidad</span>
+                  <span style="color:var(--dgray)">Vendes a <strong style="color:var(--navy)">×{{ resumenCostos.mult.toFixed(1) }}</strong> el costo · Margen <strong :style="{ color: resumenCostos.col }">{{ resumenCostos.margen.toFixed(1) }}%</strong></span>
+                </div>
               </template>
-              <template v-else-if="prev.tipo === 'pendiente'">Margen pendiente de tasas vigentes y precio equivalente positivo.</template>
-              <template v-else-if="prev.tipo === 'manual'">
-                Precio manual: <strong style="color:var(--navy)">${{ prev.manual.toFixed(2) }} BCV</strong> (falta el costo FOB para calcular la ganancia)
+              <template v-else-if="resumenCostos.tipo === 'pendiente'">Margen pendiente de tasas vigentes y precio equivalente positivo.</template>
+              <template v-else-if="resumenCostos.tipo === 'manual'">
+                Precio manual: <strong style="color:var(--navy)">${{ resumenCostos.manual.toFixed(2) }} BCV</strong> (falta el costo FOB para calcular la ganancia)
               </template>
-              <template v-else-if="prev.tipo === 'local'">
+              <template v-else-if="resumenCostos.tipo === 'local'">
                 <span style="color:var(--red);font-weight:600">Compra local: ingresa el precio de venta manualmente arriba.</span>
               </template>
-              <template v-else-if="prev.tipo === 'auto'">
-                Precio sugerido automático (×2.5 escalonado): <strong style="color:var(--navy)">${{ prev.sugerido.toFixed(2) }} BCV</strong>
+              <template v-else-if="resumenCostos.tipo === 'auto'">
+                Precio sugerido automático (×2.5 escalonado): <strong style="color:var(--navy)">${{ resumenCostos.sugerido.toFixed(2) }} BCV</strong>
               </template>
               <template v-else>Sin costo FOB ni precio configurado.</template>
             </div>
@@ -297,21 +279,38 @@ function simularAtajo(mult) {
   atajoSel.value = atajoSel.value === mult ? null : mult;
 }
 
-const simAtajo = computed(() => {
-  if (!atajoSel.value || costoReal.value <= 0) return null;
-  const mult = atajoSel.value;
-  const costo = costoReal.value;
-  const ganancia = costo * (mult - 1);
-  const objetivoBCV = tasasDisponibles.value
-    ? (costo * mult * Number(store.tasa_par) / Number(store.tasa_bcv))
-    : (costo * mult);
-  return {
-    mult,
-    pct: Math.round((mult - 1) * 100),
-    totalEfectivo: costo * mult,
-    ganancia,
-    precioBcv: redondeoBonito(objetivoBCV)
-  };
+const resumenCostos = computed(() => {
+  if (atajoSel.value && costoReal.value > 0) {
+    const fob = parseFloat(f.value.fob) || 0;
+    const factor = factorActual();
+    const costo = costoReal.value;
+    const multObj = atajoSel.value;
+    const objetivoBCV = tasasDisponibles.value
+      ? (costo * multObj * Number(store.tasa_par) / Number(store.tasa_bcv))
+      : (costo * multObj);
+    const precioSim = redondeoBonito(objetivoBCV);
+    const equivSim = tasasDisponibles.value
+      ? Math.round(precioSim * Number(store.tasa_bcv) / Number(store.tasa_par) * 100) / 100
+      : precioSim;
+    const ganancia = equivSim - costo;
+    const margen = equivSim > 0 ? (ganancia / equivSim) * 100 : 0;
+    const mult = costo > 0 ? equivSim / costo : multObj;
+    const col = margen < 25 ? 'var(--red)' : margen < 35 ? 'var(--gold)' : 'var(--green)';
+    return {
+      tipo: 'completo',
+      simulado: true,
+      pct: Math.round((multObj - 1) * 100),
+      fob,
+      manual: precioSim,
+      factor,
+      costo,
+      ganancia,
+      margen,
+      mult,
+      col
+    };
+  }
+  return prev.value;
 });
 
 const prev = computed(() => {
@@ -511,15 +510,13 @@ async function guardar() {
   background: transparent !important;
   padding: 2px 0 !important;
 }
-.ep-price-meta {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
+.ep-price-summary {
+  background: #FFF;
+  border: 1px solid #EFE3B8;
+  border-radius: 6px;
+  padding: 8px 10px;
   margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed #E5C878;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--dgray);
 }
 .ep-card {
